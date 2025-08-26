@@ -72,21 +72,12 @@ provider_update_record() {
     fi
 }
 
-# Legacy interface - kept for backward compatibility
+# Legacy interface - DEPRECATED - use provider_update_record instead
+# This is only kept for backward compatibility and should be avoided
 provider_update() {
-    local domain="$1"
-    local host="${2:-@}"
-    local ip="$3"
-    
-    # Determine record type and delegate to new interface
-    local record_type
-    if echo "$ip" | grep -q ':'; then
-        record_type="AAAA"
-    else
-        record_type="A"
-    fi
-    
-    provider_update_record "$domain" "$host" "$ip" "$record_type"
+    echo "[GoDaddy] ERROR: Legacy provider_update() is deprecated"
+    echo "[GoDaddy] Use abstraction layer update_with_provider() instead"
+    return 1
 }
 
 provider_test() {
