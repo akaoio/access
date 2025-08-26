@@ -355,7 +355,12 @@ EOF
         systemctl --user daemon-reload
         systemctl --user enable access
         
-        log "✓ User-level service created and enabled"
+        # Start the service immediately after installation
+        systemctl --user start access || {
+            warn "Failed to start Access service - you may need to start it manually"
+        }
+        
+        log "✓ User-level service created, enabled, and started"
         log "  Commands:"
         log "    Start:   systemctl --user start access"
         log "    Stop:    systemctl --user stop access"
