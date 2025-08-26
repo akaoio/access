@@ -211,7 +211,17 @@ check_provider_health() {
     echo "Summary: $healthy/$total providers healthy"
 }
 
-# Update DNS using provider
+# Detect IP type and determine DNS record type
+get_record_type() {
+    local ip="$1"
+    if echo "$ip" | grep -q ':'; then
+        echo "AAAA"  # IPv6
+    else
+        echo "A"     # IPv4
+    fi
+}
+
+# Update DNS using provider with abstracted record type logic
 update_with_provider() {
     local provider_name="$1"
     local domain="$2"
@@ -226,8 +236,18 @@ update_with_provider() {
         return 1
     fi
     
-    # Execute update
-    provider_update "$domain" "$host" "$ip"
+    # ABSTRACTION LAYER: Determine record type from IP
+    local record_type=$(get_record_type "$ip")
+    echo "[$provider_name] Updating $record_type record for $host.$domain with IP: $ip"
+    
+    # Check if provider supports record type abstraction
+    if command -v provider_update_record >/dev/null 2>&1; then
+        # New abstracted interface - provider handles record types
+        provider_update_record "$domain" "$host" "$ip" "$record_type"
+    else
+        # Legacy interface - pass raw IP, provider handles internally
+        provider_update "$domain" "$host" "$ip"
+    fi
 }
 
 # Test provider connectivity

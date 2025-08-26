@@ -413,10 +413,13 @@ load_config() {
         if [ -n "$PROVIDER" ]; then
             local prefix=$(echo "$PROVIDER" | tr '[:lower:]' '[:upper:]')
             
-            # Export provider-specific fields
-            jq -r ".[\"$(echo "$PROVIDER" | tr '[:upper:]' '[:lower:]')\"] // {} | to_entries | .[] | \"${prefix}_\\(.key | ascii_upcase)=\\(.value)\"" "$ACCESS_CONFIG" 2>/dev/null | while IFS='=' read -r key value; do
-                export "$key=$value"
-            done
+            # Export provider-specific fields (avoid subshell to make export work)
+            local temp_file=$(mktemp)
+            jq -r ".[\"$(echo "$PROVIDER" | tr '[:upper:]' '[:lower:]')\"] // {} | to_entries | .[] | \"export ${prefix}_\\(.key | ascii_upcase)=\\(.value)\"" "$ACCESS_CONFIG" 2>/dev/null > "$temp_file"
+            if [ -s "$temp_file" ]; then
+                . "$temp_file"
+            fi
+            rm -f "$temp_file"
         fi
     elif [ -f "$ACCESS_CONFIG" ]; then
         # Fallback to grep/sed parsing

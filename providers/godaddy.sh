@@ -25,28 +25,32 @@ provider_validate() {
     return 0
 }
 
-provider_update() {
+# New abstracted interface - receives record type from abstraction layer
+provider_update_record() {
     local domain="$1"
     local host="${2:-@}"
     local ip="$3"
+    local record_type="$4"
     local key="${GODADDY_KEY}"
     local secret="${GODADDY_SECRET}"
     
     # Validate inputs
-    if [ -z "$domain" ] || [ -z "$ip" ]; then
-        echo "Error: Domain and IP required"
+    if [ -z "$domain" ] || [ -z "$ip" ] || [ -z "$record_type" ]; then
+        echo "Error: Domain, IP, and record type required"
         return 1
     fi
     
+    echo "[GoDaddy] Updating $record_type record for $host.$domain with IP: $ip"
+    
     # Get current DNS record
-    local api_url="https://api.godaddy.com/v1/domains/$domain/records/A/$host"
+    local api_url="https://api.godaddy.com/v1/domains/$domain/records/$record_type/$host"
     local current_ip=$(curl -s -X GET "$api_url" \
         -H "Authorization: sso-key $key:$secret" 2>/dev/null | \
         grep -oE '"data":"[^"]*"' | cut -d'"' -f4)
     
     # Check if update needed
     if [ "$current_ip" = "$ip" ]; then
-        echo "[GoDaddy] IP unchanged: $ip"
+        echo "[GoDaddy] $record_type record unchanged: $ip"
         return 0
     fi
     
@@ -59,12 +63,30 @@ provider_update() {
     local http_code=$(echo "$response" | tail -n1)
     
     if [ "$http_code" = "200" ]; then
-        echo "[GoDaddy] Successfully updated $host.$domain to $ip"
+        echo "[GoDaddy] Successfully updated $record_type record $host.$domain to $ip"
         return 0
     else
-        echo "[GoDaddy] Failed to update DNS (HTTP $http_code)"
+        echo "[GoDaddy] Failed to update $record_type record (HTTP $http_code)"
+        echo "[GoDaddy] Response: $(echo "$response" | head -n -1)"
         return 1
     fi
+}
+
+# Legacy interface - kept for backward compatibility
+provider_update() {
+    local domain="$1"
+    local host="${2:-@}"
+    local ip="$3"
+    
+    # Determine record type and delegate to new interface
+    local record_type
+    if echo "$ip" | grep -q ':'; then
+        record_type="AAAA"
+    else
+        record_type="A"
+    fi
+    
+    provider_update_record "$domain" "$host" "$ip" "$record_type"
 }
 
 provider_test() {
