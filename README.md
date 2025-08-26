@@ -1,31 +1,29 @@
-# @akaoio/access
+# My Project
 
-Foundational network access layer - eternal infrastructure. Pure POSIX shell DNS synchronization system.
+A sample project using @akaoio/composer
 
-**Version**: 0.0.1
-**License**: MIT
-**Repository**: https://github.com/akaoio/access.git
+## Features
+
+
+- Feature 1
+
+- Feature 2
+
+- Feature 3
+
 
 ## Installation
 
 ```bash
-npm install @akaoio/access
+npm install @my/project
 ```
 
 ## Usage
 
-[Usage documentation here]
+import { MyProject } from '@my/project'
 
-## Contributing
+const project = new MyProject()
+project.run()
 
-Please read [CONTRIBUTING.md](../../CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
 
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-*Part of the AKAO ecosystem - Building the future of development tooling*
-
-*Generated: 2025-08-26T11:41:37.167Z*
+Generated with ❤️ by @akaoio/composer
