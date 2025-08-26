@@ -75,16 +75,39 @@ check_requirements() {
 create_clean_clone() {
     log "Creating clean clone at $CLEAN_CLONE_DIR..."
     
-    # SAFETY CHECK: Prevent self-destruction if run from target directory
     current_dir=$(pwd)
+    
+    # SMART UPDATE: If running from target directory, update in place instead of deleting
     if [ "$current_dir" = "$CLEAN_CLONE_DIR" ]; then
-        error "FATAL: Cannot run installer from target clone directory ($CLEAN_CLONE_DIR)"
-        error "This would delete the current directory!"
-        error "Please run from a different location."
-        exit 1
+        log "Running from Access directory - updating in place with git..."
+        
+        # Check if this is a git repository
+        if [ -d ".git" ]; then
+            log "Updating existing repository..."
+            git fetch origin main || {
+                error "Failed to fetch updates from $REPO_URL"
+                exit 1
+            }
+            
+            # Reset to latest version
+            git reset --hard origin/main || {
+                error "Failed to reset to latest version"
+                exit 1
+            }
+            
+            log "✓ Repository updated to latest version"
+        else
+            error "Current directory is not a git repository"
+            error "Cannot update in place - please run from different location"
+            exit 1
+        fi
+        
+        # Set clean clone dir to current directory for installation
+        CLEAN_CLONE_DIR="$current_dir"
+        return 0
     fi
     
-    # Remove existing clone if present (now safe)
+    # Normal clean clone for external installation
     if [ -d "$CLEAN_CLONE_DIR" ]; then
         log "Removing existing Access clone..."
         rm -rf "$CLEAN_CLONE_DIR"
