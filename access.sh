@@ -408,7 +408,7 @@ LAST_RUN_FILE="$ACCESS_DATA_HOME/last_run"
 should_skip_redundant() {
     local current_time=$(date +%s)
     local lock_timeout=600  # 10 minutes
-    local min_interval=240  # 4 minutes minimum between runs
+    local min_interval=180  # 3 minutes minimum between runs (less than 5 min cron interval)
     
     # Check lock file
     if [ -f "$LOCK_FILE" ]; then
