@@ -1,105 +1,251 @@
-# Access
+# Access - Dynamic DNS IP Synchronization (v0.0.1)
 
-Pure shell network access layer. The eternal foundation that enables connectivity.
+Pure POSIX shell implementation for automatic IP synchronization with multiple DNS providers.
+Early release with auto-agnostic provider discovery system.
 
 ## Philosophy
 
-While languages come and go, shell is eternal. Access is written in pure POSIX shell to ensure it survives forever, providing the most fundamental layer of network connectivity that makes everything else possible.
+While languages come and go, shell is eternal. Access is written in pure POSIX shell to ensure it survives forever, providing the most fundamental layer of connectivity - keeping your DNS synchronized with your dynamic IP.
 
-## What Access Does
+## Features
 
-- **Dynamic DNS Updates**: Syncs your home IP to DNS providers (GoDaddy, Cloudflare, Route53)
-- **Production SSL/HTTPS**: Automatic Let's Encrypt with wildcard support via DNS-01
-- **IPv6 Connectivity**: Enables direct access to home machines via IPv6
-- **Network Detection**: Reliable IP detection through multiple methods
-- **Zero Dependencies**: Pure shell, no runtime requirements
+- **Pure Shell**: Zero dependencies beyond standard POSIX utilities
+- **Auto-Agnostic Discovery**: Providers are discovered at runtime, not hardcoded
+- **Big Tech Provider Support**: AWS Route53, Google Cloud DNS, Azure DNS, Cloudflare, GoDaddy, DigitalOcean
+- **Flexible Deployment**: Systemd service, cron job, or both
+- **Auto-Update**: Optional self-updating capability
+- **Reliable Detection**: Multiple IP detection methods (DNS & HTTP)
+- **Simple Configuration**: One command setup per provider
+- **Provider Health Checks**: Built-in provider validation and health monitoring
+- **Single Responsibility**: Does one thing extremely well - IP synchronization
 
 ## Installation
 
+### Default (Cron every 5 minutes)
 ```bash
-curl -sSL https://raw.githubusercontent.com/akaoio/access/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/akaoio/access/main/install.sh | sh
 ```
 
-## Usage
-
-### DNS Management
+### Systemd Service
 ```bash
-# Update DNS with current IP
-access update
+curl -sSL https://raw.githubusercontent.com/akaoio/access/main/install.sh | sh -s -- --systemd
+```
 
-# Check current IP
+### Custom Cron Interval
+```bash
+curl -sSL https://raw.githubusercontent.com/akaoio/access/main/install.sh | sh -s -- --interval=10
+```
+
+### Both Service and Cron with Auto-Update
+```bash
+curl -sSL https://raw.githubusercontent.com/akaoio/access/main/install.sh | sh -s -- --systemd --cron --auto-update
+```
+
+## Quick Start
+
+### 1. Configure Your DNS Provider
+
+#### GoDaddy
+```bash
+access config godaddy \
+  --key=YOUR_API_KEY \
+  --secret=YOUR_API_SECRET \
+  --domain=example.com \
+  --host=@
+```
+
+#### Cloudflare
+```bash
+access config cloudflare \
+  --email=your@email.com \
+  --api-key=YOUR_API_KEY \
+  --zone-id=YOUR_ZONE_ID \
+  --domain=example.com \
+  --host=@
+```
+
+#### DigitalOcean
+```bash
+access config digitalocean \
+  --token=YOUR_API_TOKEN \
+  --domain=example.com \
+  --host=@
+```
+
+#### Azure DNS
+```bash
+access config azure \
+  --subscription-id=YOUR_SUBSCRIPTION_ID \
+  --resource-group=YOUR_RESOURCE_GROUP \
+  --tenant-id=YOUR_TENANT_ID \
+  --client-id=YOUR_CLIENT_ID \
+  --client-secret=YOUR_CLIENT_SECRET \
+  --domain=example.com \
+  --host=@
+```
+
+#### Google Cloud DNS
+```bash
+access config gcloud \
+  --project-id=YOUR_PROJECT_ID \
+  --zone-name=YOUR_ZONE_NAME \
+  --service-account-key=YOUR_BASE64_KEY \
+  --domain=example.com \
+  --host=@
+```
+
+#### AWS Route53
+```bash
+access config route53 \
+  --zone-id=YOUR_HOSTED_ZONE_ID \
+  --access-key=YOUR_ACCESS_KEY \
+  --secret-key=YOUR_SECRET_KEY \
+  --domain=example.com \
+  --host=@
+```
+
+### 2. Test Your Setup
+
+```bash
+# Check IP detection
 access ip
 
-# Configure provider
-access config godaddy --key=YOUR_KEY --secret=YOUR_SECRET --domain=example.com
-
-# Run as daemon
-access daemon
+# Test DNS update
+access update
 ```
 
-### SSL Certificate Management (Production-Ready)
+### 3. Automatic Updates
 
-Access provides **production-grade SSL** with automatic Let's Encrypt integration:
+#### Cron Job (Default)
+```bash
+# View cron job
+crontab -l
+
+# Remove cron job
+crontab -l | grep -v access | crontab -
+```
+
+#### Systemd Service
+```bash
+# Start service
+sudo systemctl start access
+
+# Enable on boot
+sudo systemctl enable access
+
+# View logs
+sudo journalctl -u access -f
+```
+
+#### Auto-Update Feature
+If installed with `--auto-update`, Access will automatically update itself weekly.
+You can also manually update:
+```bash
+access auto-update
+```
+
+## Manual Usage
 
 ```bash
-# Production setup - enforces valid certificates only
-access ssl production setup example.com admin@example.com
+# Core Commands
+access ip              # Detect and display public IP
+access update          # Update DNS with current IP
+access daemon          # Run continuous updates (foreground)
+access config          # Configure DNS provider
+access auto-update     # Check and install updates
+access version         # Show version
+access help            # Show help
 
-# Standard setup - tries multiple methods automatically
-access ssl letsencrypt example.com
-
-# Renew all certificates
-access ssl renew
-
-# Check certificate status
-access ssl check
-
-# Setup auto-renewal (runs twice daily)
-access ssl auto-renew
+# Provider Discovery (v0.0.1+)
+access discover        # Auto-discover all available providers
+access providers       # List providers with descriptions
+access capabilities    # Show what a provider can do
+access suggest         # Suggest provider for your domain
+access health          # Check health of all providers
 ```
 
-#### Certificate Methods (Automatic Fallback Chain)
+## Configuration
 
-1. **DNS-01 Challenge** (Recommended)
-   - Supports wildcard certificates (*.example.com)
-   - Uses GoDaddy credentials from Access config automatically
-   - No port requirements
+Configuration is stored in `~/.access/config.json`
 
-2. **Standalone Server**
-   - Temporary web server on port 80/8080
-   - Works without existing web server
-   - Automatic port detection
+Environment variables can override config:
+- `ACCESS_PROVIDER` - DNS provider
+- `ACCESS_DOMAIN` - Domain to update
+- `ACCESS_HOST` - Host record (@ for root)
+- `ACCESS_INTERVAL` - Update interval in seconds (daemon mode)
+- `AUTO_UPDATE` - Enable auto-updates on 'update' command (true/false)
 
-3. **HTTP-01 Challenge**
-   - Requires existing web server
-   - Uses webroot directory
+Provider-specific environment variables:
+- GoDaddy: `GODADDY_KEY`, `GODADDY_SECRET`
+- Cloudflare: `CLOUDFLARE_EMAIL`, `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ZONE_ID`
+- DigitalOcean: `DO_API_TOKEN`
+- Azure: `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP`, `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`
+- Google Cloud: `GCLOUD_PROJECT_ID`, `GCLOUD_ZONE_NAME`, `GCLOUD_SERVICE_ACCOUNT_KEY`
+- Route53: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ROUTE53_ZONE_ID`
 
-The system automatically tries each method until one succeeds, ensuring maximum compatibility.
+## IP Detection Methods
 
-## Why Access Exists
+Access uses multiple fallback methods to detect your public IP:
 
-Access sits below all other infrastructure. When Air breaks, when databases fail, when applications crash - Access survives. It's the layer that ensures you can always reach your machine.
+1. **DNS Resolution** (fastest)
+   - OpenDNS resolver
+   - Uses `dig` or `nslookup`
 
-Access provides the three fundamental pillars of network connectivity:
-1. **Discovery** - Your machine's IP is always synchronized to DNS
-2. **Security** - SSL certificates ensure encrypted HTTPS access
-3. **Persistence** - Pure shell ensures it works forever, on any system
+2. **HTTP Services** (fallback)
+   - checkip.amazonaws.com
+   - ipv4.icanhazip.com
+   - ifconfig.me
 
 ## Provider Support
 
-- ✅ GoDaddy
-- 🚧 Cloudflare (coming soon)
-- 🚧 AWS Route53 (coming soon)
-- 🚧 Custom webhook (coming soon)
+### Major Cloud Providers (Big Tech)
+- ✅ **AWS Route53** - Amazon Web Services DNS (requires AWS CLI)
+- ✅ **Google Cloud DNS** - Google Cloud Platform (requires gcloud CLI)
+- ✅ **Azure DNS** - Microsoft Azure DNS Service
+- ✅ **Cloudflare** - Leading CDN and DNS provider
+
+### Traditional Providers
+- ✅ **GoDaddy** - Popular domain registrar
+- ✅ **DigitalOcean** - Developer-friendly cloud platform
+
+## Requirements
+
+- POSIX-compliant shell (`/bin/sh`)
+- `curl` or `wget`
+- `dig` or `nslookup` (optional, for DNS detection)
+- `cron` (for automatic updates)
+- `aws` CLI (only for Route53 provider)
+- `gcloud` CLI (only for Google Cloud DNS provider)
+
+## Security
+
+- Credentials stored locally in `~/.access/config.json`
+- All API calls use HTTPS
+- Private/reserved IPs are filtered
+- Detailed logging to `~/.access/access.log`
 
 ## Pure Shell Promise
 
 This project will NEVER require:
 - Node.js, Python, Go, Rust, or any runtime
-- NPM, pip, cargo, or any package manager  
+- NPM, pip, cargo, or any package manager
 - Compilation, transpilation, or build steps
-- Anything beyond POSIX shell
+- Anything beyond POSIX shell (except provider-specific CLIs)
+
+## Why Access?
+
+Access sits below all other infrastructure. When databases fail, when applications crash - Access survives. It's the layer that ensures your DNS always points to the right IP, no matter what.
+
+**One job. Done perfectly. Forever.**
 
 ## License
 
 MIT
+
+## Contributing
+
+Pull requests welcome! Please ensure:
+- POSIX shell compatibility
+- No external dependencies beyond standard utilities
+- Provider implementations follow existing patterns
+- Single responsibility principle - IP sync only

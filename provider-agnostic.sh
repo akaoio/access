@@ -1,0 +1,215 @@
+#!/bin/sh
+# Provider Abstraction Layer - Fully Agnostic Auto-Discovery
+# No hardcoded provider knowledge - complete runtime discovery
+
+PROVIDER_DIR="${PROVIDER_DIR:-$(dirname "$0")/providers}"
+
+# Auto-discover all providers without any hardcoding
+discover_providers() {
+    [ ! -d "$PROVIDER_DIR" ] && return 1
+    
+    for provider_file in "$PROVIDER_DIR"/*.sh; do
+        [ -f "$provider_file" ] || continue
+        echo "$(basename "$provider_file" .sh)"
+    done
+}
+
+# Extract provider metadata without sourcing
+get_provider_metadata() {
+    local provider_file="$1"
+    local metadata_type="$2"
+    
+    case "$metadata_type" in
+        name)
+            # Try to extract name from comments or provider_info
+            grep -m1 "^# Name:" "$provider_file" 2>/dev/null | sed 's/^# Name: *//'
+            ;;
+        description)
+            # Try multiple patterns to find description
+            grep -m1 "^# Description:\|^# .* Provider\|^# .* DNS\|^# .* Service" "$provider_file" 2>/dev/null | head -1 | sed 's/^# \(Description: \)\?//'
+            ;;
+        type)
+            # Auto-detect provider type from file content
+            if grep -q "DNS\|domain\|record" "$provider_file" 2>/dev/null; then
+                echo "dns"
+            elif grep -q "blockchain\|contract\|web3" "$provider_file" 2>/dev/null; then
+                echo "blockchain"
+            elif grep -q "ipfs\|distributed\|p2p" "$provider_file" 2>/dev/null; then
+                echo "p2p"
+            else
+                echo "unknown"
+            fi
+            ;;
+        version)
+            grep -m1 "^# Version:" "$provider_file" 2>/dev/null | sed 's/^# Version: *//'
+            ;;
+    esac
+}
+
+# List providers with auto-discovered metadata
+list_providers() {
+    echo "Available providers (auto-discovered):"
+    echo ""
+    
+    for provider in $(discover_providers); do
+        provider_file="$PROVIDER_DIR/$provider.sh"
+        
+        # Get metadata without sourcing
+        desc=$(get_provider_metadata "$provider_file" description)
+        type=$(get_provider_metadata "$provider_file" type)
+        
+        if [ -n "$desc" ]; then
+            printf "  %-15s [%-10s] %s\n" "$provider" "$type" "$desc"
+        else
+            printf "  %-15s [%-10s]\n" "$provider" "$type"
+        fi
+    done
+}
+
+# Load provider dynamically
+load_provider() {
+    local provider_name="$1"
+    
+    [ -z "$provider_name" ] && return 1
+    
+    # Find provider file (case-insensitive)
+    local provider_file=""
+    for file in "$PROVIDER_DIR"/*.sh; do
+        [ -f "$file" ] || continue
+        base=$(basename "$file" .sh)
+        if [ "$(echo "$base" | tr '[:upper:]' '[:lower:]')" = "$(echo "$provider_name" | tr '[:upper:]' '[:lower:]')" ]; then
+            provider_file="$file"
+            break
+        fi
+    done
+    
+    if [ -z "$provider_file" ] || [ ! -f "$provider_file" ]; then
+        echo "Error: Provider not found: $provider_name" >&2
+        echo "Available providers:" >&2
+        discover_providers | while read -r p; do
+            echo "  - $p" >&2
+        done
+        return 1
+    fi
+    
+    # Source the provider
+    . "$provider_file"
+    
+    # Verify required functions exist
+    for func in provider_info provider_config provider_validate provider_update; do
+        if ! command -v "$func" >/dev/null 2>&1; then
+            echo "Warning: Provider $provider_name missing function: $func" >&2
+        fi
+    done
+    
+    return 0
+}
+
+# Get provider configuration help
+get_provider_config() {
+    local provider_name="$1"
+    
+    load_provider "$provider_name" || return 1
+    
+    echo "Configuration for $provider_name provider:"
+    echo ""
+    
+    if command -v provider_config >/dev/null 2>&1; then
+        provider_config | while IFS= read -r line; do
+            echo "  $line"
+        done
+        echo ""
+        echo "Example:"
+        echo "  access config $provider_name \\"
+        provider_config | while IFS= read -r line; do
+            field=$(echo "$line" | sed -n 's/.*field: \([^,]*\).*/\1/p' | xargs)
+            required=$(echo "$line" | grep -o "required: true" || true)
+            if [ -n "$field" ] && [ -n "$required" ]; then
+                echo "    --$(echo "$field" | tr '_' '-')=VALUE \\"
+            fi
+        done | sed '$ s/ \\$//'
+    else
+        echo "  No configuration help available"
+    fi
+    
+    return 0
+}
+
+# Get provider capabilities
+get_provider_capabilities() {
+    local provider_name="$1"
+    
+    load_provider "$provider_name" || return 1
+    
+    echo "Provider: $provider_name"
+    echo "Capabilities:"
+    
+    # Check which functions are available
+    command -v provider_info >/dev/null 2>&1 && echo "  ✓ Information"
+    command -v provider_config >/dev/null 2>&1 && echo "  ✓ Configuration"
+    command -v provider_validate >/dev/null 2>&1 && echo "  ✓ Validation"
+    command -v provider_update >/dev/null 2>&1 && echo "  ✓ Update"
+    command -v provider_test >/dev/null 2>&1 && echo "  ✓ Testing"
+    command -v provider_status >/dev/null 2>&1 && echo "  ✓ Status"
+    command -v provider_cleanup >/dev/null 2>&1 && echo "  ✓ Cleanup"
+}
+
+# Auto-detect provider from domain
+suggest_provider() {
+    local domain="$1"
+    
+    echo "Analyzing domain: $domain"
+    echo "Checking available providers..."
+    
+    for provider in $(discover_providers); do
+        load_provider "$provider" 2>/dev/null || continue
+        
+        # Check if provider has a match function
+        if command -v provider_matches_domain >/dev/null 2>&1; then
+            if provider_matches_domain "$domain"; then
+                echo "Suggested provider: $provider"
+                return 0
+            fi
+        fi
+    done
+    
+    echo "No specific provider detected. Showing all available:"
+    list_providers
+}
+
+# Provider health check
+check_provider_health() {
+    echo "Provider Health Check"
+    echo "===================="
+    
+    local total=0
+    local healthy=0
+    
+    for provider in $(discover_providers); do
+        total=$((total + 1))
+        printf "%-20s ... " "$provider"
+        
+        if load_provider "$provider" >/dev/null 2>&1; then
+            # Check required functions
+            missing=""
+            for func in provider_update provider_validate; do
+                command -v "$func" >/dev/null 2>&1 || missing="$missing $func"
+            done
+            
+            if [ -z "$missing" ]; then
+                echo "✓ Healthy"
+                healthy=$((healthy + 1))
+            else
+                echo "⚠ Missing:$missing"
+            fi
+        else
+            echo "✗ Failed to load"
+        fi
+    done
+    
+    echo ""
+    echo "Summary: $healthy/$total providers healthy"
+}
+
+# Functions are available after sourcing this file
+# No need to export in POSIX sh
