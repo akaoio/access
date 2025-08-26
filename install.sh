@@ -75,7 +75,16 @@ check_requirements() {
 create_clean_clone() {
     log "Creating clean clone at $CLEAN_CLONE_DIR..."
     
-    # Remove existing clone if present
+    # SAFETY CHECK: Prevent self-destruction if run from target directory
+    current_dir=$(pwd)
+    if [ "$current_dir" = "$CLEAN_CLONE_DIR" ]; then
+        error "FATAL: Cannot run installer from target clone directory ($CLEAN_CLONE_DIR)"
+        error "This would delete the current directory!"
+        error "Please run from a different location."
+        exit 1
+    fi
+    
+    # Remove existing clone if present (now safe)
     if [ -d "$CLEAN_CLONE_DIR" ]; then
         log "Removing existing Access clone..."
         rm -rf "$CLEAN_CLONE_DIR"
