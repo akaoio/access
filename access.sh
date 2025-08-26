@@ -61,16 +61,68 @@ cleanup() {
     rm -f /tmp/access_* 2>/dev/null
 }
 trap cleanup EXIT INT TERM
-ACCESS_HOME="${ACCESS_HOME:-$HOME/.access}"
-ACCESS_CONFIG="${ACCESS_CONFIG:-$ACCESS_HOME/config.json}"
-ACCESS_STATE="${ACCESS_STATE:-$ACCESS_HOME/state.json}"
-ACCESS_LOG="${ACCESS_LOG:-$ACCESS_HOME/access.log}"
+# XDG Base Directory Specification compliance
+XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+
+# Access directories following XDG standard
+ACCESS_CONFIG_HOME="${ACCESS_CONFIG_HOME:-$XDG_CONFIG_HOME/access}"
+ACCESS_DATA_HOME="${ACCESS_DATA_HOME:-$XDG_DATA_HOME/access}"
+
+# Configuration files (XDG-compliant)
+ACCESS_CONFIG="${ACCESS_CONFIG:-$ACCESS_CONFIG_HOME/config.json}"
+ACCESS_STATE="${ACCESS_STATE:-$ACCESS_DATA_HOME/state.json}"
+ACCESS_LOG="${ACCESS_LOG:-$ACCESS_DATA_HOME/access.log}"
+
+# Legacy path for migration
+ACCESS_LEGACY_HOME="$HOME/.access"
 
 # Get script directory for provider loading
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# Ensure access directory exists
-mkdir -p "$ACCESS_HOME"
+# Ensure XDG-compliant directories exist
+mkdir -p "$ACCESS_CONFIG_HOME"
+mkdir -p "$ACCESS_DATA_HOME"
+
+# Migration: Move existing config from legacy location to XDG
+migrate_legacy_config() {
+    if [ -d "$ACCESS_LEGACY_HOME" ] && [ ! -f "$ACCESS_CONFIG" ] && [ -f "$ACCESS_LEGACY_HOME/config.json" ]; then
+        log_debug "Migrating configuration from legacy location to XDG-compliant paths"
+        
+        # Migrate config file
+        if [ -f "$ACCESS_LEGACY_HOME/config.json" ]; then
+            cp "$ACCESS_LEGACY_HOME/config.json" "$ACCESS_CONFIG"
+            log "✓ Migrated config: ~/.access/config.json → ~/.config/access/config.json"
+        fi
+        
+        # Migrate log file 
+        if [ -f "$ACCESS_LEGACY_HOME/access.log" ]; then
+            cp "$ACCESS_LEGACY_HOME/access.log" "$ACCESS_LOG"
+            log "✓ Migrated log: ~/.access/access.log → ~/.local/share/access/access.log"
+        fi
+        
+        # Migrate state file
+        if [ -f "$ACCESS_LEGACY_HOME/state.json" ]; then
+            cp "$ACCESS_LEGACY_HOME/state.json" "$ACCESS_STATE"
+            log "✓ Migrated state: ~/.access/state.json → ~/.local/share/access/state.json"
+        fi
+        
+        # Migrate last_run file
+        if [ -f "$ACCESS_LEGACY_HOME/last_run" ]; then
+            cp "$ACCESS_LEGACY_HOME/last_run" "$ACCESS_DATA_HOME/last_run"
+            log "✓ Migrated last_run file to XDG data directory"
+        fi
+        
+        log "📁 Configuration migrated to XDG Base Directory Specification"
+        log "   Config: $ACCESS_CONFIG"
+        log "   Data: $ACCESS_DATA_HOME"
+        log ""
+        log "Legacy directory ~/.access can be safely removed after verification"
+    fi
+}
+
+# Run migration check
+migrate_legacy_config
 
 # Source provider abstraction layer (prefer agnostic version)
 if [ -f "$SCRIPT_DIR/provider-agnostic.sh" ]; then
@@ -348,9 +400,9 @@ detect_ipv6() {
     return 1
 }
 
-# Lock file management for redundant automation
-LOCK_FILE="$ACCESS_HOME/access.lock"
-LAST_RUN_FILE="$ACCESS_HOME/last_run"
+# Lock file management for redundant automation (XDG data directory)
+LOCK_FILE="$ACCESS_DATA_HOME/access.lock"
+LAST_RUN_FILE="$ACCESS_DATA_HOME/last_run"
 
 # Check if another instance is running and should skip
 should_skip_redundant() {

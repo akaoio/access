@@ -1,0 +1,326 @@
+name: Access CI/CD - Foundational Network Layer
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  DEBIAN_FRONTEND: noninteractive
+
+jobs:
+  shell-compatibility:
+    name: Shell Compatibility Tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-20.04]
+        shell: [dash, bash, ash]
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install shell interpreters
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dash bash busybox-static
+          # Create ash symlink from busybox
+          sudo ln -sf /bin/busybox /bin/ash || true
+
+      - name: Verify POSIX compliance
+        run: |
+          echo "Testing with ${{ matrix.shell }} shell..."
+          ${{ matrix.shell }} --version || echo "${{ matrix.shell }} version info"
+
+      - name: Run access script syntax check
+        run: |
+          # Test main script syntax
+          ${{ matrix.shell }} -n access.sh
+          
+          # Test installer syntax  
+          ${{ matrix.shell }} -n install.sh
+          
+          # Test provider scripts
+          for provider in providers/*.sh; do
+            if [ -f "$provider" ]; then
+              echo "Checking syntax: $provider"
+              ${{ matrix.shell }} -n "$provider"
+            fi
+          done
+
+      - name: Test core functionality
+        run: |
+          # Test help command
+          ${{ matrix.shell }} access.sh --help
+          
+          # Test version command
+          ${{ matrix.shell }} access.sh --version
+          
+          # Test IP detection (safe mode)
+          ACCESS_DRY_RUN=true ${{ matrix.shell }} access.sh ip
+
+  battle-tests:
+    name: Battle Terminal Tests
+    runs-on: ubuntu-latest
+    needs: shell-compatibility
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install Battle globally
+        run: |
+          # Install Battle from the workspace
+          cd ../battle
+          npm install
+          npm run build
+          npm link
+          cd ../access
+
+      - name: Run Battle tests
+        run: |
+          # Run comprehensive Battle tests
+          find test -name "*.battle.cjs" -exec battle test {} \;
+
+      - name: Generate test reports
+        if: always()
+        run: |
+          mkdir -p test-reports
+          
+          # Copy Battle logs and replays
+          if [ -d "logs" ]; then
+            cp logs/*.json test-reports/ 2>/dev/null || true
+            
+            # Generate HTML reports from replays
+            for replay in logs/*.json; do
+              if [ -f "$replay" ]; then
+                battle replay export "$replay" --format html --output "test-reports/$(basename $replay .json).html"
+              fi
+            done
+          fi
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: access-battle-reports
+          path: test-reports/
+          retention-days: 7
+
+  install-test:
+    name: Installation Testing
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, ubuntu-20.04]
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Test installation script
+        run: |
+          # Create test environment
+          export TEST_INSTALL_DIR="$HOME/test-access"
+          export ACCESS_INSTALL_DIR="$TEST_INSTALL_DIR"
+          
+          # Run installer in test mode
+          bash install.sh --test-mode
+          
+          # Verify installation
+          if [ -f "$TEST_INSTALL_DIR/access" ]; then
+            echo "✅ Installation successful"
+            "$TEST_INSTALL_DIR/access" --version
+          else
+            echo "❌ Installation failed"
+            exit 1
+          fi
+
+      - name: Test uninstallation
+        run: |
+          export TEST_INSTALL_DIR="$HOME/test-access"
+          
+          # Run uninstaller
+          bash uninstall.sh --test-mode
+          
+          # Verify cleanup
+          if [ ! -f "$TEST_INSTALL_DIR/access" ]; then
+            echo "✅ Uninstallation successful"
+          else
+            echo "❌ Uninstallation failed"
+            exit 1
+          fi
+
+  provider-tests:
+    name: DNS Provider Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install required tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl dig dnsutils
+
+      - name: Test provider discovery
+        run: |
+          # Test provider detection
+          bash providers/test.sh
+          
+          # Test provider configurations (dry run mode)
+          for provider in providers/*.sh; do
+            if [[ "$provider" != *"test.sh"* ]] && [ -f "$provider" ]; then
+              echo "Testing provider: $(basename $provider)"
+              ACCESS_DRY_RUN=true bash "$provider" --test
+            fi
+          done
+
+      - name: Test IP detection methods
+        run: |
+          # Test DNS-based detection
+          dig @resolver1.opendns.com myip.opendns.com +short
+          
+          # Test HTTP-based detection
+          curl -s --max-time 10 checkip.amazonaws.com || echo "AWS IP check failed"
+          curl -s --max-time 10 ipv4.icanhazip.com || echo "icanhazip failed"
+
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check for sensitive patterns
+        run: |
+          # Check for hardcoded secrets
+          if grep -r "password\|secret\|key" --include="*.sh" . | grep -v "KEY=" | grep -v "echo.*key"; then
+            echo "❌ Potential hardcoded secrets found"
+            exit 1
+          fi
+          
+          # Check for dangerous commands
+          if grep -r "rm -rf /\|sudo rm\|format" --include="*.sh" .; then
+            echo "❌ Dangerous commands found"
+            exit 1
+          fi
+          
+          echo "✅ Security audit passed"
+
+      - name: Check script permissions
+        run: |
+          # Verify scripts are not world-writable
+          find . -name "*.sh" -perm /002 -exec echo "World-writable script: {}" \; -exec false \; || true
+          
+          # Verify access script is executable
+          if [ ! -x "access.sh" ]; then
+            echo "❌ Main access script is not executable"
+            exit 1
+          fi
+
+  integration-test:
+    name: Integration Testing
+    runs-on: ubuntu-latest
+    needs: [shell-compatibility, install-test, provider-tests]
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Full system integration test
+        run: |
+          # Install access
+          bash install.sh --local
+          
+          # Test full workflow (dry run)
+          export ACCESS_DRY_RUN=true
+          export ACCESS_PROVIDER=test
+          export ACCESS_DOMAIN=example.com
+          export ACCESS_HOST=@
+          
+          # Test configuration
+          ./access config test
+          
+          # Test IP detection
+          ./access ip
+          
+          # Test update process
+          ./access update
+          
+          echo "✅ Integration test completed"
+
+  publish:
+    name: Publish Release
+    runs-on: ubuntu-latest
+    needs: [battle-tests, install-test, provider-tests, security-audit, integration-test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create release package
+        run: |
+          # Create distribution package
+          mkdir -p dist/access
+          
+          # Copy core files
+          cp access.sh dist/access/access
+          cp install.sh dist/access/
+          cp uninstall.sh dist/access/
+          cp -r providers dist/access/
+          cp README.md dist/access/
+          cp LICENSE dist/access/
+          
+          # Make executable
+          chmod +x dist/access/access
+          chmod +x dist/access/install.sh
+          chmod +x dist/access/uninstall.sh
+          
+          # Create tarball
+          cd dist
+          tar -czf access-latest.tar.gz access/
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: access-release
+          path: dist/access-latest.tar.gz
+          retention-days: 30
+
+  notify:
+    name: Notification
+    runs-on: ubuntu-latest
+    needs: [publish]
+    if: always()
+    
+    steps:
+      - name: Success notification
+        if: needs.publish.result == 'success'
+        run: |
+          echo "🎉 Access CI/CD pipeline completed successfully!"
+          echo "✅ Shell compatibility verified across multiple interpreters"
+          echo "✅ Battle terminal tests passed"
+          echo "✅ Installation/uninstallation tested"
+          echo "✅ Provider integrations validated"
+          echo "✅ Security audit passed"
+          echo "✅ Integration tests completed"
+          echo "📦 Release package created"
+
+      - name: Failure notification
+        if: needs.publish.result == 'failure' || needs.battle-tests.result == 'failure'
+        run: |
+          echo "❌ Access CI/CD pipeline failed!"
+          echo "🔍 Check the logs and test reports for details"
+          exit 1

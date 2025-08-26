@@ -854,9 +854,10 @@ Testing:
    access ip         # Test IP detection
    access update     # Test DNS update
 
-File Locations:
-===============
+File Locations (XDG Base Directory Specification):
+=================================================
    Config:        ~/.config/access/config.json
+   Data & Logs:   ~/.local/share/access/
    Update Log:    ~/.config/access/auto-update.log
    Clean Clone:   ~/access/ (used for self-updates)
 
