@@ -9,7 +9,7 @@ While languages come and go, shell is eternal. Access is written in pure POSIX s
 ## What Access Does
 
 - **Dynamic DNS Updates**: Syncs your home IP to DNS providers (GoDaddy, Cloudflare, Route53)
-- **SSL/HTTPS Access**: Automatic SSL certificate management (self-signed + Let's Encrypt)
+- **Production SSL/HTTPS**: Automatic Let's Encrypt with wildcard support via DNS-01
 - **IPv6 Connectivity**: Enables direct access to home machines via IPv6
 - **Network Detection**: Reliable IP detection through multiple methods
 - **Zero Dependencies**: Pure shell, no runtime requirements
@@ -37,23 +37,44 @@ access config godaddy --key=YOUR_KEY --secret=YOUR_SECRET --domain=example.com
 access daemon
 ```
 
-### SSL Certificate Management
+### SSL Certificate Management (Production-Ready)
+
+Access provides **production-grade SSL** with automatic Let's Encrypt integration:
+
 ```bash
-# Generate self-signed certificate
-access ssl generate example.com
+# Production setup - enforces valid certificates only
+access ssl production setup example.com admin@example.com
 
-# Setup Let's Encrypt certificate
-access ssl letsencrypt example.com admin@example.com
+# Standard setup - tries multiple methods automatically
+access ssl letsencrypt example.com
 
-# Renew certificates
+# Renew all certificates
 access ssl renew
 
 # Check certificate status
 access ssl check
 
-# Setup auto-renewal
+# Setup auto-renewal (runs twice daily)
 access ssl auto-renew
 ```
+
+#### Certificate Methods (Automatic Fallback Chain)
+
+1. **DNS-01 Challenge** (Recommended)
+   - Supports wildcard certificates (*.example.com)
+   - Uses GoDaddy credentials from Access config automatically
+   - No port requirements
+
+2. **Standalone Server**
+   - Temporary web server on port 80/8080
+   - Works without existing web server
+   - Automatic port detection
+
+3. **HTTP-01 Challenge**
+   - Requires existing web server
+   - Uses webroot directory
+
+The system automatically tries each method until one succeeds, ensuring maximum compatibility.
 
 ## Why Access Exists
 

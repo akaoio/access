@@ -1,13 +1,14 @@
 #!/bin/sh
 # SSL/TLS certificate management - Pure shell implementation
-# Provides both self-signed and Let's Encrypt certificates
+# Production-ready Let's Encrypt with automatic DNS challenge
 
 set -e
 
 # Configuration
 SSL_HOME="${SSL_HOME:-$HOME/.access/ssl}"
 LETSENCRYPT_HOME="${LETSENCRYPT_HOME:-/etc/letsencrypt}"
-SELF_SIGNED_DAYS="${SELF_SIGNED_DAYS:-365}"
+ACME_HOME="${ACME_HOME:-$HOME/.acme.sh}"
+PRODUCTION_MODE="${PRODUCTION_MODE:-true}"
 
 # Logging
 log() {
@@ -23,17 +24,33 @@ check_requirements() {
         missing="$missing openssl"
     fi
     
-    # Check for certbot (optional, for Let's Encrypt)
-    if ! command -v certbot >/dev/null 2>&1; then
-        log "Warning: certbot not found. Let's Encrypt support disabled."
-        log "Install with: sudo apt-get install certbot (Debian/Ubuntu)"
-        log "           or: sudo yum install certbot (RHEL/CentOS)"
+    # Check for curl (required for acme.sh)
+    if ! command -v curl >/dev/null 2>&1; then
+        missing="$missing curl"
     fi
     
     if [ -n "$missing" ]; then
         log "Error: Required tools missing:$missing"
         exit 1
     fi
+}
+
+# Install acme.sh if not present
+install_acme() {
+    if [ ! -f "$ACME_HOME/acme.sh" ]; then
+        log "Installing acme.sh for Let's Encrypt support..."
+        curl -s https://get.acme.sh | sh -s email=$1
+        
+        if [ -f "$ACME_HOME/acme.sh" ]; then
+            log "✓ acme.sh installed successfully"
+            # Set default CA to Let's Encrypt
+            "$ACME_HOME/acme.sh" --set-default-ca --server letsencrypt
+        else
+            log "✗ Failed to install acme.sh"
+            return 1
+        fi
+    fi
+    return 0
 }
 
 # Generate self-signed certificate
@@ -80,87 +97,193 @@ generate_self_signed() {
     fi
 }
 
-# Setup Let's Encrypt certificate
-setup_letsencrypt() {
+# Setup Let's Encrypt with HTTP challenge
+setup_letsencrypt_http() {
     local domain="$1"
     local email="$2"
     local webroot="${3:-/var/www/html}"
     
-    if ! command -v certbot >/dev/null 2>&1; then
-        log "Error: certbot not installed. Cannot use Let's Encrypt."
-        log "Falling back to self-signed certificate..."
-        generate_self_signed "$domain"
-        return 1
+    log "Setting up Let's Encrypt certificate via HTTP challenge..."
+    
+    # Install acme.sh if needed
+    install_acme "$email" || return 1
+    
+    # Issue certificate with webroot mode
+    if "$ACME_HOME/acme.sh" --issue -d "$domain" -w "$webroot" --force; then
+        install_certificate "$domain"
+        return $?
     fi
     
-    log "Setting up Let's Encrypt certificate for $domain..."
+    return 1
+}
+
+# Setup Let's Encrypt with DNS challenge (for wildcard support)
+setup_letsencrypt_dns() {
+    local domain="$1"
+    local email="$2"
+    local dns_provider="${3:-godaddy}"
     
-    # Check if we need sudo
-    local sudo_cmd=""
-    if [ ! -w "$LETSENCRYPT_HOME" ] && [ "$(id -u)" -ne 0 ]; then
-        sudo_cmd="sudo"
-    fi
+    log "Setting up Let's Encrypt certificate via DNS challenge..."
     
-    # Certbot command options
-    local certbot_opts="certonly --webroot"
-    certbot_opts="$certbot_opts --webroot-path $webroot"
-    certbot_opts="$certbot_opts --domain $domain"
-    certbot_opts="$certbot_opts --non-interactive"
-    certbot_opts="$certbot_opts --agree-tos"
+    # Install acme.sh if needed
+    install_acme "$email" || return 1
     
-    if [ -n "$email" ]; then
-        certbot_opts="$certbot_opts --email $email"
-    else
-        certbot_opts="$certbot_opts --register-unsafely-without-email"
-    fi
-    
-    # Try to obtain certificate
-    if $sudo_cmd certbot $certbot_opts; then
-        local key_path="$LETSENCRYPT_HOME/live/$domain/privkey.pem"
-        local cert_path="$LETSENCRYPT_HOME/live/$domain/fullchain.pem"
+    # Load DNS credentials from Access config
+    local config_file="$HOME/.access/config.json"
+    if [ -f "$config_file" ]; then
+        if command -v jq >/dev/null 2>&1; then
+            local key=$(jq -r '.godaddy.key // ""' "$config_file")
+            local secret=$(jq -r '.godaddy.secret // ""' "$config_file")
+        else
+            # Fallback to grep/sed
+            local key=$(grep '"key"' "$config_file" | sed 's/.*"key"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+            local secret=$(grep '"secret"' "$config_file" | sed 's/.*"secret"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+        fi
         
-        if [ -f "$key_path" ] && [ -f "$cert_path" ]; then
-            log "✓ Let's Encrypt certificate obtained"
-            log "  Key:  $key_path"
-            log "  Cert: $cert_path"
+        if [ -n "$key" ] && [ -n "$secret" ]; then
+            # Export GoDaddy credentials for acme.sh
+            export GD_Key="$key"
+            export GD_Secret="$secret"
             
-            # Create symlinks in Access SSL directory
-            mkdir -p "$SSL_HOME/letsencrypt"
-            ln -sf "$key_path" "$SSL_HOME/letsencrypt/key.pem"
-            ln -sf "$cert_path" "$SSL_HOME/letsencrypt/cert.pem"
+            # Issue wildcard certificate
+            if "$ACME_HOME/acme.sh" --issue -d "$domain" -d "*.$domain" --dns dns_gd --force; then
+                install_certificate "$domain"
+                return $?
+            fi
+        else
+            log "Warning: GoDaddy credentials not found in config"
+        fi
+    fi
+    
+    return 1
+}
+
+# Setup Let's Encrypt with standalone server
+setup_letsencrypt_standalone() {
+    local domain="$1"
+    local email="$2"
+    local port="${3:-80}"
+    
+    log "Setting up Let's Encrypt certificate via standalone server..."
+    
+    # Install acme.sh if needed
+    install_acme "$email" || return 1
+    
+    # Check if port 80 is available
+    if netstat -tln 2>/dev/null | grep -q ":$port "; then
+        log "Warning: Port $port is in use. Trying alternate port 8080..."
+        port=8080
+    fi
+    
+    # Issue certificate with standalone mode
+    if "$ACME_HOME/acme.sh" --issue -d "$domain" --standalone --httpport "$port" --force; then
+        install_certificate "$domain"
+        return $?
+    fi
+    
+    return 1
+}
+
+# Install certificate from acme.sh to Access SSL directory
+install_certificate() {
+    local domain="$1"
+    local acme_cert="$ACME_HOME/$domain/fullchain.cer"
+    local acme_key="$ACME_HOME/$domain/$domain.key"
+    
+    if [ -f "$acme_cert" ] && [ -f "$acme_key" ]; then
+        mkdir -p "$SSL_HOME/production"
+        
+        # Install certificate
+        "$ACME_HOME/acme.sh" --install-cert -d "$domain" \
+            --key-file "$SSL_HOME/production/key.pem" \
+            --fullchain-file "$SSL_HOME/production/cert.pem" \
+            --reloadcmd "echo 'Certificate installed'"
+        
+        if [ -f "$SSL_HOME/production/cert.pem" ]; then
+            log "✓ Production certificate installed"
+            log "  Key:  $SSL_HOME/production/key.pem"
+            log "  Cert: $SSL_HOME/production/cert.pem"
+            
+            # Set secure permissions
+            chmod 600 "$SSL_HOME/production/key.pem"
+            chmod 644 "$SSL_HOME/production/cert.pem"
             
             return 0
         fi
     fi
     
-    log "✗ Failed to obtain Let's Encrypt certificate"
-    log "Falling back to self-signed certificate..."
-    generate_self_signed "$domain"
+    log "✗ Failed to install certificate"
     return 1
+}
+
+# Smart Let's Encrypt setup with fallback chain
+setup_letsencrypt() {
+    local domain="$1"
+    local email="${2:-admin@$domain}"
+    
+    log "Starting production SSL setup for $domain..."
+    
+    # Try DNS challenge first (supports wildcards)
+    if setup_letsencrypt_dns "$domain" "$email"; then
+        log "✓ SSL setup successful via DNS challenge"
+        return 0
+    fi
+    
+    # Try standalone server
+    if setup_letsencrypt_standalone "$domain" "$email"; then
+        log "✓ SSL setup successful via standalone server"
+        return 0
+    fi
+    
+    # Try HTTP webroot as last resort
+    if setup_letsencrypt_http "$domain" "$email"; then
+        log "✓ SSL setup successful via HTTP challenge"
+        return 0
+    fi
+    
+    log "✗ All Let's Encrypt methods failed"
+    
+    # In production mode, don't fall back to self-signed
+    if [ "$PRODUCTION_MODE" = "true" ]; then
+        log "ERROR: Production mode requires valid certificates"
+        log "Please ensure:"
+        log "  1. Domain $domain points to this server"
+        log "  2. Ports 80/443 are accessible"
+        log "  3. DNS credentials are configured for wildcard certificates"
+        return 1
+    else
+        log "Development mode: Generating self-signed certificate..."
+        generate_self_signed "$domain"
+    fi
 }
 
 # Renew Let's Encrypt certificate
 renew_letsencrypt() {
-    if ! command -v certbot >/dev/null 2>&1; then
-        log "Error: certbot not installed"
-        return 1
-    fi
-    
     log "Renewing Let's Encrypt certificates..."
     
-    # Check if we need sudo
-    local sudo_cmd=""
-    if [ ! -w "$LETSENCRYPT_HOME" ] && [ "$(id -u)" -ne 0 ]; then
-        sudo_cmd="sudo"
+    # Use acme.sh for renewal
+    if [ -f "$ACME_HOME/acme.sh" ]; then
+        if "$ACME_HOME/acme.sh" --renew-all --force; then
+            log "✓ Certificates renewed successfully"
+            return 0
+        fi
     fi
     
-    if $sudo_cmd certbot renew --quiet; then
-        log "✓ Certificates renewed successfully"
-        return 0
-    else
-        log "✗ Certificate renewal failed"
-        return 1
+    # Fallback to certbot if available
+    if command -v certbot >/dev/null 2>&1; then
+        local sudo_cmd=""
+        if [ ! -w "$LETSENCRYPT_HOME" ] && [ "$(id -u)" -ne 0 ]; then
+            sudo_cmd="sudo"
+        fi
+        
+        if $sudo_cmd certbot renew --quiet; then
+            log "✓ Certificates renewed via certbot"
+            return 0
+        fi
     fi
+    
+    log "✗ Certificate renewal failed"
+    return 1
 }
 
 # Check certificate status
@@ -219,11 +342,20 @@ find_certificate() {
     local domain="${1:-localhost}"
     
     # Priority order:
-    # 1. Let's Encrypt certificate
-    # 2. Self-signed certificate
-    # 3. Generate new self-signed
+    # 1. Production Let's Encrypt certificate (from acme.sh)
+    # 2. Let's Encrypt certificate (from certbot)
+    # 3. Self-signed certificate (only in dev mode)
+    # 4. Error in production mode
     
-    # Check Let's Encrypt
+    # Check production certificate from acme.sh
+    if [ -f "$SSL_HOME/production/cert.pem" ]; then
+        if check_certificate "$SSL_HOME/production/cert.pem" >/dev/null 2>&1; then
+            echo "$SSL_HOME/production/key.pem:$SSL_HOME/production/cert.pem"
+            return 0
+        fi
+    fi
+    
+    # Check Let's Encrypt from certbot
     if [ -f "$SSL_HOME/letsencrypt/cert.pem" ]; then
         if check_certificate "$SSL_HOME/letsencrypt/cert.pem" >/dev/null 2>&1; then
             echo "$SSL_HOME/letsencrypt/key.pem:$SSL_HOME/letsencrypt/cert.pem"
@@ -231,7 +363,14 @@ find_certificate() {
         fi
     fi
     
-    # Check self-signed
+    # In production mode, we require valid certificates
+    if [ "$PRODUCTION_MODE" = "true" ]; then
+        log "ERROR: No valid production certificate found"
+        log "Run: access ssl letsencrypt $domain"
+        return 1
+    fi
+    
+    # Development mode only: use or generate self-signed
     if [ -f "$SSL_HOME/self-signed/cert.pem" ]; then
         if check_certificate "$SSL_HOME/self-signed/cert.pem" >/dev/null 2>&1; then
             echo "$SSL_HOME/self-signed/key.pem:$SSL_HOME/self-signed/cert.pem"
@@ -239,7 +378,7 @@ find_certificate() {
         fi
     fi
     
-    # Generate new self-signed
+    # Generate new self-signed (dev mode only)
     if generate_self_signed "$domain"; then
         echo "$SSL_HOME/self-signed/key.pem:$SSL_HOME/self-signed/cert.pem"
         return 0
@@ -302,36 +441,70 @@ case "${1:-help}" in
         fi
         ;;
         
+    production)
+        shift
+        export PRODUCTION_MODE="true"
+        case "${1:-help}" in
+            setup)
+                domain="$2"
+                email="${3:-admin@$domain}"
+                if [ -z "$domain" ]; then
+                    log "Error: Domain required"
+                    exit 1
+                fi
+                setup_letsencrypt "$domain" "$email"
+                ;;
+            *)
+                log "Production mode enabled - self-signed certificates disabled"
+                "$0" "$@"
+                ;;
+        esac
+        ;;
+        
     *)
         cat <<EOF
-Access SSL - Pure shell certificate management
+Access SSL - Production-ready certificate management
 
 Usage:
-    $0 generate [domain]                    Generate self-signed certificate
-    $0 letsencrypt <domain> [email] [root]  Setup Let's Encrypt certificate
-    $0 renew                                 Renew Let's Encrypt certificates
+    $0 letsencrypt <domain> [email]         Setup Let's Encrypt (auto-detect method)
+    $0 production setup <domain> [email]    Production setup (no self-signed fallback)
+    $0 renew                                 Renew all certificates
     $0 check [cert_path]                     Check certificate status
     $0 auto-renew                            Setup auto-renewal cron job
     $0 find [domain]                         Find best available certificate
     $0 help                                  Show this help
 
+Development only:
+    $0 generate [domain]                    Generate self-signed certificate
+
 Environment variables:
     SSL_HOME              SSL directory (default: ~/.access/ssl)
-    LETSENCRYPT_HOME      Let's Encrypt directory (default: /etc/letsencrypt)
-    SELF_SIGNED_DAYS      Self-signed validity (default: 365)
+    PRODUCTION_MODE       Require valid certificates (default: true)
+    ACME_HOME            acme.sh directory (default: ~/.acme.sh)
+
+Certificate Methods (tried in order):
+    1. DNS Challenge     - Wildcard support, uses GoDaddy API from Access config
+    2. Standalone Server - Temporary web server on port 80/8080
+    3. HTTP Challenge    - Requires existing web server with webroot
 
 Examples:
-    # Generate self-signed certificate
-    $0 generate example.com
+    # Production setup with wildcard certificate
+    $0 production setup example.com admin@example.com
     
-    # Setup Let's Encrypt (requires web server)
-    $0 letsencrypt example.com admin@example.com /var/www/html
+    # Standard setup (tries all methods)
+    $0 letsencrypt example.com
     
     # Setup auto-renewal
     $0 auto-renew
     
-    # Find and use best certificate
-    $0 find example.com
+    # Check certificate status
+    $0 check
+
+Notes:
+    - Production mode enforces valid certificates (no self-signed)
+    - DNS challenge automatically uses GoDaddy credentials from Access config
+    - Wildcard certificates (*.$domain) are included with DNS challenge
+    - acme.sh is automatically installed if not present
 
 EOF
         ;;
