@@ -5,6 +5,7 @@ set -e
 
 INSTALL_DIR="/usr/local/bin"
 SCRIPT_URL="https://raw.githubusercontent.com/akaoio/access/main/access.sh"
+SSL_URL="https://raw.githubusercontent.com/akaoio/access/main/ssl.sh"
 SCRIPT_NAME="access"
 
 echo "Installing Access - Pure shell network access layer"
@@ -31,44 +32,57 @@ check_requirements() {
     fi
 }
 
-# Download script
-download_script() {
-    local temp_file="/tmp/access_install_$$"
+# Download scripts
+download_scripts() {
+    local temp_main="/tmp/access_install_$$"
+    local temp_ssl="/tmp/access_ssl_install_$$"
     
     echo "Downloading Access..."
     if command -v curl >/dev/null 2>&1; then
-        curl -sSL "$SCRIPT_URL" -o "$temp_file"
+        curl -sSL "$SCRIPT_URL" -o "$temp_main"
+        curl -sSL "$SSL_URL" -o "$temp_ssl"
     elif command -v wget >/dev/null 2>&1; then
-        wget -q "$SCRIPT_URL" -O "$temp_file"
+        wget -q "$SCRIPT_URL" -O "$temp_main"
+        wget -q "$SSL_URL" -O "$temp_ssl"
     fi
     
-    if [ ! -f "$temp_file" ]; then
-        echo "Error: Failed to download Access"
+    if [ ! -f "$temp_main" ] || [ ! -f "$temp_ssl" ]; then
+        echo "Error: Failed to download Access scripts"
         exit 1
     fi
     
-    echo "$temp_file"
+    echo "$temp_main:$temp_ssl"
 }
 
-# Install script
-install_script() {
-    local src="$1"
-    local dest="$INSTALL_DIR/$SCRIPT_NAME"
+# Install scripts
+install_scripts() {
+    local main_src="$1"
+    local ssl_src="$2"
+    local main_dest="$INSTALL_DIR/$SCRIPT_NAME"
+    local ssl_dest="$INSTALL_DIR/${SCRIPT_NAME}-ssl"
     
     # Check if we need sudo
     if [ -w "$INSTALL_DIR" ]; then
-        cp "$src" "$dest"
-        chmod +x "$dest"
+        cp "$main_src" "$main_dest"
+        cp "$ssl_src" "$ssl_dest"
+        chmod +x "$main_dest" "$ssl_dest"
+        # Create symlink for ssl.sh
+        ln -sf "$ssl_dest" "$INSTALL_DIR/ssl.sh"
     else
         echo "Installing to $INSTALL_DIR (requires sudo)..."
-        sudo cp "$src" "$dest"
-        sudo chmod +x "$dest"
+        sudo cp "$main_src" "$main_dest"
+        sudo cp "$ssl_src" "$ssl_dest"
+        sudo chmod +x "$main_dest" "$ssl_dest"
+        # Create symlink for ssl.sh
+        sudo ln -sf "$ssl_dest" "$INSTALL_DIR/ssl.sh"
     fi
     
     # Create config directory
     mkdir -p "$HOME/.access"
+    mkdir -p "$HOME/.access/ssl"
     
-    echo "✓ Access installed to $dest"
+    echo "✓ Access installed to $main_dest"
+    echo "✓ SSL manager installed to $ssl_dest"
 }
 
 # Setup systemd service (optional)
@@ -116,13 +130,15 @@ main() {
     check_requirements
     
     # Download
-    temp_file=$(download_script)
+    temp_files=$(download_scripts)
+    temp_main=$(echo "$temp_files" | cut -d: -f1)
+    temp_ssl=$(echo "$temp_files" | cut -d: -f2)
     
     # Install
-    install_script "$temp_file"
+    install_scripts "$temp_main" "$temp_ssl"
     
     # Cleanup
-    rm -f "$temp_file"
+    rm -f "$temp_main" "$temp_ssl"
     
     # Optional service setup
     setup_service "$1"

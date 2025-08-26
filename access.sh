@@ -244,10 +244,23 @@ case "${1:-help}" in
         save_config
         ;;
         
+    ssl)
+        shift
+        # Delegate to ssl.sh script
+        if [ -f "$(dirname "$0")/ssl.sh" ]; then
+            "$(dirname "$0")/ssl.sh" "$@"
+        else
+            log "Error: ssl.sh not found"
+            exit 1
+        fi
+        ;;
+        
     daemon)
         log "Starting Access daemon..."
         while true; do
             "$0" update
+            # Also check SSL certificate expiry
+            "$0" ssl check 2>/dev/null || true
             sleep "${ACCESS_INTERVAL:-300}"
         done
         ;;
@@ -264,12 +277,19 @@ Usage:
     access ip              Detect and display public IP
     access update          Update DNS with current IP  
     access config          Configure DNS provider
+    access ssl             Manage SSL certificates
     access daemon          Run as daemon (updates every 5 minutes)
     access version         Show version
     access help            Show this help
 
 Configuration:
     access config godaddy --key=KEY --secret=SECRET --domain=example.com --host=@
+    
+SSL Management:
+    access ssl generate example.com         Generate self-signed certificate
+    access ssl letsencrypt example.com      Setup Let's Encrypt certificate
+    access ssl renew                        Renew certificates
+    access ssl check                        Check certificate status
     
 Environment variables:
     ACCESS_HOME       Config directory (default: ~/.access)
