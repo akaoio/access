@@ -87,8 +87,8 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$ACCESS_LOG"
 }
 
-# IP validation
-validate_ip() {
+# IPv4 validation
+validate_ipv4() {
     echo "$1" | grep -qE '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$' || return 1
     
     # Check each octet
@@ -108,23 +108,52 @@ EOF
     return 0
 }
 
-# Detect public IP via DNS
-detect_ip_dns() {
+# IPv6 validation
+validate_ipv6() {
+    local ip="$1"
+    
+    # Empty or too short
+    [ -z "$ip" ] && return 1
+    [ ${#ip} -lt 2 ] && return 1
+    
+    # Basic IPv6 format check - allow :: and standard hex groups
+    echo "$ip" | grep -qE '^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$|^::$|^::1$|^[0-9a-fA-F:]+::$|^::[0-9a-fA-F:]+$' || return 1
+    
+    # Exclude private/reserved ranges
+    case "$ip" in
+        ::1|::1/*) return 1 ;;                          # Loopback
+        fe80:*|fe80::*) return 1 ;;                     # Link-local
+        fc00:*|fd00:*) return 1 ;;                      # Unique local
+        ff00:*) return 1 ;;                             # Multicast
+        ::) return 1 ;;                                 # Unspecified
+    esac
+    
+    return 0
+}
+
+# IP validation (IPv4 or IPv6)
+validate_ip() {
+    local ip="$1"
+    validate_ipv4 "$ip" || validate_ipv6 "$ip"
+}
+
+# Detect public IPv6 via DNS
+detect_ipv6_dns() {
     local ip=""
     
-    # Try OpenDNS
+    # Try OpenDNS IPv6
     if command -v dig >/dev/null 2>&1; then
-        ip=$(dig +short myip.opendns.com @resolver1.opendns.com 2>/dev/null | head -n1)
-        if validate_ip "$ip"; then
+        ip=$(dig +short myip.opendns.com @2620:119:35::35 AAAA 2>/dev/null | head -n1)
+        if validate_ipv6 "$ip"; then
             echo "$ip"
             return 0
         fi
     fi
     
-    # Try nslookup
-    if command -v nslookup >/dev/null 2>&1; then
-        ip=$(nslookup myip.opendns.com resolver1.opendns.com 2>/dev/null | grep -A1 "Name:" | tail -n1 | awk '{print $2}')
-        if validate_ip "$ip"; then
+    # Try Google IPv6 DNS
+    if command -v dig >/dev/null 2>&1; then
+        ip=$(dig +short @2001:4860:4860::8888 myip.opendns.com AAAA 2>/dev/null | head -n1)
+        if validate_ipv6 "$ip"; then
             echo "$ip"
             return 0
         fi
@@ -133,25 +162,71 @@ detect_ip_dns() {
     return 1
 }
 
-# Detect public IP via HTTP
-detect_ip_http() {
+# Detect public IPv4 via DNS
+detect_ipv4_dns() {
     local ip=""
-    local services="https://checkip.amazonaws.com https://ipv4.icanhazip.com https://ifconfig.me"
+    
+    # Try OpenDNS
+    if command -v dig >/dev/null 2>&1; then
+        ip=$(dig +short myip.opendns.com @resolver1.opendns.com 2>/dev/null | head -n1)
+        if validate_ipv4 "$ip"; then
+            echo "$ip"
+            return 0
+        fi
+    fi
+    
+    # Try nslookup
+    if command -v nslookup >/dev/null 2>&1; then
+        ip=$(nslookup myip.opendns.com resolver1.opendns.com 2>/dev/null | grep -A1 "Name:" | tail -n1 | awk '{print $2}')
+        if validate_ipv4 "$ip"; then
+            echo "$ip"
+            return 0
+        fi
+    fi
+    
+    return 1
+}
+
+# Detect public IP via DNS (IPv6 priority)
+detect_ip_dns() {
+    local ip=""
+    
+    # Try IPv6 first
+    ip=$(detect_ipv6_dns)
+    if [ $? -eq 0 ] && [ -n "$ip" ]; then
+        echo "$ip"
+        return 0
+    fi
+    
+    # Fall back to IPv4
+    ip=$(detect_ipv4_dns)
+    if [ $? -eq 0 ] && [ -n "$ip" ]; then
+        echo "$ip"
+        return 0
+    fi
+    
+    return 1
+}
+
+# Detect public IPv6 via HTTP
+detect_ipv6_http() {
+    local ip=""
+    local services="https://ipv6.icanhazip.com https://v6.ident.me https://ipv6.whatismyip.akamai.com"
     
     for service in $services; do
-        # Try curl
+        # Try curl with IPv6
         if command -v curl >/dev/null 2>&1; then
-            ip=$(curl -s --max-time 5 "$service" 2>/dev/null | tr -d '\n\r' | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | head -n1)
-            if validate_ip "$ip"; then
+            ip=$(curl -s -6 --max-time 5 "$service" 2>/dev/null | tr -d '\n\r' | head -n1)
+            if validate_ipv6 "$ip"; then
                 echo "$ip"
                 return 0
             fi
         fi
         
-        # Try wget
+        # Try wget with IPv6
         if command -v wget >/dev/null 2>&1; then
-            ip=$(wget -qO- --timeout=5 "$service" 2>/dev/null | tr -d '\n\r' | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | head -n1)
-            if validate_ip "$ip"; then
+            ip=$(wget -qO- -6 --timeout=5 "$service" 2>/dev/null | tr -d '\n\r' | head -n1)
+            if validate_ipv6 "$ip"; then
                 echo "$ip"
                 return 0
             fi
@@ -161,7 +236,56 @@ detect_ip_http() {
     return 1
 }
 
-# Main IP detection
+# Detect public IPv4 via HTTP
+detect_ipv4_http() {
+    local ip=""
+    local services="https://checkip.amazonaws.com https://ipv4.icanhazip.com https://ifconfig.me"
+    
+    for service in $services; do
+        # Try curl
+        if command -v curl >/dev/null 2>&1; then
+            ip=$(curl -s -4 --max-time 5 "$service" 2>/dev/null | tr -d '\n\r' | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | head -n1)
+            if validate_ipv4 "$ip"; then
+                echo "$ip"
+                return 0
+            fi
+        fi
+        
+        # Try wget
+        if command -v wget >/dev/null 2>&1; then
+            ip=$(wget -qO- -4 --timeout=5 "$service" 2>/dev/null | tr -d '\n\r' | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | head -n1)
+            if validate_ipv4 "$ip"; then
+                echo "$ip"
+                return 0
+            fi
+        fi
+    done
+    
+    return 1
+}
+
+# Detect public IP via HTTP (IPv6 priority)
+detect_ip_http() {
+    local ip=""
+    
+    # Try IPv6 first
+    ip=$(detect_ipv6_http)
+    if [ $? -eq 0 ] && [ -n "$ip" ]; then
+        echo "$ip"
+        return 0
+    fi
+    
+    # Fall back to IPv4
+    ip=$(detect_ipv4_http)
+    if [ $? -eq 0 ] && [ -n "$ip" ]; then
+        echo "$ip"
+        return 0
+    fi
+    
+    return 1
+}
+
+# Main IP detection (IPv6 priority)
 detect_ip() {
     local ip=""
     
@@ -174,6 +298,48 @@ detect_ip() {
     
     # Fall back to HTTP
     ip=$(detect_ip_http)
+    if [ $? -eq 0 ] && [ -n "$ip" ]; then
+        echo "$ip"
+        return 0
+    fi
+    
+    return 1
+}
+
+# Force IPv4 detection only
+detect_ipv4() {
+    local ip=""
+    
+    # Try DNS first
+    ip=$(detect_ipv4_dns)
+    if [ $? -eq 0 ] && [ -n "$ip" ]; then
+        echo "$ip"
+        return 0
+    fi
+    
+    # Fall back to HTTP
+    ip=$(detect_ipv4_http)
+    if [ $? -eq 0 ] && [ -n "$ip" ]; then
+        echo "$ip"
+        return 0
+    fi
+    
+    return 1
+}
+
+# Force IPv6 detection only
+detect_ipv6() {
+    local ip=""
+    
+    # Try DNS first
+    ip=$(detect_ipv6_dns)
+    if [ $? -eq 0 ] && [ -n "$ip" ]; then
+        echo "$ip"
+        return 0
+    fi
+    
+    # Fall back to HTTP
+    ip=$(detect_ipv6_http)
     if [ $? -eq 0 ] && [ -n "$ip" ]; then
         echo "$ip"
         return 0
@@ -313,10 +479,36 @@ case "${1:-help}" in
     ip)
         ip=$(detect_ip)
         if [ $? -eq 0 ]; then
-            log_success "Detected IP: $ip"
+            if validate_ipv6 "$ip"; then
+                log_success "Detected IPv6: $ip"
+            else
+                log_success "Detected IPv4: $ip"
+            fi
             echo "$ip"
         else
             log_error "Failed to detect IP"
+            exit 1
+        fi
+        ;;
+        
+    ipv4)
+        ip=$(detect_ipv4)
+        if [ $? -eq 0 ]; then
+            log_success "Detected IPv4: $ip"
+            echo "$ip"
+        else
+            log_error "Failed to detect IPv4"
+            exit 1
+        fi
+        ;;
+        
+    ipv6)
+        ip=$(detect_ipv6)
+        if [ $? -eq 0 ]; then
+            log_success "Detected IPv6: $ip"
+            echo "$ip"
+        else
+            log_error "Failed to detect IPv6"
             exit 1
         fi
         ;;
@@ -480,7 +672,9 @@ case "${1:-help}" in
         echo "${BOLD}------${NC}"
         echo ""
         echo "${BOLD}Commands:${NC}"
-        echo "    ${BLUE}access ip${NC}              Detect and display public IP"
+        echo "    ${BLUE}access ip${NC}              Detect public IP (IPv6 priority)"
+        echo "    ${BLUE}access ipv4${NC}            Force IPv4 detection only"
+        echo "    ${BLUE}access ipv6${NC}            Force IPv6 detection only"
         echo "    ${BLUE}access update${NC}          Update DNS with current IP"  
         echo "    ${BLUE}access config${NC}          Configure DNS provider"
         echo "    ${BLUE}access providers${NC}       List available providers"

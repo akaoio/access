@@ -211,5 +211,56 @@ check_provider_health() {
     echo "Summary: $healthy/$total providers healthy"
 }
 
+# Update DNS using provider
+update_with_provider() {
+    local provider_name="$1"
+    local domain="$2"
+    local host="$3"
+    local ip="$4"
+    
+    load_provider "$provider_name" || return 1
+    
+    # Validate configuration first
+    if ! provider_validate; then
+        echo "Error: Provider validation failed" >&2
+        return 1
+    fi
+    
+    # Execute update
+    provider_update "$domain" "$host" "$ip"
+}
+
+# Test provider connectivity
+test_provider() {
+    local provider_name="${1:-$PROVIDER}"
+    
+    if [ -z "$provider_name" ]; then
+        echo "Error: No provider specified" >&2
+        return 1
+    fi
+    
+    echo "Testing provider: $provider_name"
+    
+    load_provider "$provider_name" || return 1
+    
+    # Test basic functions exist
+    for func in provider_update provider_validate; do
+        if ! type "$func" >/dev/null 2>&1; then
+            echo "✗ Missing function: $func"
+            return 1
+        fi
+    done
+    
+    # Test validation
+    if provider_validate; then
+        echo "✓ Provider validation passed"
+    else
+        echo "✗ Provider validation failed"
+        return 1
+    fi
+    
+    echo "✓ Provider test completed successfully"
+}
+
 # Functions are available after sourcing this file
 # No need to export in POSIX sh
