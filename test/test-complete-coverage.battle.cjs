@@ -15,11 +15,11 @@ const crypto = require('crypto');
 
 // Test configuration
 const TEST_CONFIG = {
-    accessPath: path.join(__dirname, 'access.sh'),
-    providerPath: path.join(__dirname, 'provider-agnostic.sh'),
-    providersDir: path.join(__dirname, 'providers'),
-    installPath: path.join(__dirname, 'install.sh'),
-    uninstallPath: path.join(__dirname, 'uninstall.sh'),
+    accessPath: path.join(__dirname, '..', 'access.sh'),
+    providerPath: path.join(__dirname, '..', 'provider-agnostic.sh'),
+    providersDir: path.join(__dirname, '..', 'providers'),
+    installPath: path.join(__dirname, '..', 'install.sh'),
+    uninstallPath: path.join(__dirname, '..', 'uninstall.sh'),
     testHome: path.join(os.tmpdir(), 'access_complete_test_' + Date.now()),
     testConfig: null,
     testLogFile: null
