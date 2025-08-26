@@ -696,6 +696,85 @@ interactive_digitalocean() {
     fi
 }
 
+# Enhanced visual setup menu with all options
+enhanced_setup_menu() {
+    echo ""
+    echo "🚀 ACCESS SETUP WIZARD"
+    echo "======================"
+    echo ""
+    echo "Choose additional features to enable:"
+    echo ""
+    echo "1. 🔄 AUTO-UPDATE        Enable weekly automatic updates"
+    echo "2. 🛡️  REDUNDANT BACKUP   Both systemd service + cron (recommended)"
+    echo "3. ⚙️  SYSTEMD ONLY       Just systemd service (clean)"
+    echo "4. 📅 CRON ONLY          Just cron job (simple)"
+    echo "5. 🎯 PROVIDER CONFIG    Configure DNS provider now"
+    echo "6. ✅ SKIP EXTRAS        Just install basic Access"
+    echo ""
+    printf "Select options (1,2,3,4,5,6) [default: 2,1]: "
+    
+    read -r SETUP_CHOICES
+    SETUP_CHOICES="${SETUP_CHOICES:-2,1}"  # Default: redundant backup + auto-update
+    
+    # Parse choices
+    echo "$SETUP_CHOICES" | grep -q "1" && {
+        log "✓ Enabling auto-update (weekly)"
+        USE_AUTO_UPDATE=true
+    }
+    
+    echo "$SETUP_CHOICES" | grep -q "2" && {
+        log "✓ Enabling redundant backup (service + cron)"
+        USE_SYSTEMD=true
+        USE_CRON=true
+    }
+    
+    echo "$SETUP_CHOICES" | grep -q "3" && {
+        log "✓ Enabling systemd service only"
+        USE_SYSTEMD=true
+        USE_CRON=false
+    }
+    
+    echo "$SETUP_CHOICES" | grep -q "4" && {
+        log "✓ Enabling cron job only"
+        USE_SYSTEMD=false
+        USE_CRON=true
+    }
+    
+    echo "$SETUP_CHOICES" | grep -q "5" && {
+        log "✓ Will configure DNS provider after installation"
+        INTERACTIVE_MODE=true
+    }
+    
+    echo "$SETUP_CHOICES" | grep -q "6" && {
+        log "✓ Installing basic Access only"
+        USE_AUTO_UPDATE=false
+        USE_SYSTEMD=false
+        USE_CRON=false
+    }
+    
+    echo ""
+    
+    # Show what will be installed
+    echo "📋 INSTALLATION SUMMARY:"
+    echo "========================"
+    [ "$USE_AUTO_UPDATE" = true ] && echo "  ✅ Auto-update: Weekly updates from GitHub"
+    [ "$USE_SYSTEMD" = true ] && echo "  ✅ Systemd service: Background daemon every 5 minutes"
+    [ "$USE_CRON" = true ] && echo "  ✅ Cron backup: Redundant cron job every 5 minutes"
+    [ "$INTERACTIVE_MODE" = true ] && echo "  ✅ Provider setup: Interactive configuration after install"
+    echo "  ✅ Clean clone: ~/access (for self-updates)"
+    echo "  ✅ XDG compliance: ~/.config/access + ~/.local/share/access"
+    echo ""
+    
+    printf "Proceed with installation? [Y/n]: "
+    read -r CONFIRM_INSTALL
+    if [ "$CONFIRM_INSTALL" = "n" ] || [ "$CONFIRM_INSTALL" = "N" ]; then
+        log "Installation cancelled by user"
+        exit 0
+    fi
+    
+    echo ""
+}
+
 # Interactive Azure setup
 interactive_azure() {
     echo ""
@@ -915,6 +994,9 @@ parse_args() {
                 CRON_INTERVAL="${arg#*=}"
                 USE_CRON=true
                 ;;
+            --skip-interactive)
+                SKIP_INTERACTIVE=true
+                ;;
             --help|-h)
                 SHOW_HELP=true
                 ;;
@@ -1125,7 +1207,12 @@ main() {
     # Configure provider from CLI flags (if provided)
     configure_provider_from_flags
     
-    # Run interactive setup if requested or no provider configured via CLI
+    # Always run enhanced setup menu unless explicitly skipped
+    if [ "$SKIP_INTERACTIVE" != true ]; then
+        enhanced_setup_menu
+    fi
+    
+    # Legacy interactive setup for provider only
     if [ "$INTERACTIVE_MODE" = true ] && [ -z "$PROVIDER" ]; then
         interactive_setup
     fi
