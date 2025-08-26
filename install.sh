@@ -45,29 +45,106 @@ show_header() {
     echo ""
 }
 
+# Auto-install missing dependencies
+auto_install_deps() {
+    log "🔧 Attempting to install missing dependencies..."
+    
+    # Detect package manager
+    if command -v apt-get >/dev/null 2>&1; then
+        # Debian/Ubuntu
+        log "Detected apt package manager (Debian/Ubuntu)"
+        if [ -n "$1" ]; then
+            log "Installing: $1"
+            sudo apt-get update >/dev/null 2>&1
+            sudo apt-get install -y $1 >/dev/null 2>&1 || return 1
+        fi
+    elif command -v yum >/dev/null 2>&1; then
+        # RHEL/CentOS/Fedora
+        log "Detected yum package manager (RHEL/CentOS)"
+        if [ -n "$1" ]; then
+            log "Installing: $1"
+            sudo yum install -y $1 >/dev/null 2>&1 || return 1
+        fi
+    elif command -v dnf >/dev/null 2>&1; then
+        # Fedora 22+
+        log "Detected dnf package manager (Fedora)"
+        if [ -n "$1" ]; then
+            log "Installing: $1"
+            sudo dnf install -y $1 >/dev/null 2>&1 || return 1
+        fi
+    elif command -v apk >/dev/null 2>&1; then
+        # Alpine Linux
+        log "Detected apk package manager (Alpine)"
+        if [ -n "$1" ]; then
+            log "Installing: $1"
+            sudo apk add --no-cache $1 >/dev/null 2>&1 || return 1
+        fi
+    elif command -v brew >/dev/null 2>&1; then
+        # macOS with Homebrew
+        log "Detected brew package manager (macOS)"
+        if [ -n "$1" ]; then
+            log "Installing: $1"
+            brew install $1 >/dev/null 2>&1 || return 1
+        fi
+    else
+        error "No supported package manager found"
+        return 1
+    fi
+    
+    log "✓ Dependencies installed successfully"
+    return 0
+}
+
 # Check for required tools
 check_requirements() {
     local missing=""
+    local missing_packages=""
     
     # Check for git (now required for clean clone)
     if ! command -v git >/dev/null 2>&1; then
         missing="$missing git"
+        missing_packages="$missing_packages git"
     fi
     
     # Check for curl or wget (required)
     if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
         missing="$missing curl/wget"
+        missing_packages="$missing_packages curl"
     fi
     
     # Check for DNS tools (optional but recommended)
     if ! command -v dig >/dev/null 2>&1 && ! command -v nslookup >/dev/null 2>&1; then
         warn "No DNS tools found (dig/nslookup). HTTP detection will be used."
+        warn "To install: sudo apt-get install dnsutils (or bind-utils on RHEL)"
     fi
     
     if [ -n "$missing" ]; then
         error "Required tools missing:$missing"
-        error "Please install them and try again."
-        exit 1
+        
+        # Ask to auto-install if we have sudo
+        if sudo -n true 2>/dev/null; then
+            printf "Would you like to auto-install missing dependencies? [Y/n]: "
+            read -r AUTO_INSTALL
+            if [ "$AUTO_INSTALL" != "n" ] && [ "$AUTO_INSTALL" != "N" ]; then
+                if auto_install_deps "$missing_packages"; then
+                    log "✓ Dependencies installed. Continuing installation..."
+                else
+                    error "Failed to install dependencies automatically"
+                    error "Please install manually: $missing"
+                    exit 1
+                fi
+            else
+                error "Please install manually: $missing"
+                exit 1
+            fi
+        else
+            error "Please install them and try again:"
+            error "  Debian/Ubuntu: sudo apt-get install$missing_packages"
+            error "  RHEL/CentOS: sudo yum install$missing_packages"
+            error "  Alpine: sudo apk add$missing_packages"
+            error "  macOS: brew install$missing_packages"
+            exit 1
+        fi
     fi
 }
 
