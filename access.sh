@@ -507,7 +507,7 @@ save_config() {
         
         for env_var in $(env | grep "^${provider_upper}_" | cut -d= -f1); do
             env_value=$(eval echo "\$$env_var")
-            field_name=$(echo "$env_var" | sed "s/^${provider_upper}_//" | tr '[:upper:]' '[:lower:]')
+            field_name=$(echo "$env_var" | sed "s/^${provider_upper}_//g" | tr '[:upper:]' '[:lower:]')
             
             if [ $field_count -gt 0 ]; then
                 provider_fields="${provider_fields},"
