@@ -218,6 +218,17 @@ install_script() {
     
     log "Installing Access with all provider dependencies..."
     
+    # Ensure installation directory exists
+    if [ ! -d "$INSTALL_DIR" ]; then
+        log "Creating installation directory: $INSTALL_DIR"
+        if mkdir -p "$INSTALL_DIR" 2>/dev/null; then
+            log "✓ Installation directory created"
+        else
+            log "Creating installation directory with sudo..."
+            sudo mkdir -p "$INSTALL_DIR"
+        fi
+    fi
+    
     # Install main script
     if [ -w "$INSTALL_DIR" ]; then
         cp "$src" "$dest"
@@ -402,7 +413,7 @@ setup_auto_update() {
 #!/bin/sh
 # Access auto-update script - Uses ~/access folder and XDG config
 
-INSTALL_DIR="/usr/local/bin"
+INSTALL_DIR="$INSTALL_DIR"
 SCRIPT_NAME="access"
 REPO_URL="https://github.com/akaoio/access.git"
 CLEAN_CLONE_DIR="$HOME/access"
@@ -1135,6 +1146,9 @@ parse_args() {
             --interactive)
                 INTERACTIVE_MODE=true
                 ;;
+            --prefix=*)
+                INSTALL_DIR="${arg#*=}/bin"
+                ;;
             *)
                 warn "Unknown option: $arg"
                 ;;
@@ -1162,6 +1176,7 @@ Installation Options:
   Default: Both systemd service AND cron backup (redundant automation)
   --auto-update    Enable weekly auto-updates
   --interactive    Force interactive mode
+  --prefix=PATH    Installation prefix (default: /usr/local)
   --help           Show this help
 
 Provider Configuration (CLI):
@@ -1203,6 +1218,9 @@ Examples:
 
   # Installation only (no provider config)
   ./install.sh --systemd --cron --interval=3 --auto-update
+
+  # Install to custom location (for testing)
+  ./install.sh --prefix=/tmp/test_install --systemd
 
 EOF
     exit 0
