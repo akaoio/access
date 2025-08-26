@@ -221,7 +221,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=$HOME/.config/access $HOME/.access
+ReadWritePaths=$HOME/.config/access $HOME/.local/share/access $HOME/.access
 
 [Install]
 WantedBy=multi-user.target
