@@ -96,7 +96,7 @@ create_clean_clone() {
     log "✓ Clean clone created successfully"
 }
 
-# Install script from clean clone
+# Install script and dependencies from clean clone
 install_script() {
     local src="$CLEAN_CLONE_DIR/access.sh"
     local dest="$INSTALL_DIR/$SCRIPT_NAME"
@@ -107,7 +107,9 @@ install_script() {
         exit 1
     fi
     
-    # Check if we need sudo
+    log "Installing Access with all provider dependencies..."
+    
+    # Install main script
     if [ -w "$INSTALL_DIR" ]; then
         cp "$src" "$dest"
         chmod +x "$dest"
@@ -117,10 +119,39 @@ install_script() {
         sudo chmod +x "$dest"
     fi
     
+    # Install provider abstraction files
+    local provider_files="provider-agnostic.sh provider.sh"
+    for provider_file in $provider_files; do
+        if [ -f "$CLEAN_CLONE_DIR/$provider_file" ]; then
+            local provider_dest="$INSTALL_DIR/$provider_file"
+            if [ -w "$INSTALL_DIR" ]; then
+                cp "$CLEAN_CLONE_DIR/$provider_file" "$provider_dest"
+                chmod +x "$provider_dest"
+            else
+                sudo cp "$CLEAN_CLONE_DIR/$provider_file" "$provider_dest"
+                sudo chmod +x "$provider_dest"
+            fi
+            log "✓ Installed $provider_file"
+        fi
+    done
+    
+    # Install providers directory if it exists
+    if [ -d "$CLEAN_CLONE_DIR/providers" ]; then
+        local providers_dest="$INSTALL_DIR/providers"
+        if [ -w "$INSTALL_DIR" ]; then
+            cp -r "$CLEAN_CLONE_DIR/providers" "$providers_dest"
+            chmod -R +x "$providers_dest"/*.sh 2>/dev/null || true
+        else
+            sudo cp -r "$CLEAN_CLONE_DIR/providers" "$providers_dest"
+            sudo chmod -R +x "$providers_dest"/*.sh 2>/dev/null || true
+        fi
+        log "✓ Installed providers directory"
+    fi
+    
     # Create XDG-compliant config directory
     mkdir -p "$HOME/.config/access"
     
-    log "✓ Access installed to $dest (from clean clone)"
+    log "✓ Access installed to $dest with all dependencies (from clean clone)"
 }
 
 # Setup systemd service
@@ -267,25 +298,64 @@ update_clean_clone() {
 
 # Update clean clone first
 if update_clean_clone; then
-    # Install from updated clean clone
+    # Install from updated clean clone with all dependencies
     SRC="\$CLEAN_CLONE_DIR/access.sh"
     if [ -f "\$SRC" ]; then
+        log_update "Installing updated Access with all dependencies..."
+        
         # Backup current version with timestamp
         BACKUP="\$CURRENT.backup.\$(date +%Y%m%d-%H%M%S)"
         cp "\$CURRENT" "\$BACKUP" 2>/dev/null && log_update "Backed up to \$BACKUP"
         
-        # Install new version from clean clone
+        # Install main script
         if [ -w "\$INSTALL_DIR" ]; then
             cp "\$SRC" "\$CURRENT" && chmod +x "\$CURRENT"
         else
             sudo cp "\$SRC" "\$CURRENT" && sudo chmod +x "\$CURRENT"
         fi
         
+        # Install provider abstraction files
+        PROVIDER_FILES="provider-agnostic.sh provider.sh"
+        for provider_file in \$PROVIDER_FILES; do
+            if [ -f "\$CLEAN_CLONE_DIR/\$provider_file" ]; then
+                PROVIDER_DEST="\$INSTALL_DIR/\$provider_file"
+                if [ -w "\$INSTALL_DIR" ]; then
+                    cp "\$CLEAN_CLONE_DIR/\$provider_file" "\$PROVIDER_DEST"
+                    chmod +x "\$PROVIDER_DEST"
+                else
+                    sudo cp "\$CLEAN_CLONE_DIR/\$provider_file" "\$PROVIDER_DEST"
+                    sudo chmod +x "\$PROVIDER_DEST"
+                fi
+                log_update "Updated \$provider_file"
+            fi
+        done
+        
+        # Update providers directory if it exists
+        if [ -d "\$CLEAN_CLONE_DIR/providers" ]; then
+            PROVIDERS_DEST="\$INSTALL_DIR/providers"
+            if [ -w "\$INSTALL_DIR" ]; then
+                rm -rf "\$PROVIDERS_DEST" 2>/dev/null || true
+                cp -r "\$CLEAN_CLONE_DIR/providers" "\$PROVIDERS_DEST"
+                chmod -R +x "\$PROVIDERS_DEST"/*.sh 2>/dev/null || true
+            else
+                sudo rm -rf "\$PROVIDERS_DEST" 2>/dev/null || true
+                sudo cp -r "\$CLEAN_CLONE_DIR/providers" "\$PROVIDERS_DEST"
+                sudo chmod -R +x "\$PROVIDERS_DEST"/*.sh 2>/dev/null || true
+            fi
+            log_update "Updated providers directory"
+        fi
+        
         if [ \$? -eq 0 ]; then
-            log_update "Access updated successfully from clean clone"
+            log_update "Access updated successfully with all dependencies from clean clone"
             # Test the new installation
             if "\$CURRENT" version >/dev/null 2>&1; then
                 log_update "New version verified working"
+                # Test provider loading
+                if "\$CURRENT" providers >/dev/null 2>&1; then
+                    log_update "Provider system verified working"
+                else
+                    log_update "WARNING: Provider system test failed"
+                fi
             else
                 log_update "WARNING: New version test failed"
             fi
@@ -312,6 +382,339 @@ EOF
     log "  Clean clone: ~/access (used for all updates)"
     
     return 0
+}
+
+# Configure provider from flags
+configure_provider_from_flags() {
+    if [ -z "$PROVIDER" ]; then
+        return 0  # No provider specified
+    fi
+    
+    log "Configuring $PROVIDER provider from command line flags..."
+    
+    case "$PROVIDER" in
+        godaddy)
+            if [ -z "$PROVIDER_KEY" ] || [ -z "$PROVIDER_SECRET" ] || [ -z "$PROVIDER_DOMAIN" ]; then
+                error "GoDaddy requires --key, --secret, and --domain"
+                exit 1
+            fi
+            "$INSTALL_DIR/$SCRIPT_NAME" config godaddy \
+                --key="$PROVIDER_KEY" \
+                --secret="$PROVIDER_SECRET" \
+                --domain="$PROVIDER_DOMAIN" \
+                --host="$PROVIDER_HOST"
+            ;;
+        cloudflare)
+            if [ -z "$PROVIDER_EMAIL" ] || [ -z "$PROVIDER_KEY" ] || [ -z "$PROVIDER_ZONE_ID" ] || [ -z "$PROVIDER_DOMAIN" ]; then
+                error "Cloudflare requires --email, --key, --zone-id, and --domain"
+                exit 1
+            fi
+            "$INSTALL_DIR/$SCRIPT_NAME" config cloudflare \
+                --email="$PROVIDER_EMAIL" \
+                --api-key="$PROVIDER_KEY" \
+                --zone-id="$PROVIDER_ZONE_ID" \
+                --domain="$PROVIDER_DOMAIN" \
+                --host="$PROVIDER_HOST"
+            ;;
+        digitalocean)
+            if [ -z "$PROVIDER_TOKEN" ] || [ -z "$PROVIDER_DOMAIN" ]; then
+                error "DigitalOcean requires --token and --domain"
+                exit 1
+            fi
+            "$INSTALL_DIR/$SCRIPT_NAME" config digitalocean \
+                --token="$PROVIDER_TOKEN" \
+                --domain="$PROVIDER_DOMAIN" \
+                --host="$PROVIDER_HOST"
+            ;;
+        azure)
+            if [ -z "$PROVIDER_SUBSCRIPTION_ID" ] || [ -z "$PROVIDER_RESOURCE_GROUP" ] || \
+               [ -z "$PROVIDER_TENANT_ID" ] || [ -z "$PROVIDER_CLIENT_ID" ] || \
+               [ -z "$PROVIDER_CLIENT_SECRET" ] || [ -z "$PROVIDER_DOMAIN" ]; then
+                error "Azure requires --subscription-id, --resource-group, --tenant-id, --client-id, --client-secret, and --domain"
+                exit 1
+            fi
+            "$INSTALL_DIR/$SCRIPT_NAME" config azure \
+                --subscription-id="$PROVIDER_SUBSCRIPTION_ID" \
+                --resource-group="$PROVIDER_RESOURCE_GROUP" \
+                --tenant-id="$PROVIDER_TENANT_ID" \
+                --client-id="$PROVIDER_CLIENT_ID" \
+                --client-secret="$PROVIDER_CLIENT_SECRET" \
+                --domain="$PROVIDER_DOMAIN" \
+                --host="$PROVIDER_HOST"
+            ;;
+        gcloud)
+            if [ -z "$PROVIDER_PROJECT_ID" ] || [ -z "$PROVIDER_ZONE_NAME" ] || \
+               [ -z "$PROVIDER_SERVICE_ACCOUNT_KEY" ] || [ -z "$PROVIDER_DOMAIN" ]; then
+                error "Google Cloud requires --project-id, --zone-name, --service-account-key, and --domain"
+                exit 1
+            fi
+            "$INSTALL_DIR/$SCRIPT_NAME" config gcloud \
+                --project-id="$PROVIDER_PROJECT_ID" \
+                --zone-name="$PROVIDER_ZONE_NAME" \
+                --service-account-key="$PROVIDER_SERVICE_ACCOUNT_KEY" \
+                --domain="$PROVIDER_DOMAIN" \
+                --host="$PROVIDER_HOST"
+            ;;
+        route53)
+            if [ -z "$PROVIDER_ZONE_ID" ] || [ -z "$PROVIDER_ACCESS_KEY" ] || \
+               [ -z "$PROVIDER_SECRET_KEY" ] || [ -z "$PROVIDER_DOMAIN" ]; then
+                error "Route53 requires --zone-id, --access-key, --secret-key, and --domain"
+                exit 1
+            fi
+            "$INSTALL_DIR/$SCRIPT_NAME" config route53 \
+                --zone-id="$PROVIDER_ZONE_ID" \
+                --access-key="$PROVIDER_ACCESS_KEY" \
+                --secret-key="$PROVIDER_SECRET_KEY" \
+                --domain="$PROVIDER_DOMAIN" \
+                --host="$PROVIDER_HOST"
+            ;;
+        *)
+            error "Unknown provider: $PROVIDER"
+            error "Supported providers: godaddy, cloudflare, digitalocean, azure, gcloud, route53"
+            exit 1
+            ;;
+    esac
+    
+    log "✓ $PROVIDER provider configured successfully"
+}
+
+# Interactive TUI setup
+interactive_setup() {
+    echo ""
+    log "🎯 Interactive Access Configuration"
+    echo "======================================"
+    echo ""
+    
+    # Provider selection
+    echo "Select your DNS provider:"
+    echo "  1) GoDaddy"
+    echo "  2) Cloudflare" 
+    echo "  3) DigitalOcean"
+    echo "  4) Azure DNS"
+    echo "  5) Google Cloud DNS"
+    echo "  6) AWS Route53"
+    echo "  0) Skip provider configuration"
+    echo ""
+    printf "Choice [1-6, 0 to skip]: "
+    read -r PROVIDER_CHOICE
+    
+    case "$PROVIDER_CHOICE" in
+        1)
+            interactive_godaddy
+            ;;
+        2)
+            interactive_cloudflare
+            ;;
+        3)
+            interactive_digitalocean
+            ;;
+        4)
+            interactive_azure
+            ;;
+        5)
+            interactive_gcloud
+            ;;
+        6)
+            interactive_route53
+            ;;
+        0)
+            log "Skipping provider configuration - you can configure later with:"
+            log "  access config <provider> [options]"
+            ;;
+        *)
+            warn "Invalid choice, skipping provider configuration"
+            ;;
+    esac
+    
+    echo ""
+    log "✓ Interactive setup complete!"
+}
+
+# Interactive GoDaddy setup
+interactive_godaddy() {
+    echo ""
+    log "📝 GoDaddy Configuration"
+    echo "------------------------"
+    
+    printf "API Key: "
+    read -r PROVIDER_KEY
+    printf "API Secret: "
+    read -r PROVIDER_SECRET
+    printf "Domain (e.g., example.com): "
+    read -r PROVIDER_DOMAIN
+    printf "Host record [@ for root domain]: "
+    read -r PROVIDER_HOST
+    PROVIDER_HOST="${PROVIDER_HOST:-@}"
+    
+    if [ -n "$PROVIDER_KEY" ] && [ -n "$PROVIDER_SECRET" ] && [ -n "$PROVIDER_DOMAIN" ]; then
+        "$INSTALL_DIR/$SCRIPT_NAME" config godaddy \
+            --key="$PROVIDER_KEY" \
+            --secret="$PROVIDER_SECRET" \
+            --domain="$PROVIDER_DOMAIN" \
+            --host="$PROVIDER_HOST"
+        log "✓ GoDaddy configured successfully"
+    else
+        warn "Missing required fields, skipping configuration"
+    fi
+}
+
+# Interactive Cloudflare setup
+interactive_cloudflare() {
+    echo ""
+    log "📝 Cloudflare Configuration"
+    echo "----------------------------"
+    
+    printf "Email: "
+    read -r PROVIDER_EMAIL
+    printf "API Key: "
+    read -r PROVIDER_KEY
+    printf "Zone ID: "
+    read -r PROVIDER_ZONE_ID
+    printf "Domain (e.g., example.com): "
+    read -r PROVIDER_DOMAIN
+    printf "Host record [@ for root domain]: "
+    read -r PROVIDER_HOST
+    PROVIDER_HOST="${PROVIDER_HOST:-@}"
+    
+    if [ -n "$PROVIDER_EMAIL" ] && [ -n "$PROVIDER_KEY" ] && [ -n "$PROVIDER_ZONE_ID" ] && [ -n "$PROVIDER_DOMAIN" ]; then
+        "$INSTALL_DIR/$SCRIPT_NAME" config cloudflare \
+            --email="$PROVIDER_EMAIL" \
+            --api-key="$PROVIDER_KEY" \
+            --zone-id="$PROVIDER_ZONE_ID" \
+            --domain="$PROVIDER_DOMAIN" \
+            --host="$PROVIDER_HOST"
+        log "✓ Cloudflare configured successfully"
+    else
+        warn "Missing required fields, skipping configuration"
+    fi
+}
+
+# Interactive DigitalOcean setup
+interactive_digitalocean() {
+    echo ""
+    log "📝 DigitalOcean Configuration"
+    echo "------------------------------"
+    
+    printf "API Token: "
+    read -r PROVIDER_TOKEN
+    printf "Domain (e.g., example.com): "
+    read -r PROVIDER_DOMAIN
+    printf "Host record [@ for root domain]: "
+    read -r PROVIDER_HOST
+    PROVIDER_HOST="${PROVIDER_HOST:-@}"
+    
+    if [ -n "$PROVIDER_TOKEN" ] && [ -n "$PROVIDER_DOMAIN" ]; then
+        "$INSTALL_DIR/$SCRIPT_NAME" config digitalocean \
+            --token="$PROVIDER_TOKEN" \
+            --domain="$PROVIDER_DOMAIN" \
+            --host="$PROVIDER_HOST"
+        log "✓ DigitalOcean configured successfully"
+    else
+        warn "Missing required fields, skipping configuration"
+    fi
+}
+
+# Interactive Azure setup
+interactive_azure() {
+    echo ""
+    log "📝 Azure DNS Configuration"
+    echo "---------------------------"
+    
+    printf "Subscription ID: "
+    read -r PROVIDER_SUBSCRIPTION_ID
+    printf "Resource Group: "
+    read -r PROVIDER_RESOURCE_GROUP
+    printf "Tenant ID: "
+    read -r PROVIDER_TENANT_ID
+    printf "Client ID: "
+    read -r PROVIDER_CLIENT_ID
+    printf "Client Secret: "
+    read -r PROVIDER_CLIENT_SECRET
+    printf "Domain (e.g., example.com): "
+    read -r PROVIDER_DOMAIN
+    printf "Host record [@ for root domain]: "
+    read -r PROVIDER_HOST
+    PROVIDER_HOST="${PROVIDER_HOST:-@}"
+    
+    if [ -n "$PROVIDER_SUBSCRIPTION_ID" ] && [ -n "$PROVIDER_RESOURCE_GROUP" ] && \
+       [ -n "$PROVIDER_TENANT_ID" ] && [ -n "$PROVIDER_CLIENT_ID" ] && \
+       [ -n "$PROVIDER_CLIENT_SECRET" ] && [ -n "$PROVIDER_DOMAIN" ]; then
+        "$INSTALL_DIR/$SCRIPT_NAME" config azure \
+            --subscription-id="$PROVIDER_SUBSCRIPTION_ID" \
+            --resource-group="$PROVIDER_RESOURCE_GROUP" \
+            --tenant-id="$PROVIDER_TENANT_ID" \
+            --client-id="$PROVIDER_CLIENT_ID" \
+            --client-secret="$PROVIDER_CLIENT_SECRET" \
+            --domain="$PROVIDER_DOMAIN" \
+            --host="$PROVIDER_HOST"
+        log "✓ Azure DNS configured successfully"
+    else
+        warn "Missing required fields, skipping configuration"
+    fi
+}
+
+# Interactive Google Cloud setup
+interactive_gcloud() {
+    echo ""
+    log "📝 Google Cloud DNS Configuration"
+    echo "----------------------------------"
+    
+    printf "Project ID: "
+    read -r PROVIDER_PROJECT_ID
+    printf "Zone Name: "
+    read -r PROVIDER_ZONE_NAME
+    printf "Service Account Key (base64): "
+    read -r PROVIDER_SERVICE_ACCOUNT_KEY
+    printf "Domain (e.g., example.com): "
+    read -r PROVIDER_DOMAIN
+    printf "Host record [@ for root domain]: "
+    read -r PROVIDER_HOST
+    PROVIDER_HOST="${PROVIDER_HOST:-@}"
+    
+    if [ -n "$PROVIDER_PROJECT_ID" ] && [ -n "$PROVIDER_ZONE_NAME" ] && \
+       [ -n "$PROVIDER_SERVICE_ACCOUNT_KEY" ] && [ -n "$PROVIDER_DOMAIN" ]; then
+        "$INSTALL_DIR/$SCRIPT_NAME" config gcloud \
+            --project-id="$PROVIDER_PROJECT_ID" \
+            --zone-name="$PROVIDER_ZONE_NAME" \
+            --service-account-key="$PROVIDER_SERVICE_ACCOUNT_KEY" \
+            --domain="$PROVIDER_DOMAIN" \
+            --host="$PROVIDER_HOST"
+        log "✓ Google Cloud DNS configured successfully"
+    else
+        warn "Missing required fields, skipping configuration"
+    fi
+}
+
+# Interactive Route53 setup
+interactive_route53() {
+    echo ""
+    log "📝 AWS Route53 Configuration"
+    echo "-----------------------------"
+    
+    printf "Hosted Zone ID: "
+    read -r PROVIDER_ZONE_ID
+    printf "Access Key ID: "
+    read -r PROVIDER_ACCESS_KEY
+    printf "Secret Access Key: "
+    read -r PROVIDER_SECRET_KEY
+    printf "Domain (e.g., example.com): "
+    read -r PROVIDER_DOMAIN
+    printf "Host record [@ for root domain]: "
+    read -r PROVIDER_HOST
+    PROVIDER_HOST="${PROVIDER_HOST:-@}"
+    
+    if [ -n "$PROVIDER_ZONE_ID" ] && [ -n "$PROVIDER_ACCESS_KEY" ] && \
+       [ -n "$PROVIDER_SECRET_KEY" ] && [ -n "$PROVIDER_DOMAIN" ]; then
+        "$INSTALL_DIR/$SCRIPT_NAME" config route53 \
+            --zone-id="$PROVIDER_ZONE_ID" \
+            --access-key="$PROVIDER_ACCESS_KEY" \
+            --secret-key="$PROVIDER_SECRET_KEY" \
+            --domain="$PROVIDER_DOMAIN" \
+            --host="$PROVIDER_HOST"
+        log "✓ AWS Route53 configured successfully"
+    else
+        warn "Missing required fields, skipping configuration"
+    fi
 }
 
 # Provider setup helper
@@ -385,9 +788,31 @@ parse_args() {
     USE_AUTO_UPDATE=false
     CRON_INTERVAL=5
     SHOW_HELP=false
+    INTERACTIVE_MODE=false
     
-    # If no args, default to cron
+    # Provider configuration flags
+    PROVIDER=""
+    PROVIDER_KEY=""
+    PROVIDER_SECRET=""
+    PROVIDER_EMAIL=""
+    PROVIDER_TOKEN=""
+    PROVIDER_DOMAIN=""
+    PROVIDER_HOST="@"
+    PROVIDER_ZONE_ID=""
+    PROVIDER_SUBSCRIPTION_ID=""
+    PROVIDER_RESOURCE_GROUP=""
+    PROVIDER_TENANT_ID=""
+    PROVIDER_CLIENT_ID=""
+    PROVIDER_CLIENT_SECRET=""
+    PROVIDER_PROJECT_ID=""
+    PROVIDER_ZONE_NAME=""
+    PROVIDER_SERVICE_ACCOUNT_KEY=""
+    PROVIDER_ACCESS_KEY=""
+    PROVIDER_SECRET_KEY=""
+    
+    # If no args, enable interactive mode
     if [ $# -eq 0 ]; then
+        INTERACTIVE_MODE=true
         USE_CRON=true
         return
     fi
@@ -409,6 +834,64 @@ parse_args() {
                 ;;
             --help|-h)
                 SHOW_HELP=true
+                ;;
+            # Provider configuration flags
+            --provider=*)
+                PROVIDER="${arg#*=}"
+                ;;
+            --key=*)
+                PROVIDER_KEY="${arg#*=}"
+                ;;
+            --secret=*)
+                PROVIDER_SECRET="${arg#*=}"
+                ;;
+            --email=*)
+                PROVIDER_EMAIL="${arg#*=}"
+                ;;
+            --token=*)
+                PROVIDER_TOKEN="${arg#*=}"
+                ;;
+            --domain=*)
+                PROVIDER_DOMAIN="${arg#*=}"
+                ;;
+            --host=*)
+                PROVIDER_HOST="${arg#*=}"
+                ;;
+            --zone-id=*)
+                PROVIDER_ZONE_ID="${arg#*=}"
+                ;;
+            --subscription-id=*)
+                PROVIDER_SUBSCRIPTION_ID="${arg#*=}"
+                ;;
+            --resource-group=*)
+                PROVIDER_RESOURCE_GROUP="${arg#*=}"
+                ;;
+            --tenant-id=*)
+                PROVIDER_TENANT_ID="${arg#*=}"
+                ;;
+            --client-id=*)
+                PROVIDER_CLIENT_ID="${arg#*=}"
+                ;;
+            --client-secret=*)
+                PROVIDER_CLIENT_SECRET="${arg#*=}"
+                ;;
+            --project-id=*)
+                PROVIDER_PROJECT_ID="${arg#*=}"
+                ;;
+            --zone-name=*)
+                PROVIDER_ZONE_NAME="${arg#*=}"
+                ;;
+            --service-account-key=*)
+                PROVIDER_SERVICE_ACCOUNT_KEY="${arg#*=}"
+                ;;
+            --access-key=*)
+                PROVIDER_ACCESS_KEY="${arg#*=}"
+                ;;
+            --secret-key=*)
+                PROVIDER_SECRET_KEY="${arg#*=}"
+                ;;
+            --interactive)
+                INTERACTIVE_MODE=true
                 ;;
             *)
                 warn "Unknown option: $arg"
@@ -434,24 +917,47 @@ Installation Options:
   --cron           Install cron job (default)
   --interval=N     Set cron interval in minutes (default: 5)
   --auto-update    Enable weekly auto-updates
+  --interactive    Force interactive mode
   --help           Show this help
+
+Provider Configuration (CLI):
+============================
+
+  --provider=NAME  DNS provider (godaddy|cloudflare|digitalocean|azure|gcloud|route53)
+  --domain=DOMAIN  Domain to manage
+  --host=HOST      Host record (default: @)
+  
+  # GoDaddy
+  --key=KEY --secret=SECRET
+  
+  # Cloudflare  
+  --email=EMAIL --key=API_KEY --zone-id=ZONE_ID
+  
+  # DigitalOcean
+  --token=API_TOKEN
+  
+  # Azure DNS
+  --subscription-id=ID --resource-group=GROUP --tenant-id=ID --client-id=ID --client-secret=SECRET
+  
+  # Google Cloud DNS
+  --project-id=ID --zone-name=NAME --service-account-key=KEY
+  
+  # AWS Route53
+  --zone-id=ID --access-key=KEY --secret-key=SECRET
 
 Examples:
 =========
 
-  # Default installation (cron every 5 minutes)
+  # Interactive installation (default)
   ./install.sh
 
-  # Systemd service
-  ./install.sh --systemd
+  # One-command GoDaddy setup
+  ./install.sh --provider=godaddy --key=YOUR_KEY --secret=YOUR_SECRET --domain=example.com --systemd
 
-  # Cron with custom interval
-  ./install.sh --cron --interval=10
+  # One-command Cloudflare setup
+  ./install.sh --provider=cloudflare --email=you@email.com --key=API_KEY --zone-id=ZONE --domain=example.com --cron --auto-update
 
-  # Both systemd and cron with auto-update
-  ./install.sh --systemd --cron --auto-update
-
-  # Everything
+  # Installation only (no provider config)
   ./install.sh --systemd --cron --interval=3 --auto-update
 
 EOF
@@ -500,12 +1006,38 @@ main() {
         echo ""
     fi
     
+    # Configure provider from CLI flags (if provided)
+    configure_provider_from_flags
+    
+    # Run interactive setup if requested or no provider configured via CLI
+    if [ "$INTERACTIVE_MODE" = true ] && [ -z "$PROVIDER" ]; then
+        interactive_setup
+    fi
+    
     # Show completion message
     log "Installation complete!"
     echo "=================================================="
     
-    # Show provider help
-    show_provider_help
+    # Test the installation
+    echo ""
+    log "🧪 Testing installation..."
+    if "$INSTALL_DIR/$SCRIPT_NAME" ip >/dev/null 2>&1; then
+        log "✓ Access installed and working correctly"
+        echo ""
+        log "Ready to use! Try:"
+        log "  access ip         # Test IP detection"
+        if [ -f "$HOME/.config/access/config.json" ]; then
+            log "  access update     # Update your DNS"
+        fi
+    else
+        warn "Installation completed but access command test failed"
+        log "You may need to add $INSTALL_DIR to your PATH"
+    fi
+    
+    # Show provider help only if no provider was configured
+    if [ -z "$PROVIDER" ] && [ "$INTERACTIVE_MODE" = false ]; then
+        show_provider_help
+    fi
 }
 
 # Run main
