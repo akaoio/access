@@ -718,8 +718,8 @@ case "${1:-help}" in
     daemon)
         log "Starting Access daemon (redundant with cron backup)..."
         
-        # Create daemon-specific lock for service identification
-        DAEMON_LOCK="$ACCESS_HOME/daemon.lock"
+        # Create daemon-specific lock for service identification (XDG data directory)
+        DAEMON_LOCK="$ACCESS_DATA_HOME/daemon.lock"
         echo $$ > "$DAEMON_LOCK"
         trap 'rm -f "$DAEMON_LOCK"; remove_run_lock; exit 130' INT TERM
         
