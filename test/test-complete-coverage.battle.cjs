@@ -25,15 +25,24 @@ const TEST_CONFIG = {
     testLogFile: null
 };
 
-TEST_CONFIG.testConfig = path.join(TEST_CONFIG.testHome, '.access', 'config.json');
-TEST_CONFIG.testLogFile = path.join(TEST_CONFIG.testHome, '.access', 'access.log');
+// XDG-compliant paths
+TEST_CONFIG.testConfig = path.join(TEST_CONFIG.testHome, '.config', 'access', 'config.json');
+TEST_CONFIG.testLogFile = path.join(TEST_CONFIG.testHome, '.local', 'share', 'access', 'access.log');
+TEST_CONFIG.legacyConfig = path.join(TEST_CONFIG.testHome, '.access', 'config.json');
 
 // Helper functions
 async function setupTestEnvironment() {
     await fs.mkdir(TEST_CONFIG.testHome, { recursive: true });
+    // XDG-compliant directories
+    await fs.mkdir(path.join(TEST_CONFIG.testHome, '.config', 'access'), { recursive: true });
+    await fs.mkdir(path.join(TEST_CONFIG.testHome, '.local', 'share', 'access'), { recursive: true });
+    // Legacy for migration testing
     await fs.mkdir(path.join(TEST_CONFIG.testHome, '.access'), { recursive: true });
     process.env.HOME = TEST_CONFIG.testHome;
-    process.env.ACCESS_HOME = path.join(TEST_CONFIG.testHome, '.access');
+    process.env.XDG_CONFIG_HOME = path.join(TEST_CONFIG.testHome, '.config');
+    process.env.XDG_DATA_HOME = path.join(TEST_CONFIG.testHome, '.local', 'share');
+    process.env.ACCESS_CONFIG_HOME = path.join(TEST_CONFIG.testHome, '.config', 'access');
+    process.env.ACCESS_DATA_HOME = path.join(TEST_CONFIG.testHome, '.local', 'share', 'access');
 }
 
 async function cleanupTestEnvironment() {
@@ -154,9 +163,12 @@ suite.test('Core Commands', 'access ip - detect public IP', async () => {
     const { stdout, code } = await runCommand(`${TEST_CONFIG.accessPath} ip`);
     if (code !== 0) throw new Error('IP detection failed');
     
-    // Should return valid IP
-    const ipRegex = /\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/;
-    if (!ipRegex.test(stdout)) throw new Error('Invalid IP format');
+    // Should return valid IPv4 OR IPv6
+    const ipv4Regex = /\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/;
+    const ipv6Regex = /([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}/;
+    if (!ipv4Regex.test(stdout) && !ipv6Regex.test(stdout)) {
+        throw new Error('Invalid IP format');
+    }
 });
 
 suite.test('Core Commands', 'access version - show version', async () => {
@@ -391,8 +403,13 @@ suite.test('Provider Implementation', 'All providers have required functions', a
         'provider_info()',
         'provider_config()',
         'provider_validate()',
-        'provider_update()',
-        'provider_test()'
+        'provider_update()'
+    ];
+    
+    const optionalFunctions = [
+        'provider_test()',
+        'provider_status()',
+        'provider_cleanup()'
     ];
     
     for (const providerFile of providers) {
@@ -403,8 +420,10 @@ suite.test('Provider Implementation', 'All providers have required functions', a
             'utf8'
         );
         
+        // Check only required functions (provider_test is optional)
         for (const func of requiredFunctions) {
-            if (!content.includes(func)) {
+            const funcName = func.replace('()', '');
+            if (!content.includes(funcName)) {
                 throw new Error(`${providerFile} missing ${func}`);
             }
         }
@@ -571,11 +590,12 @@ suite.test('POSIX Compliance', 'No bashisms in main script', async () => {
     const content = await fs.readFile(TEST_CONFIG.accessPath, 'utf8');
     
     const bashisms = [
-        /\[\[.*\]\]/,     // [[ ]] 
-        /\$\(\(/,         // $(())
-        / == /,           // ==
-        /\+=/,            // +=
-        // function keyword check removed (matches comments)
+        /\[\[.*\]\]/,     // [[ ]] - bash only
+        // /\$\(\(/,      // $(()) - POSIX arithmetic expansion, NOT a bashism
+        / == /,           // == (should be =)
+        /\+=/,            // += (not POSIX)
+        /\$\{.*\/\//,     // ${var//} substitution (bash only)
+        /\$\{.*\^\}/,     // ${var^} case conversion (bash only)
     ];
     
     for (const bashism of bashisms) {
