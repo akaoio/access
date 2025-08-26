@@ -124,7 +124,7 @@ get_provider_config() {
         provider_config | while IFS= read -r line; do
             field=$(echo "$line" | sed -n 's/.*field: \([^,]*\).*/\1/p' | xargs)
             required=$(echo "$line" | grep -o "required: true" || true)
-            if [ -n "$field" ] && [ -n "$required" ]; then
+            if [ -n "$field" ]; then
                 echo "    --$(echo "$field" | tr '_' '-')=VALUE \\"
             fi
         done | sed '$ s/ \\$//'
