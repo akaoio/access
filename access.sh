@@ -348,6 +348,59 @@ detect_ipv6() {
     return 1
 }
 
+# Lock file management for redundant automation
+LOCK_FILE="$ACCESS_HOME/access.lock"
+LAST_RUN_FILE="$ACCESS_HOME/last_run"
+
+# Check if another instance is running and should skip
+should_skip_redundant() {
+    local current_time=$(date +%s)
+    local lock_timeout=600  # 10 minutes
+    local min_interval=240  # 4 minutes minimum between runs
+    
+    # Check lock file
+    if [ -f "$LOCK_FILE" ]; then
+        local lock_time=$(cat "$LOCK_FILE" 2>/dev/null || echo "0")
+        local lock_age=$((current_time - lock_time))
+        
+        # If lock is fresh (< 10 minutes), another instance might be running
+        if [ "$lock_age" -lt "$lock_timeout" ]; then
+            # Check if process is actually running
+            local lock_pid=$(ps aux | grep "access.*daemon\|access.*update" | grep -v grep | head -1 | awk '{print $2}')
+            if [ -n "$lock_pid" ]; then
+                log "Another Access instance running (PID: $lock_pid) - skipping"
+                return 0  # Skip
+            fi
+        fi
+    fi
+    
+    # Check last run time
+    if [ -f "$LAST_RUN_FILE" ]; then
+        local last_run=$(cat "$LAST_RUN_FILE" 2>/dev/null || echo "0")
+        local run_age=$((current_time - last_run))
+        
+        # If last run was recent, skip to avoid conflicts
+        if [ "$run_age" -lt "$min_interval" ]; then
+            log "Recent run detected ($run_age seconds ago) - skipping to avoid conflict"
+            return 0  # Skip
+        fi
+    fi
+    
+    return 1  # Don't skip
+}
+
+# Create lock and update last run
+create_run_lock() {
+    local current_time=$(date +%s)
+    echo "$current_time" > "$LOCK_FILE"
+    echo "$current_time" > "$LAST_RUN_FILE"
+}
+
+# Remove lock
+remove_run_lock() {
+    rm -f "$LOCK_FILE" 2>/dev/null || true
+}
+
 # Load configuration
 load_config() {
     if [ -f "$ACCESS_CONFIG" ] && command -v jq >/dev/null 2>&1; then
@@ -514,6 +567,15 @@ case "${1:-help}" in
         ;;
         
     update)
+        # Check for redundant automation conflict avoidance
+        if should_skip_redundant; then
+            exit 0
+        fi
+        
+        # Create run lock
+        create_run_lock
+        trap 'remove_run_lock; exit 130' INT TERM
+        
         # Check for updates first (optional)
         if [ "${AUTO_UPDATE:-false}" = "true" ]; then
             auto_update "$@"
@@ -524,12 +586,14 @@ case "${1:-help}" in
         if [ -z "$PROVIDER" ]; then
             log_error "No provider configured"
             log_info "Run: access config <provider> --help"
+            remove_run_lock
             exit 1
         fi
         
         ip=$(detect_ip)
         if [ $? -ne 0 ]; then
             log_error "Failed to detect IP"
+            remove_run_lock
             exit 1
         fi
         
@@ -538,6 +602,9 @@ case "${1:-help}" in
         
         # Use provider abstraction to update DNS
         update_with_provider "$PROVIDER" "$DOMAIN" "$HOST" "$ip"
+        
+        # Remove lock on successful completion
+        remove_run_lock
         ;;
         
     config)
@@ -594,9 +661,40 @@ case "${1:-help}" in
         ;;
         
     daemon)
-        log "Starting Access daemon..."
+        log "Starting Access daemon (redundant with cron backup)..."
+        
+        # Create daemon-specific lock for service identification
+        DAEMON_LOCK="$ACCESS_HOME/daemon.lock"
+        echo $$ > "$DAEMON_LOCK"
+        trap 'rm -f "$DAEMON_LOCK"; remove_run_lock; exit 130' INT TERM
+        
         while true; do
-            "$0" update
+            # Check if we should skip this cycle due to redundancy
+            if should_skip_redundant; then
+                log "Cron recently ran - daemon cycle skipped (backup working)"
+            else
+                log "Daemon cycle - updating DNS..."
+                create_run_lock
+                
+                # Run update with direct call to avoid recursive redundancy checks
+                load_config
+                
+                if [ -n "$PROVIDER" ]; then
+                    ip=$(detect_ip)
+                    if [ $? -eq 0 ]; then
+                        log_success "Detected IP: $ip"
+                        log_info "Using provider: $PROVIDER"
+                        update_with_provider "$PROVIDER" "$DOMAIN" "$HOST" "$ip"
+                    else
+                        log_error "Failed to detect IP"
+                    fi
+                else
+                    log_error "No provider configured"
+                fi
+                
+                remove_run_lock
+            fi
+            
             sleep "${ACCESS_INTERVAL:-300}"
         done
         ;;

@@ -163,8 +163,12 @@ setup_systemd() {
     
     log "Setting up systemd service..."
     
-    # Create service file
-    cat <<EOF | sudo tee /etc/systemd/system/access.service >/dev/null
+    # Check if we have sudo access or should use user service
+    if sudo -n true 2>/dev/null; then
+        # System-level service (requires sudo)
+        log "Creating system-level service (requires sudo)..."
+        
+        cat <<EOF | sudo tee /etc/systemd/system/access.service >/dev/null
 [Unit]
 Description=Access - Dynamic DNS IP Synchronization
 After=network.target network-online.target
@@ -185,22 +189,68 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=$HOME/.config/access
+ReadWritePaths=$HOME/.config/access $HOME/.access
 
 [Install]
 WantedBy=multi-user.target
 EOF
-    
-    # Reload systemd and enable service
-    sudo systemctl daemon-reload
-    
-    log "✓ Systemd service created"
-    log "  Commands:"
-    log "    Start:   sudo systemctl start access"
-    log "    Stop:    sudo systemctl stop access"
-    log "    Status:  sudo systemctl status access"
-    log "    Enable:  sudo systemctl enable access"
-    log "    Logs:    sudo journalctl -u access -f"
+        
+        # Reload systemd and enable service
+        sudo systemctl daemon-reload
+        sudo systemctl enable access
+        
+        log "✓ System-level service created and enabled"
+        log "  Commands:"
+        log "    Start:   sudo systemctl start access"
+        log "    Stop:    sudo systemctl stop access"
+        log "    Status:  sudo systemctl status access"
+        log "    Logs:    sudo journalctl -u access -f"
+        
+    else
+        # User-level service (no sudo required)
+        log "Creating user-level service (no sudo required)..."
+        
+        # Create user systemd directory if needed
+        mkdir -p "$HOME/.config/systemd/user"
+        
+        cat <<EOF > "$HOME/.config/systemd/user/access.service"
+[Unit]
+Description=Access - Dynamic DNS IP Synchronization (User Service)
+After=network.target
+
+[Service]
+Type=simple
+Environment="HOME=$HOME"
+ExecStart=$INSTALL_DIR/$SCRIPT_NAME daemon
+Restart=always
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
+EOF
+        
+        # Reload user systemd and enable service
+        systemctl --user daemon-reload
+        systemctl --user enable access
+        
+        log "✓ User-level service created and enabled"
+        log "  Commands:"
+        log "    Start:   systemctl --user start access"
+        log "    Stop:    systemctl --user stop access"
+        log "    Status:  systemctl --user status access"
+        log "    Logs:    journalctl --user -u access -f"
+        
+        # Enable lingering so service starts at boot even without login
+        if command -v loginctl >/dev/null 2>&1; then
+            if sudo -n loginctl enable-linger "$USER" 2>/dev/null; then
+                log "✓ User lingering enabled (service will start at boot)"
+            else
+                warn "Could not enable user lingering - service won't start at boot without login"
+            fi
+        fi
+    fi
     
     return 0
 }
@@ -789,6 +839,7 @@ parse_args() {
     CRON_INTERVAL=5
     SHOW_HELP=false
     INTERACTIVE_MODE=false
+    AUTO_DETECT_AUTOMATION=false
     
     # Provider configuration flags
     PROVIDER=""
@@ -810,10 +861,9 @@ parse_args() {
     PROVIDER_ACCESS_KEY=""
     PROVIDER_SECRET_KEY=""
     
-    # If no args, enable interactive mode
+    # If no args, enable interactive mode BUT let redundant automation logic decide
     if [ $# -eq 0 ]; then
         INTERACTIVE_MODE=true
-        USE_CRON=true
         return
     fi
     
@@ -912,10 +962,12 @@ show_help() {
 Installation Options:
 ====================
 
-  --systemd        Install systemd service
+  --systemd        Install systemd service only
   --service        Alias for --systemd
-  --cron           Install cron job (default)
+  --cron           Install cron job only  
   --interval=N     Set cron interval in minutes (default: 5)
+  
+  Default: Both systemd service AND cron backup (redundant automation)
   --auto-update    Enable weekly auto-updates
   --interactive    Force interactive mode
   --help           Show this help
@@ -988,13 +1040,44 @@ main() {
     
     echo ""
     
-    # Setup systemd if requested
+    # REDUNDANT AUTOMATION: Always install both systemd AND cron for backup
+    if [ "$USE_SYSTEMD" = false ] && [ "$USE_CRON" = false ]; then
+        log "Setting up REDUNDANT automation (service + cron backup)..."
+        
+        # Enable both if available
+        if command -v systemctl >/dev/null 2>&1; then
+            log "Systemd available - enabling service..."
+            USE_SYSTEMD=true
+        fi
+        
+        if command -v crontab >/dev/null 2>&1; then
+            log "Cron available - enabling cron backup..."
+            USE_CRON=true
+        fi
+        
+        if [ "$USE_SYSTEMD" = false ] && [ "$USE_CRON" = false ]; then
+            warn "Neither systemd nor cron available - manual setup required"
+        fi
+    fi
+    
+    # Setup systemd if requested or auto-detected
     if [ "$USE_SYSTEMD" = true ]; then
-        setup_systemd || warn "Failed to setup systemd service"
+        if setup_systemd; then
+            # Auto-start the service after installation
+            if sudo -n true 2>/dev/null; then
+                sudo systemctl start access
+                log "✓ Service started automatically"
+            else
+                systemctl --user start access
+                log "✓ User service started automatically"
+            fi
+        else
+            warn "Failed to setup systemd service"
+        fi
         echo ""
     fi
     
-    # Setup cron if requested
+    # Setup cron if requested or auto-detected
     if [ "$USE_CRON" = true ]; then
         setup_cron "$CRON_INTERVAL" || warn "Failed to setup cron job"
         echo ""
@@ -1017,6 +1100,17 @@ main() {
     # Show completion message
     log "Installation complete!"
     echo "=================================================="
+    echo ""
+    
+    if [ "$USE_SYSTEMD" = true ] && [ "$USE_CRON" = true ]; then
+        log "🔄 REDUNDANT AUTOMATION ENABLED"
+        log "  ✅ Systemd service running (primary)"
+        log "  ✅ Cron backup every $CRON_INTERVAL minutes"  
+        log "  🛡️  When service dies → cron works"
+        log "  🛡️  When cron dies → service works"
+        log "  🧠 Smart conflict avoidance (4-minute minimum interval)"
+        echo ""
+    fi
     
     # Test the installation
     echo ""
