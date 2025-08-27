@@ -2,7 +2,7 @@
 # Access - Pure shell network access layer with modular provider support
 # The eternal foundation that enables connectivity
 
-VERSION="0.0.2"
+VERSION="0.0.3"
 
 # Color support
 if [ "${FORCE_COLOR:-0}" = "1" ] || { [ -t 1 ] && [ "${NO_COLOR:-0}" != "1" ] && [ "${TERM:-}" != "dumb" ]; }; then
