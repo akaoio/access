@@ -162,8 +162,51 @@ check_peer_alive() {
     fi
 }
 
+# Find our existing peer slot if we already have one
+find_existing_peer_slot() {
+    # Get our current IPs
+    my_ipv4=$(get_public_ip 2>/dev/null || true)
+    my_ipv6=""
+    if command -v curl >/dev/null 2>&1; then
+        my_ipv6=$(curl -6 -s ipv6.icanhazip.com 2>/dev/null || true)
+    fi
+    
+    # Check if we already have a peer slot
+    slot=0
+    max_slots=100
+    
+    log "Checking if we already have a peer slot..." >&2
+    
+    while [ "$slot" -lt "$max_slots" ]; do
+        peer_host="${HOST_PREFIX}${slot}"
+        full_domain="${peer_host}.${DOMAIN}"
+        
+        if command -v nslookup >/dev/null 2>&1; then
+            peer_ip=$(nslookup "$full_domain" 8.8.8.8 2>/dev/null | grep "Address:" | tail -1 | awk '{print $2}')
+            
+            if [ "$peer_ip" = "$my_ipv4" ] || [ "$peer_ip" = "$my_ipv6" ]; then
+                log "Found our existing slot: ${peer_host} (IP: $peer_ip)" >&2
+                printf "%d" "$slot"
+                return 0
+            fi
+        fi
+        
+        slot=$((slot + 1))
+    done
+    
+    return 1  # No existing slot found
+}
+
 # Find the lowest available peer slot (POSIX compliant)
 find_lowest_available_slot() {
+    # First check if we already have a slot
+    existing_slot=$(find_existing_peer_slot)
+    if [ $? -eq 0 ] && [ -n "$existing_slot" ]; then
+        log "Using our existing slot: ${HOST_PREFIX}${existing_slot}"
+        printf "%d" "$existing_slot"
+        return 0
+    fi
+    
     slot=0
     max_slots=100  # Reduced from 1000 to avoid excessive scanning
     
