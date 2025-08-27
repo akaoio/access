@@ -585,26 +585,67 @@ self_update() {
     if [ -f "$manager_dir/manager-core.sh" ]; then
         . "$manager_dir/manager-core.sh"
     fi
-    if [ -f "$manager_dir/manager-self-update.sh" ]; then
-        . "$manager_dir/manager-self-update.sh"
+    if [ -f "$manager_dir/manager-update.sh" ]; then
+        . "$manager_dir/manager-update.sh"
     fi
+    
+    # Initialize Manager environment variables for Access
+    export MANAGER_CLEAN_CLONE_DIR="/home/x/access"
+    export MANAGER_CONFIG_DIR="$HOME/.config/access"
     
     # Now run the actual update
     log "Running update check..."
     
-    # Use the correct Manager function
-    if command -v manager_handle_self_update >/dev/null 2>&1; then
-        manager_handle_self_update || {
-            log "Update check completed"
-        }
-    elif command -v manager_check_self_update >/dev/null 2>&1; then
-        manager_check_self_update || {
-            log "No updates available"
-        }
-    else
-        log "Manager update functions not available"
-        return 1
-    fi
+    # Parse arguments to determine action
+    action="check"
+    shift  # Remove 'self-update' argument
+    for arg in "$@"; do
+        case "$arg" in
+            --apply|--update|--install) action="apply" ;;
+            --check) action="check" ;;
+            --status) action="status" ;;
+        esac
+    done
+    
+    # Use the correct Manager update functions
+    case "$action" in
+        apply)
+            if command -v manager_apply_updates >/dev/null 2>&1; then
+                log "Applying updates..."
+                manager_apply_updates || {
+                    log "Update application completed"
+                }
+            else
+                log "Manager update functions not available"
+                return 1
+            fi
+            ;;
+        status)
+            if command -v manager_check_updates >/dev/null 2>&1; then
+                if manager_check_updates; then
+                    log "Updates are available"
+                    return 0
+                else
+                    log "Already up to date"
+                    return 1
+                fi
+            fi
+            ;;
+        check|*)
+            if command -v manager_check_updates >/dev/null 2>&1; then
+                if manager_check_updates; then
+                    log "Updates are available. Run 'access self-update --apply' to install"
+                    return 0
+                else
+                    log "Already up to date"
+                    return 1
+                fi
+            else
+                log "Manager update functions not available"
+                return 1
+            fi
+            ;;
+    esac
     
     log "Update check completed"
 }
