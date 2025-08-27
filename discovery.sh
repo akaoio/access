@@ -95,10 +95,25 @@ check_peer_alive() {
     peer_host="$1"
     full_domain="${peer_host}.${DOMAIN}"
     
+    # Get our current IPs (both IPv4 and IPv6)
+    my_ipv4=$(get_public_ip 2>/dev/null || true)
+    my_ipv6=""
+    if command -v curl >/dev/null 2>&1; then
+        my_ipv6=$(curl -6 -s ipv6.icanhazip.com 2>/dev/null || true)
+    fi
+    
     # Method 1: Check DNS record exists (POSIX compliant)
     if command -v nslookup >/dev/null 2>&1; then
         # nslookup is in POSIX.1-2001
-        if nslookup "$full_domain" 8.8.8.8 2>/dev/null | grep -q "Address:.*[0-9]"; then
+        peer_ip=$(nslookup "$full_domain" 8.8.8.8 2>/dev/null | grep "Address:" | tail -1 | awk '{print $2}')
+        
+        if [ -n "$peer_ip" ]; then
+            # Check if this peer is us (our IPv4 or IPv6)
+            if [ "$peer_ip" = "$my_ipv4" ] || [ "$peer_ip" = "$my_ipv6" ]; then
+                log "Slot ${peer_host} is ours (IP: $peer_ip)"
+                return 0  # Our own slot, occupied
+            fi
+            
             # DNS exists, now check if reachable
             
             # Method 2: Try telnet to SSH port (POSIX.1)
