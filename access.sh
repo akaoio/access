@@ -70,55 +70,12 @@ ACCESS_CONFIG="${ACCESS_CONFIG:-$ACCESS_CONFIG_HOME/config.json}"
 ACCESS_STATE="${ACCESS_STATE:-$ACCESS_DATA_HOME/state.json}"
 ACCESS_LOG="${ACCESS_LOG:-$ACCESS_DATA_HOME/access.log}"
 
-# Legacy path for migration
-ACCESS_LEGACY_HOME="$HOME/.access"
-
 # Get script directory for provider loading
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Ensure XDG-compliant directories exist
 mkdir -p "$ACCESS_CONFIG_HOME"
 mkdir -p "$ACCESS_DATA_HOME"
-
-# Migration: Move existing config from legacy location to XDG
-migrate_legacy_config() {
-    if [ -d "$ACCESS_LEGACY_HOME" ] && [ ! -f "$ACCESS_CONFIG" ] && [ -f "$ACCESS_LEGACY_HOME/config.json" ]; then
-        log_debug "Migrating configuration from legacy location to XDG-compliant paths"
-        
-        # Migrate config file
-        if [ -f "$ACCESS_LEGACY_HOME/config.json" ]; then
-            cp "$ACCESS_LEGACY_HOME/config.json" "$ACCESS_CONFIG"
-            log "✓ Migrated config: ~/.access/config.json → ~/.config/access/config.json"
-        fi
-        
-        # Migrate log file 
-        if [ -f "$ACCESS_LEGACY_HOME/access.log" ]; then
-            cp "$ACCESS_LEGACY_HOME/access.log" "$ACCESS_LOG"
-            log "✓ Migrated log: ~/.access/access.log → ~/.local/share/access/access.log"
-        fi
-        
-        # Migrate state file
-        if [ -f "$ACCESS_LEGACY_HOME/state.json" ]; then
-            cp "$ACCESS_LEGACY_HOME/state.json" "$ACCESS_STATE"
-            log "✓ Migrated state: ~/.access/state.json → ~/.local/share/access/state.json"
-        fi
-        
-        # Migrate last_run file
-        if [ -f "$ACCESS_LEGACY_HOME/last_run" ]; then
-            cp "$ACCESS_LEGACY_HOME/last_run" "$ACCESS_DATA_HOME/last_run"
-            log "✓ Migrated last_run file to XDG data directory"
-        fi
-        
-        log "📁 Configuration migrated to XDG Base Directory Specification"
-        log "   Config: $ACCESS_CONFIG"
-        log "   Data: $ACCESS_DATA_HOME"
-        log ""
-        log "Legacy directory ~/.access can be safely removed after verification"
-    fi
-}
-
-# Run migration check
-migrate_legacy_config
 
 # Source provider abstraction layer
 if [ -f "$SCRIPT_DIR/providers.sh" ]; then
@@ -816,14 +773,12 @@ case "${1:-help}" in
         echo ""
         echo "${BOLD}Environment variables:${NC}"
         echo "${BOLD}---------------------${NC}"
-        echo "    ${YELLOW}ACCESS_HOME${NC}       Config directory (default: ~/.access)"
         echo "    ${YELLOW}ACCESS_PROVIDER${NC}   DNS provider"
         echo "    ${YELLOW}ACCESS_DOMAIN${NC}     Domain to update"
         echo "    ${YELLOW}ACCESS_HOST${NC}       Host record (default: @)"
         echo "    ${YELLOW}ACCESS_INTERVAL${NC}   Update interval in seconds (default: 300)"
-        # AUTO_UPDATE environment variable removed - managed by Manager framework"
         echo ""
-        echo "${DIM}Note: v$VERSION - Humble beginnings with auto-agnostic provider discovery${NC}"
+        echo "${DIM}Access v$VERSION - Pure shell DNS synchronization with auto-discovery${NC}"
         echo ""
         ;;
 esac
