@@ -44,3 +44,6 @@ temp/
 # Build output
 dist/
 build/
+
+# External repositories
+manager/

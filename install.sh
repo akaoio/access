@@ -4,6 +4,7 @@
 
 set -e
 
+
 # Check if Manager framework is available
 check_manager() {
     # Check if manager is installed in the system
