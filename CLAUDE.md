@@ -92,7 +92,7 @@ Access is designed as eternal infrastructure with multiple layers:
 - Unified configuration interface
 
 **Configuration Management**
-- JSON-based configuration in `~/.access/config.json`
+- JSON-based configuration in `~/.config/access/config.json` (XDG-compliant)
 - Environment variable overrides
 - Secure credential storage (HTTPS only)
 
@@ -139,8 +139,8 @@ access health          # Check health of all providers
 ## Configuration System
 
 ### Storage Location
-- Primary config: `~/.access/config.json`
-- Logs: `~/.access/access.log`
+- Primary config: `~/.config/access/config.json`
+- Logs: `~/.local/share/access/access.log`
 - All data stored locally (no cloud dependencies)
 
 ### Environment Variable Support
@@ -331,7 +331,7 @@ curl -sSL https://raw.githubusercontent.com/akaoio/access/main/install.sh | sh -
 ## Security Considerations
 
 ### Credential Security
-- All credentials stored locally in `~/.access/config.json`
+- All credentials stored locally in `~/.config/access/config.json`
 - File permissions set to 600 (user read/write only)
 - No credentials transmitted in URLs or logs
 - HTTPS required for all API communication
@@ -365,13 +365,13 @@ dig @resolver1.opendns.com myip.opendns.com +short
 **DNS Update Failures**
 ```bash
 # Check configuration
-cat ~/.access/config.json
+cat ~/.config/access/config.json
 
 # Test provider connectivity
 access health
 
 # Check logs
-tail -f ~/.access/access.log
+tail -f ~/.local/share/access/access.log
 ```
 
 **Service Issues**
