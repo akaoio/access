@@ -116,7 +116,8 @@ check_peer_alive() {
     # Method 1: Check DNS record exists (POSIX compliant)
     if command -v nslookup >/dev/null 2>&1; then
         # nslookup is in POSIX.1-2001
-        peer_ip=$(nslookup "$full_domain" 8.8.8.8 2>/dev/null | grep "Address:" | tail -1 | awk '{print $2}')
+        local dns_server="${ACCESS_DNS_SERVER:-8.8.8.8}"
+        peer_ip=$(nslookup "$full_domain" "$dns_server" 2>/dev/null | grep "Address:" | tail -1 | awk '{print $2}')
         
         if [ -n "$peer_ip" ]; then
             # Check if this peer is us (our IPv4 or IPv6)
@@ -144,7 +145,8 @@ check_peer_alive() {
             
             # Method 4: Try curl if available (not POSIX but common)
             if command -v curl >/dev/null 2>&1; then
-                if curl -s -f --connect-timeout 2 "http://${full_domain}:80/" >/dev/null 2>&1; then
+                local timeout="${ACCESS_TIMEOUT:-2}"
+                if curl -s -f --connect-timeout "$timeout" "http://${full_domain}:80/" >/dev/null 2>&1; then
                     return 0  # HTTP responding
                 fi
             fi
@@ -158,7 +160,8 @@ check_peer_alive() {
         fi
     elif command -v host >/dev/null 2>&1; then
         # Try host command as fallback (common but not POSIX)
-        if host "$full_domain" 8.8.8.8 2>/dev/null | grep -q "has address"; then
+        local dns_server="${ACCESS_DNS_SERVER:-8.8.8.8}"
+        if host "$full_domain" "$dns_server" 2>/dev/null | grep -q "has address"; then
             return 0  # DNS exists, assume occupied
         else
             return 1  # No DNS, available
@@ -184,7 +187,7 @@ find_existing_peer_slot() {
     
     # Check if we already have a peer slot
     slot=0
-    max_slots=100
+    max_slots="${ACCESS_MAX_SLOTS:-100}"
     
     log "Checking if we already have a peer slot..." >&2
     
@@ -193,7 +196,8 @@ find_existing_peer_slot() {
         full_domain="${peer_host}.${DOMAIN}"
         
         if command -v nslookup >/dev/null 2>&1; then
-            peer_ip=$(nslookup "$full_domain" 8.8.8.8 2>/dev/null | grep "Address:" | tail -1 | awk '{print $2}')
+            local dns_server="${ACCESS_DNS_SERVER:-8.8.8.8}"
+        peer_ip=$(nslookup "$full_domain" "$dns_server" 2>/dev/null | grep "Address:" | tail -1 | awk '{print $2}')
             
             if [ "$peer_ip" = "$my_ipv4" ] || [ "$peer_ip" = "$my_ipv6" ]; then
                 log "Found our existing slot: ${peer_host} (IP: $peer_ip)" >&2
@@ -219,7 +223,7 @@ find_lowest_available_slot() {
     fi
     
     slot=0
-    max_slots=100  # Reduced from 1000 to avoid excessive scanning
+    max_slots="${ACCESS_MAX_SLOTS:-100}"  # Reduced from 1000 to avoid excessive scanning
     
     # Quiet mode - only log important info
     log "Scanning for available peer slots (0-$max_slots)..."
@@ -341,12 +345,12 @@ update_godaddy_dns() {
         response=$(curl -s -X PUT "$api_url" \
             -H "Authorization: sso-key ${DNS_KEY}:${DNS_SECRET}" \
             -H "Content-Type: application/json" \
-            -d "[{\"data\":\"${ip}\",\"ttl\":600}]" 2>&1)
+            -d "[{\"data\":\"${ip}\",\"ttl\":${ACCESS_DNS_TTL:-600}}]" 2>&1)
     elif command -v wget >/dev/null 2>&1; then
         response=$(wget -q -O - --method=PUT \
             --header="Authorization: sso-key ${DNS_KEY}:${DNS_SECRET}" \
             --header="Content-Type: application/json" \
-            --body-data="[{\"data\":\"${ip}\",\"ttl\":600}]" \
+            --body-data="[{\"data\":\"${ip}\",\"ttl\":${ACCESS_DNS_TTL:-600}}]" \
             "$api_url" 2>&1)
     else
         error "Neither curl nor wget available for API calls"

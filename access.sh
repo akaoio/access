@@ -214,7 +214,7 @@ detect_ipv6_http() {
     for service in $services; do
         # Try curl with IPv6
         if command -v curl >/dev/null 2>&1; then
-            ip=$(curl -s -6 --max-time 5 "$service" 2>/dev/null | tr -d '\n\r' | head -n1)
+            ip=$(curl -s -6 --max-time ${ACCESS_TIMEOUT:-5} "$service" 2>/dev/null | tr -d '\n\r' | head -n1)
             if validate_ipv6 "$ip"; then
                 echo "$ip"
                 return 0
@@ -223,7 +223,7 @@ detect_ipv6_http() {
         
         # Try wget with IPv6
         if command -v wget >/dev/null 2>&1; then
-            ip=$(wget -qO- -6 --timeout=5 "$service" 2>/dev/null | tr -d '\n\r' | head -n1)
+            ip=$(wget -qO- -6 --timeout=${ACCESS_TIMEOUT:-5} "$service" 2>/dev/null | tr -d '\n\r' | head -n1)
             if validate_ipv6 "$ip"; then
                 echo "$ip"
                 return 0
@@ -242,7 +242,7 @@ detect_ipv4_http() {
     for service in $services; do
         # Try curl
         if command -v curl >/dev/null 2>&1; then
-            ip=$(curl -s -4 --max-time 5 "$service" 2>/dev/null | tr -d '\n\r' | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | head -n1)
+            ip=$(curl -s -4 --max-time ${ACCESS_TIMEOUT:-5} "$service" 2>/dev/null | tr -d '\n\r' | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | head -n1)
             if validate_ipv4 "$ip"; then
                 echo "$ip"
                 return 0
@@ -251,7 +251,7 @@ detect_ipv4_http() {
         
         # Try wget
         if command -v wget >/dev/null 2>&1; then
-            ip=$(wget -qO- -4 --timeout=5 "$service" 2>/dev/null | tr -d '\n\r' | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | head -n1)
+            ip=$(wget -qO- -4 --timeout=${ACCESS_TIMEOUT:-5} "$service" 2>/dev/null | tr -d '\n\r' | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | head -n1)
             if validate_ipv4 "$ip"; then
                 echo "$ip"
                 return 0
