@@ -123,9 +123,9 @@ check_peer_alive() {
                 fi
             fi
             
-            # DNS exists but not reachable - consider it occupied
-            warn "Peer $full_domain has DNS but is not reachable"
-            return 0  # Still occupied
+            # DNS exists but not reachable - slot can be reclaimed
+            info "Peer $full_domain has stale DNS - slot available for reclaim"
+            return 1  # Available for reclaim
         else
             # No DNS record - slot is available
             return 1
@@ -150,9 +150,10 @@ check_peer_alive() {
 # Find the lowest available peer slot (POSIX compliant)
 find_lowest_available_slot() {
     slot=0
-    max_slots=1000
+    max_slots=100  # Reduced from 1000 to avoid excessive scanning
     
-    info "Scanning for available peer slots..."
+    # Quiet mode - only log important info
+    log "Scanning for available peer slots (0-$max_slots)..."
     
     while [ "$slot" -lt "$max_slots" ]; do
         peer_host="${HOST_PREFIX}${slot}"
@@ -161,8 +162,11 @@ find_lowest_available_slot() {
             log "Found available slot: ${peer_host}.${DOMAIN}"
             printf "%d" "$slot"
             return 0
-        else
-            info "Slot $slot is occupied (${peer_host}.${DOMAIN})"
+        fi
+        
+        # Only log every 10th slot to reduce noise
+        if [ $((slot % 10)) -eq 0 ] && [ "$slot" -gt 0 ]; then
+            log "Scanned up to slot $slot..."
         fi
         
         slot=$((slot + 1))
