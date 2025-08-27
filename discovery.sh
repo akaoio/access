@@ -90,32 +90,76 @@ EOF
     chmod 600 "$DISCOVERY_CONFIG"
 }
 
-# Check if a peer is alive using DNS and HTTP
+# Check if a peer is alive using multiple methods
 check_peer_alive() {
     local peer_host="$1"
     local full_domain="$peer_host.$DOMAIN"
+    local ip=""
     
     # First check if DNS record exists
     if command -v dig >/dev/null 2>&1; then
-        local ip=$(dig +short "$full_domain" @8.8.8.8 2>/dev/null | head -1)
+        ip=$(dig +short "$full_domain" @8.8.8.8 2>/dev/null | head -1)
         if [ -z "$ip" ]; then
-            return 1  # No DNS record
+            return 1  # No DNS record - slot is available
         fi
     elif command -v nslookup >/dev/null 2>&1; then
-        local ip=$(nslookup "$full_domain" 8.8.8.8 2>/dev/null | grep "Address:" | tail -1 | awk '{print $2}')
+        ip=$(nslookup "$full_domain" 8.8.8.8 2>/dev/null | grep "Address:" | tail -1 | awk '{print $2}')
         if [ -z "$ip" ]; then
-            return 1  # No DNS record
+            return 1  # No DNS record - slot is available
+        fi
+    elif command -v host >/dev/null 2>&1; then
+        ip=$(host "$full_domain" 8.8.8.8 2>/dev/null | grep "has address" | awk '{print $4}' | head -1)
+        if [ -z "$ip" ]; then
+            return 1  # No DNS record - slot is available
         fi
     else
-        warn "No DNS tools available (dig/nslookup). Cannot verify peer."
+        warn "No DNS tools available (dig/nslookup/host). Cannot verify peer."
         return 2  # Cannot check
     fi
     
-    # Optional: Check if peer responds to HTTP health check
-    # This assumes peers run a health endpoint (future feature)
-    # For now, DNS existence is enough
+    # Method 1: Try TCP connection on common ports (SSH, HTTP, HTTPS)
+    # SSH port 22 is most reliable since all peers should have it
+    if command -v nc >/dev/null 2>&1; then
+        # Try SSH port first (most likely to be open)
+        if nc -z -w 2 "$full_domain" 22 2>/dev/null; then
+            return 0  # Peer is alive - SSH port responding
+        fi
+        # Try HTTP port
+        if nc -z -w 2 "$full_domain" 80 2>/dev/null; then
+            return 0  # Peer is alive - HTTP port responding
+        fi
+        # Try HTTPS port
+        if nc -z -w 2 "$full_domain" 443 2>/dev/null; then
+            return 0  # Peer is alive - HTTPS port responding
+        fi
+    fi
     
-    return 0  # Peer is alive
+    # Method 2: Try HTTP health check (for peers running web services)
+    if command -v curl >/dev/null 2>&1; then
+        # Try a simple HTTP request with short timeout
+        if curl -s -f -m 2 "http://$full_domain/health" >/dev/null 2>&1; then
+            return 0  # Peer is alive - health endpoint responding
+        fi
+        # Try HTTPS
+        if curl -s -f -k -m 2 "https://$full_domain/health" >/dev/null 2>&1; then
+            return 0  # Peer is alive - HTTPS health endpoint responding
+        fi
+    elif command -v wget >/dev/null 2>&1; then
+        # Try with wget as fallback
+        if wget -q -O /dev/null --timeout=2 "http://$full_domain/health" 2>/dev/null; then
+            return 0  # Peer is alive - health endpoint responding
+        fi
+    fi
+    
+    # Method 3: Check DNS record age (if recently updated, likely alive)
+    # This is a heuristic - if DNS was updated in last hour, peer is probably alive
+    # Most DNS providers return TTL which we could use
+    
+    # If DNS exists but we can't connect, peer might be behind strict firewall
+    # We'll consider it "alive" if DNS exists and was recently updated
+    # For now, if DNS exists but no connection, assume it's alive but unreachable
+    warn "Peer $full_domain has DNS record but is not reachable on common ports"
+    return 0  # Consider it occupied since DNS exists
 }
 
 # Find the lowest available peer slot
