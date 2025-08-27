@@ -145,6 +145,7 @@ main() {
     # Parse command line arguments
     USE_SERVICE=false
     USE_CRON=false
+    USE_REDUNDANT=false
     USE_AUTO_UPDATE=false
     USE_DISCOVERY=false
     CRON_INTERVAL=5
@@ -175,8 +176,7 @@ main() {
                 INTERACTIVE=false
                 ;;
             --redundant)
-                USE_SERVICE=true
-                USE_CRON=true
+                USE_REDUNDANT=true
                 INTERACTIVE=false
                 ;;
             --non-interactive)
@@ -233,17 +233,25 @@ EOF
         exit 0
     fi
     
-    # Build installation arguments
-    INSTALL_ARGS=""
-    [ "$USE_SERVICE" = true ] && INSTALL_ARGS="$INSTALL_ARGS --service"
-    [ "$USE_CRON" = true ] && INSTALL_ARGS="$INSTALL_ARGS --cron --interval=$CRON_INTERVAL"
-    [ "$USE_AUTO_UPDATE" = true ] && INSTALL_ARGS="$INSTALL_ARGS --auto-update"  # Manager handles this!
-    
-    # Default to cron if nothing specified
-    if [ "$USE_SERVICE" = false ] && [ "$USE_CRON" = false ]; then
-        manager_log "No automation specified, defaulting to cron job"
-        INSTALL_ARGS="--cron"
+    # Handle redundant automation setup using Manager
+    if [ "$USE_REDUNDANT" = true ]; then
+        # Manager's built-in redundant automation (both systemd + cron)
+        INSTALL_ARGS="--redundant"
+    else
+        # Build installation arguments for single automation
+        INSTALL_ARGS=""
+        [ "$USE_SERVICE" = true ] && INSTALL_ARGS="$INSTALL_ARGS --service"
+        [ "$USE_CRON" = true ] && INSTALL_ARGS="$INSTALL_ARGS --cron --interval=$CRON_INTERVAL"
+        
+        # Default to cron if nothing specified
+        if [ "$USE_SERVICE" = false ] && [ "$USE_CRON" = false ] && [ "$USE_REDUNDANT" = false ]; then
+            manager_log "No automation specified, defaulting to cron job"
+            INSTALL_ARGS="--cron"
+        fi
     fi
+    
+    # Add auto-update if requested (Manager handles this)
+    [ "$USE_AUTO_UPDATE" = true ] && INSTALL_ARGS="$INSTALL_ARGS --auto-update"
     
     # Check and install dependencies using Manager
     manager_log "Checking system dependencies..."
@@ -257,13 +265,21 @@ EOF
         exit 1
     }
     
+    # Verify installation using Manager
+    manager_verify_installation || {
+        manager_warn "Installation verification failed - please check manually"
+    }
+    
     # Handle Access-specific features
     if [ "$USE_DISCOVERY" = true ]; then
         setup_network_discovery
     fi
     
-    # Setup Access configuration
+    # Setup Access configuration using Manager's config management
     setup_access_config
+    
+    # Check for updates immediately after installation
+    manager_check_updates || true
     
     # Show completion summary
     show_summary
@@ -296,19 +312,28 @@ setup_discovery_service() {
     manager_log "  Note: Discovery runs alongside main Access service"
 }
 
-# Setup Access configuration
+# Setup Access configuration using Manager's config management
 setup_access_config() {
     manager_log "Setting up Access configuration..."
     
-    # Config directory already created by Manager during installation
-    
-    # Check for existing configuration
-    CONFIG_FILE="$MANAGER_CONFIG_DIR/config.json"
-    
-    if [ -f "$CONFIG_FILE" ]; then
-        manager_log "✓ Existing configuration preserved"
-    else
+    # Use Manager's configuration management functions
+    manager_load_config || {
+        # No existing config, create default
+        manager_create_default_config || true
         manager_log "  Please run: access config <provider> --key=KEY --domain=DOMAIN"
+    }
+    
+    # Load any environment variable overrides
+    manager_load_env_overrides
+    
+    # Check if provider is configured
+    if manager_get_config "provider" >/dev/null 2>&1; then
+        local provider=$(manager_get_config "provider")
+        local domain=$(manager_get_config "domain")
+        manager_log "✓ Existing configuration preserved"
+        manager_log "  Provider: $provider, Domain: $domain"
+    else
+        manager_log "  Configuration required: access config <provider> --key=KEY --domain=DOMAIN"
     fi
 }
 
@@ -333,16 +358,17 @@ show_summary() {
     echo "   access update          # Update DNS immediately"
     echo ""
     
-    if [ "$USE_SERVICE" = true ]; then
-        manager_show_service_commands "access"
-    fi
+    # Use Manager's built-in service command display
+    manager_status || true
     
-    if [ "$USE_CRON" = true ]; then
-        echo "⏰ Cron Job:"
-        echo "   Updates every $CRON_INTERVAL minutes"
-        echo "   View/edit: crontab -e"
-        echo ""
+    # Show additional commands based on what was installed
+    echo "📝 Management Commands:"
+    echo "   access --version       # Show version"
+    echo "   access check-updates   # Check for updates"
+    if [ "$USE_AUTO_UPDATE" = true ]; then
+        echo "   access auto-update     # Manually trigger update"
     fi
+    echo ""
     
     if [ "$USE_DISCOVERY" = true ]; then
         echo "🌐 Network Discovery:"
