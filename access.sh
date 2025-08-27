@@ -526,60 +526,27 @@ save_config() {
     log "Provider: $provider, Domain: $DOMAIN, Host: $HOST"
 }
 
-# Auto-update function
-auto_update() {
-    log "Checking for updates..."
+# Self-update using Manager framework
+self_update() {
+    log "Checking for updates using Manager framework..."
     
-    local CURRENT="$0"
-    local TEMP=$(mktemp /tmp/access_update.XXXXXX 2>/dev/null || echo "/tmp/access_update_$$")
-    local UPDATE_URL="https://raw.githubusercontent.com/akaoio/access/main/access.sh"
-    
-    # Download latest version
-    if command -v curl >/dev/null 2>&1; then
-        curl -sSL "$UPDATE_URL" -o "$TEMP" 2>/dev/null
-    elif command -v wget >/dev/null 2>&1; then
-        wget -q "$UPDATE_URL" -O "$TEMP" 2>/dev/null
+    # Check if Manager is available
+    if [ -f "$HOME/manager/manager-self-update.sh" ]; then
+        . "$HOME/manager/manager-self-update.sh"
+        manager_self_update "access" "https://github.com/akaoio/access.git" || {
+            log "Update failed"
+            return 1
+        }
+    elif [ -f "/usr/local/lib/manager/manager-self-update.sh" ]; then
+        . "/usr/local/lib/manager/manager-self-update.sh"
+        manager_self_update "access" "https://github.com/akaoio/access.git" || {
+            log "Update failed"
+            return 1
+        }
     else
-        log "Cannot check for updates (no curl/wget)"
+        log "Manager framework not installed. Run install.sh first."
         return 1
     fi
-    
-    if [ -f "$TEMP" ] && [ -s "$TEMP" ]; then
-        # Check if update needed
-        if ! cmp -s "$TEMP" "$CURRENT" 2>/dev/null; then
-            # Backup current version
-            cp "$CURRENT" "$CURRENT.backup"
-            
-            # Check if we can write
-            if [ -w "$CURRENT" ]; then
-                cp "$TEMP" "$CURRENT"
-                chmod +x "$CURRENT"
-            else
-                # Try with sudo
-                if command -v sudo >/dev/null 2>&1; then
-                    sudo cp "$TEMP" "$CURRENT"
-                    sudo chmod +x "$CURRENT"
-                else
-                    log "Cannot update: no write permission"
-                    rm -f "$TEMP"
-                    return 1
-                fi
-            fi
-            
-            log "✓ Updated to latest version"
-            rm -f "$TEMP"
-            
-            # Re-execute with original arguments
-            exec "$CURRENT" "$@"
-        else
-            log "Already running latest version"
-        fi
-    else
-        log "Failed to download update"
-    fi
-    
-    rm -f "$TEMP"
-    return 0
 }
 
 # Main command handler
@@ -632,9 +599,7 @@ case "${1:-help}" in
         trap 'remove_run_lock; exit 130' INT TERM
         
         # Check for updates first (optional)
-        if [ "${AUTO_UPDATE:-false}" = "true" ]; then
-            auto_update "$@"
-        fi
+        # Auto-update removed - use Manager framework instead
         
         load_config
         
@@ -807,8 +772,8 @@ case "${1:-help}" in
         fi
         ;;
         
-    auto-update)
-        auto_update "$@"
+    self-update)
+        self_update "$@"
         ;;
         
     version)
@@ -837,7 +802,7 @@ case "${1:-help}" in
         echo "    ${BLUE}access health${NC}          Check provider health"
         echo "    ${BLUE}access test${NC} [provider] Test provider connectivity"
         echo "    ${BLUE}access daemon${NC}          Run as daemon (updates every 5 minutes)"
-        echo "    ${BLUE}access auto-update${NC}     Check and install updates"
+        echo "    ${BLUE}access self-update${NC}     Update using Manager framework"
         echo "    ${BLUE}access version${NC}         Show version"
         echo "    ${BLUE}access help${NC}            Show this help"
         echo ""
@@ -867,7 +832,7 @@ case "${1:-help}" in
         echo "    ${YELLOW}ACCESS_DOMAIN${NC}     Domain to update"
         echo "    ${YELLOW}ACCESS_HOST${NC}       Host record (default: @)"
         echo "    ${YELLOW}ACCESS_INTERVAL${NC}   Update interval in seconds (default: 300)"
-        echo "    ${YELLOW}AUTO_UPDATE${NC}       Enable auto-updates on 'update' command (true/false)"
+        # AUTO_UPDATE environment variable removed - managed by Manager framework"
         echo ""
         echo "${DIM}Note: v$VERSION - Humble beginnings with auto-agnostic provider discovery${NC}"
         echo ""
