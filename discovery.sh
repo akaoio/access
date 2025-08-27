@@ -11,7 +11,7 @@ DISCOVERY_LOG="${DISCOVERY_LOG:-$HOME/.config/access/discovery.log}"
 DISCOVERY_STATE="${DISCOVERY_STATE:-$HOME/.local/share/access/discovery.state}"
 
 # Default values
-DEFAULT_DOMAIN="akao.io"
+DEFAULT_DOMAIN=""  # Use domain from Access config, not hardcoded
 DEFAULT_HOST_PREFIX="peer"
 DEFAULT_CHECK_INTERVAL=300  # 5 minutes
 DEFAULT_HEAL_INTERVAL=60    # 1 minute when healing
@@ -48,9 +48,20 @@ init_discovery() {
 
 # Load discovery configuration (POSIX compliant JSON parsing)
 load_discovery_config() {
+    # First try to load from Access main config if domain not set
+    ACCESS_CONFIG="${ACCESS_CONFIG:-$HOME/.config/access/config.json}"
+    if [ -z "$DOMAIN" ] && [ -f "$ACCESS_CONFIG" ]; then
+        # Try to get domain from Access config
+        if command -v jq >/dev/null 2>&1; then
+            DOMAIN=$(jq -r '.domain // ""' "$ACCESS_CONFIG" 2>/dev/null)
+        else
+            DOMAIN=$(sed -n 's/.*"domain"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$ACCESS_CONFIG" 2>/dev/null)
+        fi
+    fi
+    
     if [ -f "$DISCOVERY_CONFIG" ]; then
         # POSIX compliant JSON extraction using sed
-        DOMAIN=$(sed -n 's/.*"domain"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$DISCOVERY_CONFIG" 2>/dev/null)
+        DOMAIN="${DOMAIN:-$(sed -n 's/.*"domain"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$DISCOVERY_CONFIG" 2>/dev/null)}"
         HOST_PREFIX=$(sed -n 's/.*"host_prefix"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$DISCOVERY_CONFIG" 2>/dev/null)
         DNS_KEY=$(sed -n 's/.*"dns_key"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$DISCOVERY_CONFIG" 2>/dev/null)
         DNS_SECRET=$(sed -n 's/.*"dns_secret"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$DISCOVERY_CONFIG" 2>/dev/null)
@@ -63,8 +74,8 @@ load_discovery_config() {
         ENABLE_AUTO_SYNC="${ENABLE_AUTO_SYNC:-false}"
     else
         # Use defaults
-        DOMAIN="$DEFAULT_DOMAIN"
-        HOST_PREFIX="$DEFAULT_HOST_PREFIX"
+        DOMAIN="${DOMAIN:-$DEFAULT_DOMAIN}"
+        HOST_PREFIX="${HOST_PREFIX:-$DEFAULT_HOST_PREFIX}"
         DNS_KEY=""
         DNS_SECRET=""
         DNS_PROVIDER=""
@@ -636,7 +647,7 @@ if [ "${0##*/}" = "discovery.sh" ] || [ "${0##*/}" = "access-discovery" ]; then
         printf "  status   - Show current peer registration status\n"
         printf "\n"
         printf "Environment variables for non-interactive mode:\n"
-        printf "  ACCESS_DISCOVERY_DOMAIN   - Main domain (default: akao.io)\n"
+        printf "  ACCESS_DISCOVERY_DOMAIN   - Main domain (from Access config)\n"
         printf "  ACCESS_DISCOVERY_PREFIX   - Host prefix (default: peer)\n"
         printf "  ACCESS_DNS_PROVIDER      - DNS provider (godaddy|cloudflare|digitalocean)\n"
         printf "  ACCESS_DNS_KEY           - API key for DNS provider\n"
