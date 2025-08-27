@@ -7,21 +7,15 @@ set -e
 
 # Check if Manager framework is available
 check_manager() {
-    # Check if manager is installed in the system
-    if [ -d "/usr/local/lib/manager" ]; then
-        MANAGER_DIR="/usr/local/lib/manager"
-        return 0
-    fi
-    
-    # Check if manager is in user's home
+    # Check if manager is in user's home (standard location)
     if [ -d "$HOME/manager" ]; then
         MANAGER_DIR="$HOME/manager"
         return 0
     fi
     
-    # Check if manager is in parent projects directory (workspace mode)
-    if [ -d "../manager" ]; then
-        MANAGER_DIR="../manager"
+    # Check if manager is installed in the system
+    if [ -d "/usr/local/lib/manager" ]; then
+        MANAGER_DIR="/usr/local/lib/manager"
         return 0
     fi
     
@@ -32,6 +26,7 @@ check_manager() {
         exit 1
     }
     MANAGER_DIR="$HOME/manager"
+    echo "Manager framework installed successfully at $HOME/manager"
 }
 
 # Load Manager framework

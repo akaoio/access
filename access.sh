@@ -525,7 +525,7 @@ self_update() {
     
     # Find Manager in various locations
     local manager_found=false
-    local manager_dirs="$HOME/manager /usr/local/lib/manager ../manager"
+    local manager_dirs="$HOME/manager /usr/local/lib/manager"
     
     # Also check if we can access root's manager (for system installations)
     if [ -r "/root/manager/manager-self-update.sh" ]; then

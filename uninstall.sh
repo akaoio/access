@@ -9,12 +9,14 @@ if [ -f "$HOME/manager/manager.sh" ]; then
     . "$HOME/manager/manager.sh"
 elif [ -f "/usr/local/lib/manager/manager.sh" ]; then
     . "/usr/local/lib/manager/manager.sh"
-elif [ -f "../manager/manager.sh" ]; then
-    . "../manager/manager.sh"
 else
     echo "ERROR: Manager framework not found!"
     echo "Manager is required for proper uninstallation."
-    echo "Install Manager first: git clone https://github.com/akaoio/manager.git ~/manager"
+    echo ""
+    echo "Install Manager first:"
+    echo "  git clone https://github.com/akaoio/manager.git ~/manager"
+    echo ""
+    echo "Manager handles all aspects of uninstallation properly."
     exit 1
 fi
 
