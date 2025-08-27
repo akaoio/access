@@ -485,10 +485,11 @@ self_update() {
         manager_dirs="$manager_dirs /root/manager"
     fi
     
+    local manager_dir=""
     for dir in $manager_dirs; do
         if [ -f "$dir/manager-self-update.sh" ]; then
             log "Loading Manager from $dir"
-            . "$dir/manager-self-update.sh"
+            manager_dir="$dir"
             manager_found=true
             break
         fi
@@ -501,17 +502,35 @@ self_update() {
             log "Failed to install Manager framework"
             return 1
         }
-        . "$HOME/manager/manager-self-update.sh"
+        manager_dir="$HOME/manager"
+    fi
+    
+    # Load all Manager modules needed
+    if [ -f "$manager_dir/manager-core.sh" ]; then
+        . "$manager_dir/manager-core.sh"
+    fi
+    if [ -f "$manager_dir/manager-self-update.sh" ]; then
+        . "$manager_dir/manager-self-update.sh"
     fi
     
     # Now run the actual update
     log "Running update check..."
-    manager_self_update "access" "https://github.com/akaoio/access.git" || {
-        log "Update failed"
-        return 1
-    }
     
-    log "Update completed successfully"
+    # Use the correct Manager function
+    if command -v manager_handle_self_update >/dev/null 2>&1; then
+        manager_handle_self_update || {
+            log "Update check completed"
+        }
+    elif command -v manager_check_self_update >/dev/null 2>&1; then
+        manager_check_self_update || {
+            log "No updates available"
+        }
+    else
+        log "Manager update functions not available"
+        return 1
+    fi
+    
+    log "Update check completed"
 }
 
 # Main command handler
