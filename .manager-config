@@ -1,11 +1,25 @@
 # Manager framework configuration for Access
 # This file tells Manager what additional files to install
 
+# Main script (access.sh is copied as 'access' by default)
+MAIN_SCRIPT="access.sh"
+
 # Additional files to copy during installation
-ADDITIONAL_FILES="providers.sh"
+ADDITIONAL_FILES="providers.sh discovery.sh health.sh"
 
 # Legacy files to remove (cleanup)
-LEGACY_FILES="provider-agnostic.sh provider.sh"
+LEGACY_FILES="provider-agnostic.sh provider.sh health-server.sh"
 
 # Directories to copy
 DIRECTORIES="providers"
+
+# Service configuration
+SERVICE_NAME="access"
+SERVICE_DESCRIPTION="Dynamic DNS IP Synchronization"
+
+# Dependencies to check/install
+DEPENDENCIES="curl dig jq"
+
+# Auto-update configuration
+AUTO_UPDATE_ENABLED="true"
+AUTO_UPDATE_INTERVAL="weekly"

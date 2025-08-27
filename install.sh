@@ -139,6 +139,9 @@ main() {
                  "access.sh" \
                  "Dynamic DNS IP Synchronization"
     
+    # Create XDG-compliant directory structure using Manager
+    manager_create_xdg_dirs
+    
     # Parse command line arguments
     USE_SERVICE=false
     USE_CRON=false
@@ -242,7 +245,12 @@ EOF
         INSTALL_ARGS="--cron"
     fi
     
-    # Run Manager installation
+    # Check and install dependencies using Manager
+    manager_log "Checking system dependencies..."
+    manager_check_requirements "curl" "curl" || manager_auto_install_deps "curl"
+    manager_check_requirements "dig" "bind-utils dnsutils" || manager_auto_install_deps "bind-utils dnsutils"
+    
+    # Run Manager installation (uses .manager-config automatically)
     manager_log "Installing Access with Manager framework..."
     manager_install $INSTALL_ARGS || {
         manager_error "Installation failed"
@@ -261,24 +269,15 @@ EOF
     show_summary
 }
 
-# Setup network discovery (Access-specific)
+# Setup network discovery (simplified - files already installed by Manager)
 setup_network_discovery() {
-    manager_log "Setting up network discovery..."
+    manager_log "Network discovery enabled via Manager framework"
     
-    # Copy discovery scripts to installation directory
-    if [ -f "$MANAGER_CLEAN_CLONE_DIR/discovery.sh" ]; then
-        discovery_dest="$MANAGER_INSTALL_DIR/access-discovery"
-        
-        if [ -w "$MANAGER_INSTALL_DIR" ]; then
-            cp "$MANAGER_CLEAN_CLONE_DIR/discovery.sh" "$discovery_dest"
-            chmod +x "$discovery_dest"
-        else
-            sudo cp "$MANAGER_CLEAN_CLONE_DIR/discovery.sh" "$discovery_dest"
-            sudo chmod +x "$discovery_dest"
-        fi
-        
-        manager_log "✓ Network discovery enabled"
-        manager_log "  Command: access-discovery"
+    # Discovery.sh is automatically installed by Manager via .manager-config
+    # Just notify user that it's available
+    if [ -x "$MANAGER_INSTALL_DIR/discovery" ]; then
+        manager_log "✓ Network discovery available"
+        manager_log "  Command: discovery"
     fi
     
     # Setup discovery service if using systemd
