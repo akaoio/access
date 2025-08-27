@@ -526,7 +526,24 @@ save_config() {
     
     config_json="$config_json\n}"
     
-    printf "%b\n" "$config_json" > "$ACCESS_CONFIG"
+    # Add discovery flag if set in environment
+    if [ -n "$DISCOVERY_ENABLED" ]; then
+        # Parse existing config and add discovery flag
+        if command -v jq >/dev/null 2>&1 && [ -f "$ACCESS_CONFIG" ]; then
+            # First save the basic config
+            printf "%b\n" "$config_json" > "$ACCESS_CONFIG"
+            # Then add discovery flag using jq
+            temp_file=$(mktemp)
+            jq ".discovery = $DISCOVERY_ENABLED" "$ACCESS_CONFIG" > "$temp_file" && mv "$temp_file" "$ACCESS_CONFIG"
+        else
+            # Fallback: manually add discovery field before closing brace
+            config_json=$(echo "$config_json" | sed 's/\n}$/,\n    "discovery": '"$DISCOVERY_ENABLED"'\n}/')
+            printf "%b\n" "$config_json" > "$ACCESS_CONFIG"
+        fi
+    else
+        printf "%b\n" "$config_json" > "$ACCESS_CONFIG"
+    fi
+    
     log "Configuration saved to $ACCESS_CONFIG"
     log "Provider: $provider, Domain: $DOMAIN, Host: $HOST"
 }
@@ -703,6 +720,17 @@ case "${1:-help}" in
             case "$arg" in
                 --domain=*) DOMAIN="${arg#*=}" ;;
                 --host=*) HOST="${arg#*=}" ;;
+                --discovery=*) 
+                    DISCOVERY_ENABLED="${arg#*=}"
+                    # Validate boolean value
+                    case "$DISCOVERY_ENABLED" in
+                        true|false) ;;
+                        *) 
+                            log_error "Invalid discovery value: $DISCOVERY_ENABLED (must be true or false)"
+                            exit 1
+                            ;;
+                    esac
+                    ;;
                 --*=*)
                     # Generic handling for provider-specific arguments
                     key=$(echo "${arg%%=*}" | sed 's/^--//' | tr '[:lower:]' '[:upper:]' | tr '-' '_')
@@ -764,6 +792,52 @@ case "${1:-help}" in
         
     providers)
         list_providers
+        ;;
+        
+    discovery)
+        # Manage network discovery settings
+        shift
+        if [ "$1" = "enable" ]; then
+            if command -v jq >/dev/null 2>&1 && [ -f "$ACCESS_CONFIG" ]; then
+                temp_file=$(mktemp)
+                jq '.discovery = true' "$ACCESS_CONFIG" > "$temp_file" && mv "$temp_file" "$ACCESS_CONFIG"
+                log_success "Network discovery enabled"
+                log "When host is empty, Access will auto-discover available peer slots"
+            else
+                log_error "Config file not found. Run 'access config <provider>' first"
+                exit 1
+            fi
+        elif [ "$1" = "disable" ]; then
+            if command -v jq >/dev/null 2>&1 && [ -f "$ACCESS_CONFIG" ]; then
+                temp_file=$(mktemp)
+                jq '.discovery = false' "$ACCESS_CONFIG" > "$temp_file" && mv "$temp_file" "$ACCESS_CONFIG"
+                log_success "Network discovery disabled"
+                log "When host is empty, Access will use root domain (@)"
+            else
+                log_error "Config file not found. Run 'access config <provider>' first"
+                exit 1
+            fi
+        elif [ "$1" = "status" ] || [ -z "$1" ]; then
+            if [ -f "$ACCESS_CONFIG" ] && command -v jq >/dev/null 2>&1; then
+                discovery_status=$(jq -r '.discovery // false' "$ACCESS_CONFIG" 2>/dev/null || echo "false")
+                echo "Network discovery: $discovery_status"
+                if [ "$discovery_status" = "true" ]; then
+                    echo "  When host is empty, auto-discovery will find available peer slots"
+                else
+                    echo "  When host is empty, root domain (@) will be used"
+                fi
+            else
+                echo "Network discovery: not configured"
+                echo "  Run 'access config <provider>' first"
+            fi
+        else
+            echo "Usage: access discovery [enable|disable|status]"
+            echo ""
+            echo "  enable   - Enable auto-discovery for empty host"
+            echo "  disable  - Disable auto-discovery (use @ for empty host)"
+            echo "  status   - Show current discovery setting (default)"
+            exit 1
+        fi
         ;;
         
     discover)
@@ -838,6 +912,7 @@ case "${1:-help}" in
         echo "    ${BLUE}access ipv6${NC}            Force IPv6 detection only"
         echo "    ${BLUE}access update${NC}          Update DNS with current IP"  
         echo "    ${BLUE}access config${NC}          Configure DNS provider"
+        echo "    ${BLUE}access discovery${NC}       Manage auto-discovery settings"
         echo "    ${BLUE}access providers${NC}       List available providers"
         echo "    ${BLUE}access discover${NC}        Auto-discover all providers"
         echo "    ${BLUE}access capabilities${NC}    Show provider capabilities"
@@ -853,6 +928,7 @@ case "${1:-help}" in
         echo "${BOLD}-------------${NC}"
         echo "    ${YELLOW}access config${NC} <provider> ${DIM}--help${NC}     Show provider configuration help"
         echo "    ${YELLOW}access config${NC} <provider> ${DIM}[options]${NC}  Configure provider"
+        echo "    ${YELLOW}access discovery${NC} [enable|disable]   Manage peer auto-discovery"
         echo ""
         echo "${BOLD}Provider Discovery:${NC}"
         echo "${BOLD}------------------${NC}"
@@ -864,6 +940,7 @@ case "${1:-help}" in
         echo "${BOLD}Examples:${NC}"
         echo "${BOLD}---------${NC}"
         echo "    ${DIM}access config godaddy --domain=example.com --key=KEY --secret=SECRET${NC}"
+        echo "    ${DIM}access config godaddy --domain=example.com --key=KEY --secret=SECRET --discovery=true${NC}"
         echo "    ${DIM}access config cloudflare --domain=example.com --email=EMAIL --api-key=KEY --zone-id=ZONE${NC}"
         echo "    ${DIM}access config azure --domain=example.com --subscription-id=ID --resource-group=RG${NC}"
         echo "    ${DIM}access config gcloud --domain=example.com --project-id=PROJECT --zone-name=ZONE${NC}"
@@ -878,3 +955,4 @@ case "${1:-help}" in
         echo "${DIM}Access v$VERSION - Pure shell DNS synchronization with auto-discovery${NC}"
         echo ""
         ;;
+esac
