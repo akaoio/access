@@ -431,46 +431,58 @@ load_config() {
     DOMAIN="${ACCESS_DOMAIN:-$DOMAIN}"
     HOST="${ACCESS_HOST:-$HOST}"
     
-    # Auto-discovery: If host is empty, run discovery to find available slot
-    if [ -z "$HOST" ] && [ -n "$DOMAIN" ]; then
-        log "Host is empty - triggering auto-discovery for available slot..."
-        
-        # Check if discovery.sh exists
-        DISCOVERY_SCRIPT="$(dirname "$0")/discovery.sh"
-        if [ ! -f "$DISCOVERY_SCRIPT" ]; then
-            # Try installed location
-            DISCOVERY_SCRIPT="/usr/local/bin/access-discovery"
-            if [ ! -f "$DISCOVERY_SCRIPT" ]; then
-                # Try user location
-                DISCOVERY_SCRIPT="$HOME/.local/bin/access-discovery"
-            fi
+    # Handle empty host based on discovery setting
+    if [ -z "$HOST" ]; then
+        # Check if discovery is enabled (from config or environment)
+        DISCOVERY_ENABLED="${ACCESS_DISCOVERY:-false}"
+        if [ -f "$ACCESS_CONFIG" ] && command -v jq >/dev/null 2>&1; then
+            DISCOVERY_ENABLED=$(jq -r '.discovery // false' "$ACCESS_CONFIG" 2>/dev/null || echo "false")
         fi
         
-        if [ -f "$DISCOVERY_SCRIPT" ] && [ -x "$DISCOVERY_SCRIPT" ]; then
-            # Source discovery functions
-            . "$DISCOVERY_SCRIPT"
+        if [ "$DISCOVERY_ENABLED" = "true" ] && [ -n "$DOMAIN" ]; then
+            log "Host is empty with discovery enabled - finding available slot..."
             
-            # Set discovery variables
-            DOMAIN="$DOMAIN"
-            HOST_PREFIX="${HOST_PREFIX:-peer}"
+            # Check if discovery.sh exists
+            DISCOVERY_SCRIPT="$(dirname "$0")/discovery.sh"
+            if [ ! -f "$DISCOVERY_SCRIPT" ]; then
+                # Try installed location
+                DISCOVERY_SCRIPT="/usr/local/bin/access-discovery"
+                if [ ! -f "$DISCOVERY_SCRIPT" ]; then
+                    # Try user location
+                    DISCOVERY_SCRIPT="$HOME/.local/bin/access-discovery"
+                fi
+            fi
             
-            # Find available slot
-            if slot=$(find_lowest_available_slot); then
-                HOST="${HOST_PREFIX}${slot}"
-                log_success "Auto-discovered available host: $HOST"
+            if [ -f "$DISCOVERY_SCRIPT" ] && [ -x "$DISCOVERY_SCRIPT" ]; then
+                # Source discovery functions
+                . "$DISCOVERY_SCRIPT"
                 
-                # Save the discovered host back to config
-                if command -v jq >/dev/null 2>&1 && [ -f "$ACCESS_CONFIG" ]; then
-                    temp_file=$(mktemp)
-                    jq ".host = \"$HOST\"" "$ACCESS_CONFIG" > "$temp_file" && mv "$temp_file" "$ACCESS_CONFIG"
-                    log "Saved auto-discovered host to configuration"
+                # Set discovery variables
+                DOMAIN="$DOMAIN"
+                HOST_PREFIX="${HOST_PREFIX:-peer}"
+                
+                # Find available slot
+                if slot=$(find_lowest_available_slot); then
+                    HOST="${HOST_PREFIX}${slot}"
+                    log_success "Auto-discovered available host: $HOST"
+                    
+                    # Save the discovered host back to config
+                    if command -v jq >/dev/null 2>&1 && [ -f "$ACCESS_CONFIG" ]; then
+                        temp_file=$(mktemp)
+                        jq ".host = \"$HOST\"" "$ACCESS_CONFIG" > "$temp_file" && mv "$temp_file" "$ACCESS_CONFIG"
+                        log "Saved auto-discovered host to configuration"
+                    fi
+                else
+                    log_warning "Auto-discovery failed - using root domain (@)"
+                    HOST="@"
                 fi
             else
-                log_warning "Auto-discovery failed - using root domain (@)"
+                log_warning "Discovery module not found - using root domain (@)"
                 HOST="@"
             fi
         else
-            log_warning "Discovery module not found - using root domain (@)"
+            # Discovery not enabled or no domain - use root
+            log_debug "Host empty, discovery disabled - using root domain (@)"
             HOST="@"
         fi
     fi
