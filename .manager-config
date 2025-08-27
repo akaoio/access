@@ -1,0 +1,11 @@
+# Manager framework configuration for Access
+# This file tells Manager what additional files to install
+
+# Additional files to copy during installation
+ADDITIONAL_FILES="providers.sh"
+
+# Legacy files to remove (cleanup)
+LEGACY_FILES="provider-agnostic.sh provider.sh"
+
+# Directories to copy
+DIRECTORIES="providers"
