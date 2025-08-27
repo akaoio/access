@@ -866,4 +866,3 @@ case "${1:-help}" in
         echo "${DIM}Access v$VERSION - Pure shell DNS synchronization with auto-discovery${NC}"
         echo ""
         ;;
-esac
