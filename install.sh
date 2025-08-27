@@ -47,6 +47,88 @@ manager_header() {
     echo ""
 }
 
+# Interactive prompts for user preferences
+interactive_setup() {
+    manager_log "Welcome to Access installation!"
+    echo ""
+    
+    # Ask about automation method
+    echo "How would you like Access to run?"
+    echo "  1) Systemd service (recommended for servers)"
+    echo "  2) Cron job (recommended for personal use)"
+    echo "  3) Both (redundant automation - most reliable)"
+    echo "  4) Manual only (no automation)"
+    printf "Choice (1-4): "
+    read -r automation_choice
+    
+    case "$automation_choice" in
+        1) USE_SERVICE=true ;;
+        2) USE_CRON=true ;;
+        3) USE_SERVICE=true; USE_CRON=true ;;
+        4) ;;
+        *) manager_warn "Invalid choice, defaulting to cron"; USE_CRON=true ;;
+    esac
+    
+    # Ask about cron interval if using cron
+    if [ "$USE_CRON" = true ]; then
+        echo ""
+        printf "Cron update interval in minutes? (default: 5): "
+        read -r interval_input
+        if [ -n "$interval_input" ] && [ "$interval_input" -gt 0 ] 2>/dev/null; then
+            CRON_INTERVAL="$interval_input"
+        fi
+    fi
+    
+    # Ask about network discovery
+    echo ""
+    printf "Enable network discovery for peer detection? (y/N): "
+    read -r discovery_choice
+    case "$discovery_choice" in
+        [yY]|[yY][eE][sS]) USE_DISCOVERY=true ;;
+        *) USE_DISCOVERY=false ;;
+    esac
+    
+    # Ask about auto-updates
+    echo ""
+    printf "Enable weekly auto-updates? (y/N): "
+    read -r update_choice
+    case "$update_choice" in
+        [yY]|[yY][eE][sS]) USE_AUTO_UPDATE=true ;;
+        *) USE_AUTO_UPDATE=false ;;
+    esac
+    
+    echo ""
+    manager_log "Configuration complete!"
+    
+    # Show summary of choices
+    echo ""
+    echo "Installation Summary:"
+    if [ "$USE_SERVICE" = true ]; then
+        echo "  ✓ Systemd service will be created"
+    fi
+    if [ "$USE_CRON" = true ]; then
+        echo "  ✓ Cron job will run every $CRON_INTERVAL minutes"
+    fi
+    if [ "$USE_DISCOVERY" = true ]; then
+        echo "  ✓ Network discovery will be enabled"
+    fi
+    if [ "$USE_AUTO_UPDATE" = true ]; then
+        echo "  ✓ Weekly auto-updates will be enabled"
+    fi
+    if [ "$USE_SERVICE" = false ] && [ "$USE_CRON" = false ]; then
+        echo "  • Manual operation only (no automation)"
+    fi
+    echo ""
+    printf "Continue with installation? (Y/n): "
+    read -r confirm
+    case "$confirm" in
+        [nN]|[nN][oO]) 
+            manager_log "Installation cancelled by user"
+            exit 0
+            ;;
+    esac
+}
+
 # Main installation
 main() {
     manager_header
@@ -64,28 +146,38 @@ main() {
     USE_DISCOVERY=false
     CRON_INTERVAL=5
     SHOW_HELP=false
+    INTERACTIVE=true
     
     for arg in "$@"; do
         case "$arg" in
             --service|--systemd)
                 USE_SERVICE=true
+                INTERACTIVE=false
                 ;;
             --cron)
                 USE_CRON=true
+                INTERACTIVE=false
                 ;;
             --auto-update)
                 USE_AUTO_UPDATE=true
+                INTERACTIVE=false
                 ;;
             --discovery)
                 USE_DISCOVERY=true
+                INTERACTIVE=false
                 ;;
             --interval=*)
                 CRON_INTERVAL="${arg#*=}"
                 USE_CRON=true
+                INTERACTIVE=false
                 ;;
             --redundant)
                 USE_SERVICE=true
                 USE_CRON=true
+                INTERACTIVE=false
+                ;;
+            --non-interactive)
+                INTERACTIVE=false
                 ;;
             --help|-h)
                 SHOW_HELP=true
@@ -95,6 +187,11 @@ main() {
                 ;;
         esac
     done
+    
+    # Run interactive setup if no command line args provided
+    if [ "$INTERACTIVE" = true ] && [ "$SHOW_HELP" = false ]; then
+        interactive_setup
+    fi
     
     if [ "$SHOW_HELP" = true ]; then
         cat << 'EOF'
@@ -107,12 +204,18 @@ Options:
   --redundant     Both service and cron (recommended)
   --discovery     Enable network discovery for swarm mode
   --auto-update   Enable weekly auto-updates
+  --non-interactive Skip interactive prompts (use with other options)
   --help          Show this help
 
+Interactive Mode:
+  Run without options for interactive setup with guided prompts
+
 Examples:
-  ./install-with-manager.sh --redundant --auto-update
-  ./install-with-manager.sh --service --discovery
-  ./install-with-manager.sh --cron --interval=10
+  ./install.sh                    # Interactive setup (recommended)
+  ./install.sh --redundant --auto-update
+  ./install.sh --service --discovery
+  ./install.sh --cron --interval=10
+  ./install.sh --non-interactive --cron  # Non-interactive with defaults
 
 The Manager framework handles:
   ✓ XDG-compliant directory creation
