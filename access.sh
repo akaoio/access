@@ -405,7 +405,7 @@ load_config() {
         # Use jq if available
         PROVIDER=$(jq -r '.provider // ""' "$ACCESS_CONFIG")
         DOMAIN=$(jq -r '.domain // ""' "$ACCESS_CONFIG")
-        HOST=$(jq -r '.host // "@"' "$ACCESS_CONFIG")
+        HOST=$(jq -r '.host // ""' "$ACCESS_CONFIG")
         
         # Load provider-specific config as environment variables
         if [ -n "$PROVIDER" ]; then
@@ -430,6 +430,53 @@ load_config() {
     PROVIDER="${ACCESS_PROVIDER:-$PROVIDER}"
     DOMAIN="${ACCESS_DOMAIN:-$DOMAIN}"
     HOST="${ACCESS_HOST:-$HOST}"
+    
+    # Auto-discovery: If host is empty, run discovery to find available slot
+    if [ -z "$HOST" ] && [ -n "$DOMAIN" ]; then
+        log "Host is empty - triggering auto-discovery for available slot..."
+        
+        # Check if discovery.sh exists
+        DISCOVERY_SCRIPT="$(dirname "$0")/discovery.sh"
+        if [ ! -f "$DISCOVERY_SCRIPT" ]; then
+            # Try installed location
+            DISCOVERY_SCRIPT="/usr/local/bin/access-discovery"
+            if [ ! -f "$DISCOVERY_SCRIPT" ]; then
+                # Try user location
+                DISCOVERY_SCRIPT="$HOME/.local/bin/access-discovery"
+            fi
+        fi
+        
+        if [ -f "$DISCOVERY_SCRIPT" ] && [ -x "$DISCOVERY_SCRIPT" ]; then
+            # Source discovery functions
+            . "$DISCOVERY_SCRIPT"
+            
+            # Set discovery variables
+            DOMAIN="$DOMAIN"
+            HOST_PREFIX="${HOST_PREFIX:-peer}"
+            
+            # Find available slot
+            if slot=$(find_lowest_available_slot); then
+                HOST="${HOST_PREFIX}${slot}"
+                log_success "Auto-discovered available host: $HOST"
+                
+                # Save the discovered host back to config
+                if command -v jq >/dev/null 2>&1 && [ -f "$ACCESS_CONFIG" ]; then
+                    temp_file=$(mktemp)
+                    jq ".host = \"$HOST\"" "$ACCESS_CONFIG" > "$temp_file" && mv "$temp_file" "$ACCESS_CONFIG"
+                    log "Saved auto-discovered host to configuration"
+                fi
+            else
+                log_warning "Auto-discovery failed - using root domain (@)"
+                HOST="@"
+            fi
+        else
+            log_warning "Discovery module not found - using root domain (@)"
+            HOST="@"
+        fi
+    fi
+    
+    # Default to @ if still empty (fallback)
+    HOST="${HOST:-@}"
 }
 
 # Save configuration

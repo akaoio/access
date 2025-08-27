@@ -535,7 +535,9 @@ run_daemon() {
 }
 
 # Main command handler (POSIX compliant)
-case "${1:-}" in
+# Only run main logic if executed directly (not sourced)
+if [ "${0##*/}" = "discovery.sh" ] || [ "${0##*/}" = "access-discovery" ]; then
+    case "${1:-}" in
     setup)
         if [ -t 0 ]; then
             interactive_setup
@@ -580,4 +582,5 @@ case "${1:-}" in
         printf "\n"
         exit 1
         ;;
-esac
+    esac
+fi
