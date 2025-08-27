@@ -559,6 +559,127 @@ EOF
     return 0
 }
 
+# Setup network discovery
+setup_network_discovery() {
+    local mode="${1:-interactive}"
+    
+    log "Setting up network discovery and auto-sync..."
+    
+    # Install discovery module
+    if [ -f "$CLEAN_CLONE_DIR/discovery.sh" ]; then
+        local discovery_dest="$INSTALL_DIR/access-discovery"
+        if [ -w "$INSTALL_DIR" ]; then
+            cp "$CLEAN_CLONE_DIR/discovery.sh" "$discovery_dest"
+            chmod +x "$discovery_dest"
+        else
+            sudo cp "$CLEAN_CLONE_DIR/discovery.sh" "$discovery_dest"
+            sudo chmod +x "$discovery_dest"
+        fi
+        log "✓ Discovery module installed"
+        
+        # Run discovery setup
+        if [ "$mode" = "interactive" ]; then
+            "$discovery_dest" setup
+        else
+            # Non-interactive mode using environment variables
+            export ACCESS_DISCOVERY_DOMAIN="${DISCOVERY_DOMAIN:-akao.io}"
+            export ACCESS_DISCOVERY_PREFIX="${DISCOVERY_PREFIX:-peer}"
+            export ACCESS_DNS_PROVIDER="$PROVIDER"
+            export ACCESS_DNS_KEY="$PROVIDER_KEY"
+            export ACCESS_DNS_SECRET="$PROVIDER_SECRET"
+            export ACCESS_CLOUDFLARE_EMAIL="$PROVIDER_EMAIL"
+            export ACCESS_CLOUDFLARE_ZONE_ID="$PROVIDER_ZONE_ID"
+            
+            "$discovery_dest" setup
+        fi
+        
+        # Setup discovery daemon as systemd service
+        if command -v systemctl >/dev/null 2>&1; then
+            setup_discovery_service
+        else
+            # Setup as cron job for monitoring
+            setup_discovery_cron
+        fi
+        
+        return 0
+    else
+        warn "Discovery module not found in repository"
+        return 1
+    fi
+}
+
+# Setup discovery systemd service
+setup_discovery_service() {
+    log "Setting up discovery monitoring service..."
+    
+    if sudo -n true 2>/dev/null; then
+        # System-level service
+        cat <<EOF | sudo tee /etc/systemd/system/access-discovery.service >/dev/null
+[Unit]
+Description=Access Network Discovery and Self-Healing
+After=network.target network-online.target access.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=$USER
+Environment="HOME=$HOME"
+ExecStart=$INSTALL_DIR/access-discovery daemon
+Restart=always
+RestartSec=60
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+        
+        sudo systemctl daemon-reload
+        sudo systemctl enable access-discovery
+        sudo systemctl start access-discovery
+        
+        log "✓ Discovery service enabled and started"
+    else
+        # User-level service
+        mkdir -p "$HOME/.config/systemd/user"
+        
+        cat <<EOF > "$HOME/.config/systemd/user/access-discovery.service"
+[Unit]
+Description=Access Network Discovery and Self-Healing (User Service)
+After=network.target access.service
+
+[Service]
+Type=simple
+Environment="HOME=$HOME"
+ExecStart=$INSTALL_DIR/access-discovery daemon
+Restart=always
+RestartSec=60
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
+EOF
+        
+        systemctl --user daemon-reload
+        systemctl --user enable access-discovery
+        systemctl --user start access-discovery
+        
+        log "✓ User discovery service enabled and started"
+    fi
+}
+
+# Setup discovery cron job
+setup_discovery_cron() {
+    log "Setting up discovery monitoring cron job..."
+    
+    # Run discovery check every 5 minutes
+    local cron_line="*/5 * * * * $INSTALL_DIR/access-discovery monitor >/dev/null 2>&1"
+    (crontab -l 2>/dev/null | grep -v "access-discovery"; echo "$cron_line") | crontab -
+    
+    log "✓ Discovery cron job created"
+}
+
 # Configure provider from flags
 configure_provider_from_flags() {
     if [ -z "$PROVIDER" ]; then
@@ -802,9 +923,10 @@ enhanced_setup_menu() {
     echo "3. ⚙️  SYSTEMD ONLY       Just systemd service (clean)"
     echo "4. 📅 CRON ONLY          Just cron job (simple)"
     echo "5. 🎯 PROVIDER CONFIG    Configure DNS provider now"
-    echo "6. ✅ SKIP EXTRAS        Just install basic Access"
+    echo "6. 🌐 NETWORK DISCOVERY  Join peer swarm with auto-healing (NEW!)"
+    echo "7. ✅ SKIP EXTRAS        Just install basic Access"
     echo ""
-    printf "Select options (1,2,3,4,5,6) [default: 2,1]: "
+    printf "Select options (1,2,3,4,5,6,7) [default: 2,1]: "
     
     read -r SETUP_CHOICES
     SETUP_CHOICES="${SETUP_CHOICES:-2,1}"  # Default: redundant backup + auto-update
@@ -839,6 +961,11 @@ enhanced_setup_menu() {
     }
     
     echo "$SETUP_CHOICES" | grep -q "6" && {
+        log "✓ Will setup network discovery and peer swarm"
+        USE_NETWORK_DISCOVERY=true
+    }
+    
+    echo "$SETUP_CHOICES" | grep -q "7" && {
         log "✓ Installing basic Access only"
         USE_AUTO_UPDATE=false
         USE_SYSTEMD=false
@@ -854,6 +981,7 @@ enhanced_setup_menu() {
     [ "$USE_SYSTEMD" = true ] && echo "  ✅ Systemd service: Background daemon every 5 minutes"
     [ "$USE_CRON" = true ] && echo "  ✅ Cron backup: Redundant cron job every 5 minutes"
     [ "$INTERACTIVE_MODE" = true ] && echo "  ✅ Provider setup: Interactive configuration after install"
+    [ "$USE_NETWORK_DISCOVERY" = true ] && echo "  ✅ Network discovery: Auto-join peer swarm with self-healing"
     echo "  ✅ Clean clone: ~/access (for self-updates)"
     echo "  ✅ XDG compliance: ~/.config/access + ~/.local/share/access"
     echo ""
@@ -1041,10 +1169,15 @@ parse_args() {
     USE_SYSTEMD=false
     USE_CRON=false
     USE_AUTO_UPDATE=false
+    USE_NETWORK_DISCOVERY=false
     CRON_INTERVAL=5
     SHOW_HELP=false
     INTERACTIVE_MODE=false
     AUTO_DETECT_AUTOMATION=false
+    
+    # Discovery configuration
+    DISCOVERY_DOMAIN=""
+    DISCOVERY_PREFIX=""
     
     # Provider configuration flags
     PROVIDER=""
@@ -1151,6 +1284,17 @@ parse_args() {
             --interactive)
                 INTERACTIVE_MODE=true
                 ;;
+            --network-discovery)
+                USE_NETWORK_DISCOVERY=true
+                ;;
+            --discovery-domain=*)
+                DISCOVERY_DOMAIN="${arg#*=}"
+                USE_NETWORK_DISCOVERY=true
+                ;;
+            --discovery-prefix=*)
+                DISCOVERY_PREFIX="${arg#*=}"
+                USE_NETWORK_DISCOVERY=true
+                ;;
             --prefix=*)
                 INSTALL_DIR="${arg#*=}/bin"
                 ;;
@@ -1179,10 +1323,13 @@ Installation Options:
   --interval=N     Set cron interval in minutes (default: 5)
   
   Default: Both systemd service AND cron backup (redundant automation)
-  --auto-update    Enable weekly auto-updates
-  --interactive    Force interactive mode
-  --prefix=PATH    Installation prefix (default: /usr/local)
-  --help           Show this help
+  --auto-update         Enable weekly auto-updates
+  --interactive         Force interactive mode
+  --network-discovery   Enable peer swarm with auto-discovery
+  --discovery-domain=D  Set discovery domain (default: akao.io)
+  --discovery-prefix=P  Set host prefix (default: peer)
+  --prefix=PATH         Installation prefix (default: /usr/local)
+  --help                Show this help
 
 Provider Configuration (CLI):
 ============================
@@ -1223,6 +1370,12 @@ Examples:
 
   # Installation only (no provider config)
   ./install.sh --systemd --cron --interval=3 --auto-update
+
+  # Install with network discovery (interactive)
+  ./install.sh --network-discovery
+
+  # Non-interactive network discovery setup
+  ACCESS_DNS_PROVIDER=godaddy ACCESS_DNS_KEY=YOUR_KEY ACCESS_DNS_SECRET=YOUR_SECRET ./install.sh --network-discovery --discovery-domain=akao.io
 
   # Install to custom location (for testing)
   ./install.sh --prefix=/tmp/test_install --systemd
@@ -1315,6 +1468,19 @@ main() {
     # Legacy interactive setup for provider only
     if [ "$INTERACTIVE_MODE" = true ] && [ -z "$PROVIDER" ]; then
         interactive_setup
+    fi
+    
+    # Setup network discovery if requested
+    if [ "$USE_NETWORK_DISCOVERY" = true ]; then
+        echo ""
+        if [ -n "$PROVIDER" ] && [ -n "$PROVIDER_KEY" ]; then
+            # Non-interactive discovery setup
+            setup_network_discovery "non-interactive"
+        else
+            # Interactive discovery setup
+            setup_network_discovery "interactive"
+        fi
+        echo ""
     fi
     
     # Show completion message
