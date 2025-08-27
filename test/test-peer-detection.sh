@@ -126,11 +126,11 @@ test_health_endpoint() {
     log "Testing health endpoint (if available)..."
     
     # Try to start health server locally for testing
-    if [ -f "./health-server.sh" ]; then
+    if [ -f "./health.sh" ]; then
         info "Starting local health server for testing..."
-        ./health-server.sh test
+        ./health.sh test
     else
-        info "Health server script not found, skipping"
+        info "Health script not found, skipping"
     fi
 }
 

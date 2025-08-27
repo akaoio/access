@@ -19,7 +19,7 @@ echo "============================================"
 # Test 1: Check if installer includes all provider files
 log "Test 1: Checking if install function includes provider dependencies..."
 
-if grep -q "provider-agnostic.sh provider.sh" install.sh && \
+if grep -q "providers.sh" install.sh && \
    grep -q "cp -r.*providers" install.sh; then
     log "✓ Installer includes provider abstraction files and providers directory"
 else
@@ -48,15 +48,14 @@ mkdir -p "$TEST_DIR"
 # Simulate what the installer should create
 mkdir -p "$TEST_DIR/install_dir"
 cp access.sh "$TEST_DIR/install_dir/"
-cp provider-agnostic.sh "$TEST_DIR/install_dir/" 2>/dev/null || warn "provider-agnostic.sh not found"
-cp provider.sh "$TEST_DIR/install_dir/" 2>/dev/null || warn "provider.sh not found"
+cp providers.sh "$TEST_DIR/install_dir/" 2>/dev/null || warn "providers.sh not found"
 cp -r providers "$TEST_DIR/install_dir/" 2>/dev/null || warn "providers directory not found"
 
 log "Expected installation structure:"
 echo "  /usr/local/bin/"
 echo "  ├── access                 # Main script"
-echo "  ├── provider-agnostic.sh   # Provider abstraction"
-echo "  ├── provider.sh            # Fallback provider"
+echo "  ├── providers.sh           # Provider abstraction"
+echo ""
 echo "  └── providers/             # Individual provider scripts"
 echo "      ├── godaddy.sh"
 echo "      ├── cloudflare.sh"
@@ -69,7 +68,7 @@ echo "      └── route53.sh"
 log "Test 4: Verifying required files exist..."
 
 REQUIRED_FILES="access.sh"
-PROVIDER_FILES="provider-agnostic.sh provider.sh"
+PROVIDER_FILES="providers.sh"
 
 for file in $REQUIRED_FILES; do
     if [ -f "$TEST_DIR/install_dir/$file" ]; then

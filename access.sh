@@ -38,10 +38,6 @@ log_error() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $*" >> "$ACCESS_LOG"
 }
 
-log_warning() {
-    echo "${YELLOW}⚠ Warning:${NC} $*"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARNING: $*" >> "$ACCESS_LOG"
-}
 
 log_info() {
     echo "${BLUE}ℹ${NC} $*"
@@ -124,11 +120,9 @@ migrate_legacy_config() {
 # Run migration check
 migrate_legacy_config
 
-# Source provider abstraction layer (prefer agnostic version)
-if [ -f "$SCRIPT_DIR/provider-agnostic.sh" ]; then
-    . "$SCRIPT_DIR/provider-agnostic.sh"
-elif [ -f "$SCRIPT_DIR/provider.sh" ]; then
-    . "$SCRIPT_DIR/provider.sh"
+# Source provider abstraction layer
+if [ -f "$SCRIPT_DIR/providers.sh" ]; then
+    . "$SCRIPT_DIR/providers.sh"
 else
     log_error "Provider abstraction layer not found"
     exit 1
@@ -183,11 +177,6 @@ validate_ipv6() {
     return 0
 }
 
-# IP validation (IPv4 or IPv6)
-validate_ip() {
-    local ip="$1"
-    validate_ipv4 "$ip" || validate_ipv6 "$ip"
-}
 
 # Detect public IPv6 via DNS
 detect_ipv6_dns() {
