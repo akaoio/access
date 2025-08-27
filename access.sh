@@ -476,23 +476,42 @@ save_config() {
 self_update() {
     log "Checking for updates using Manager framework..."
     
-    # Check if Manager is available
-    if [ -f "$HOME/manager/manager-self-update.sh" ]; then
-        . "$HOME/manager/manager-self-update.sh"
-        manager_self_update "access" "https://github.com/akaoio/access.git" || {
-            log "Update failed"
-            return 1
-        }
-    elif [ -f "/usr/local/lib/manager/manager-self-update.sh" ]; then
-        . "/usr/local/lib/manager/manager-self-update.sh"
-        manager_self_update "access" "https://github.com/akaoio/access.git" || {
-            log "Update failed"
-            return 1
-        }
-    else
-        log "Manager framework not installed. Run install.sh first."
-        return 1
+    # Find Manager in various locations
+    local manager_found=false
+    local manager_dirs="$HOME/manager /usr/local/lib/manager ../manager"
+    
+    # Also check if we can access root's manager (for system installations)
+    if [ -r "/root/manager/manager-self-update.sh" ]; then
+        manager_dirs="$manager_dirs /root/manager"
     fi
+    
+    for dir in $manager_dirs; do
+        if [ -f "$dir/manager-self-update.sh" ]; then
+            log "Loading Manager from $dir"
+            . "$dir/manager-self-update.sh"
+            manager_found=true
+            break
+        fi
+    done
+    
+    if [ "$manager_found" = false ]; then
+        # Try to clone Manager if not found
+        log "Manager not found. Installing Manager framework..."
+        git clone https://github.com/akaoio/manager.git "$HOME/manager" || {
+            log "Failed to install Manager framework"
+            return 1
+        }
+        . "$HOME/manager/manager-self-update.sh"
+    fi
+    
+    # Now run the actual update
+    log "Running update check..."
+    manager_self_update "access" "https://github.com/akaoio/access.git" || {
+        log "Update failed"
+        return 1
+    }
+    
+    log "Update completed successfully"
 }
 
 # Main command handler
