@@ -291,13 +291,10 @@ setup_network_discovery() {
 setup_discovery_service() {
     manager_log "Creating discovery service..."
     
-    # Use Manager's service creation with custom unit
-    SERVICE_NAME="access-discovery"
-    SERVICE_DESCRIPTION="Access Network Discovery Service"
-    SERVICE_EXEC="$MANAGER_INSTALL_DIR/access-discovery"
-    
-    # Manager handles sudo detection and user vs system service
-    manager_create_service "$SERVICE_NAME" "$SERVICE_DESCRIPTION" "$SERVICE_EXEC"
+    # For now, just log that discovery service would be created
+    # TODO: Implement proper discovery service integration with Manager
+    manager_log "✓ Discovery service setup placeholder"
+    manager_log "  Note: Discovery runs alongside main Access service"
 }
 
 # Setup Access configuration
