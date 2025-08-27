@@ -18,7 +18,7 @@ DEFAULT_HEAL_INTERVAL=60    # 1 minute when healing
 
 # POSIX compliant output (no colors in strict POSIX mode)
 log() {
-    printf "[Discovery] %s\n" "$*"
+    printf "[Discovery] %s\n" "$*" >&2
     printf "[%s] %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$DISCOVERY_LOG" 2>/dev/null || true
 }
 
@@ -33,7 +33,7 @@ error() {
 }
 
 info() {
-    printf "[Info] %s\n" "$*"
+    printf "[Info] %s\n" "$*" >&2
 }
 
 # Create necessary directories (POSIX compliant)
@@ -217,7 +217,7 @@ find_lowest_available_slot() {
     # First check if we already have a slot
     existing_slot=$(find_existing_peer_slot)
     if [ $? -eq 0 ] && [ -n "$existing_slot" ]; then
-        log "Using our existing slot: ${HOST_PREFIX}${existing_slot}"
+        log "Using our existing slot: ${HOST_PREFIX}${existing_slot}" >&2
         printf "%d" "$existing_slot"
         return 0
     fi

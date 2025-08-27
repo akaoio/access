@@ -893,6 +893,197 @@ case "${1:-help}" in
         self_update "$@"
         ;;
         
+    status)
+        # Show current configuration and status
+        echo "${BOLD}Access Configuration Status${NC}"
+        echo "${BOLD}===========================${NC}"
+        echo ""
+        
+        # Load and display current config
+        load_config
+        
+        if [ -f "$ACCESS_CONFIG" ]; then
+            echo "${GREEN}Configuration file:${NC} $ACCESS_CONFIG"
+            echo ""
+            echo "${BOLD}Current settings:${NC}"
+            echo "  Provider: ${YELLOW}${PROVIDER:-not configured}${NC}"
+            echo "  Domain: ${YELLOW}${DOMAIN:-not configured}${NC}"
+            echo "  Host: ${YELLOW}${HOST:-not configured}${NC}"
+            
+            # Show discovery status
+            if [ -f "$ACCESS_CONFIG" ] && command -v jq >/dev/null 2>&1; then
+                discovery_status=$(jq -r '.discovery // false' "$ACCESS_CONFIG" 2>/dev/null || echo "false")
+                echo "  Discovery: ${YELLOW}$discovery_status${NC}"
+            fi
+            
+            # Show provider-specific config (without sensitive data)
+            if [ -n "$PROVIDER" ]; then
+                echo ""
+                echo "${BOLD}Provider settings:${NC}"
+                case "$PROVIDER" in
+                    godaddy)
+                        [ -n "$GODADDY_KEY" ] && echo "  API Key: ${DIM}configured${NC}"
+                        [ -n "$GODADDY_SECRET" ] && echo "  API Secret: ${DIM}configured${NC}"
+                        ;;
+                    cloudflare)
+                        [ -n "$CLOUDFLARE_EMAIL" ] && echo "  Email: ${YELLOW}$CLOUDFLARE_EMAIL${NC}"
+                        [ -n "$CLOUDFLARE_API_KEY" ] && echo "  API Key: ${DIM}configured${NC}"
+                        [ -n "$CLOUDFLARE_ZONE_ID" ] && echo "  Zone ID: ${DIM}configured${NC}"
+                        ;;
+                    *)
+                        echo "  ${DIM}Provider-specific settings configured${NC}"
+                        ;;
+                esac
+            fi
+        else
+            echo "${RED}No configuration found${NC}"
+            echo "  Run: ${YELLOW}access config <provider> --domain=<domain>${NC}"
+        fi
+        
+        # Show service status
+        echo ""
+        echo "${BOLD}Service status:${NC}"
+        
+        # Check if running as daemon
+        if [ -f "$ACCESS_DATA_HOME/daemon.lock" ]; then
+            daemon_pid=$(cat "$ACCESS_DATA_HOME/daemon.lock")
+            if kill -0 "$daemon_pid" 2>/dev/null; then
+                echo "  Daemon: ${GREEN}running${NC} (PID: $daemon_pid)"
+            else
+                echo "  Daemon: ${RED}stale lock${NC} (PID: $daemon_pid)"
+            fi
+        else
+            echo "  Daemon: ${DIM}not running${NC}"
+        fi
+        
+        # Check cron
+        if crontab -l 2>/dev/null | grep -q "access update"; then
+            echo "  Cron: ${GREEN}configured${NC}"
+            cron_schedule=$(crontab -l | grep "access update" | head -1 | cut -d' ' -f1-5)
+            echo "    Schedule: ${YELLOW}$cron_schedule${NC}"
+        else
+            echo "  Cron: ${DIM}not configured${NC}"
+        fi
+        
+        # Check systemd service
+        if command -v systemctl >/dev/null 2>&1; then
+            if systemctl --user list-unit-files 2>/dev/null | grep -q "^access.service"; then
+                service_status=$(systemctl --user is-active access.service 2>/dev/null)
+                if [ "$service_status" = "active" ]; then
+                    echo "  Systemd: ${GREEN}active${NC} (user service)"
+                else
+                    echo "  Systemd: ${YELLOW}$service_status${NC} (user service)"
+                fi
+            elif systemctl list-unit-files 2>/dev/null | grep -q "^access.service"; then
+                service_status=$(systemctl is-active access.service 2>/dev/null)
+                if [ "$service_status" = "active" ]; then
+                    echo "  Systemd: ${GREEN}active${NC} (system service)"
+                else
+                    echo "  Systemd: ${YELLOW}$service_status${NC} (system service)"
+                fi
+            else
+                echo "  Systemd: ${DIM}not configured${NC}"
+            fi
+        fi
+        
+        # Show last update info
+        if [ -f "$ACCESS_DATA_HOME/last_run" ]; then
+            last_run_timestamp=$(cat "$ACCESS_DATA_HOME/last_run")
+            current_time=$(date +%s)
+            time_diff=$((current_time - last_run_timestamp))
+            
+            if [ $time_diff -lt 60 ]; then
+                echo ""
+                echo "${BOLD}Last update:${NC} ${GREEN}$time_diff seconds ago${NC}"
+            elif [ $time_diff -lt 3600 ]; then
+                minutes=$((time_diff / 60))
+                echo ""
+                echo "${BOLD}Last update:${NC} ${GREEN}$minutes minutes ago${NC}"
+            elif [ $time_diff -lt 86400 ]; then
+                hours=$((time_diff / 3600))
+                echo ""
+                echo "${BOLD}Last update:${NC} ${YELLOW}$hours hours ago${NC}"
+            else
+                days=$((time_diff / 86400))
+                echo ""
+                echo "${BOLD}Last update:${NC} ${RED}$days days ago${NC}"
+            fi
+            
+            # Show current IP
+            current_ip=$(detect_ip 2>/dev/null)
+            if [ -n "$current_ip" ]; then
+                echo "${BOLD}Current IP:${NC} ${CYAN}$current_ip${NC}"
+            fi
+        else
+            echo ""
+            echo "${BOLD}Last update:${NC} ${DIM}never${NC}"
+        fi
+        ;;
+        
+    logs)
+        # View Access logs
+        shift
+        log_file="$ACCESS_DATA_HOME/access.log"
+        
+        if [ ! -f "$log_file" ]; then
+            log_error "No logs found at $log_file"
+            exit 1
+        fi
+        
+        # Parse options
+        lines=20
+        follow=false
+        for arg in "$@"; do
+            case "$arg" in
+                -f|--follow) follow=true ;;
+                -n*) lines="${arg#-n}" ;;
+                --lines=*) lines="${arg#*=}" ;;
+                --all) lines="" ;;
+            esac
+        done
+        
+        if [ "$follow" = true ]; then
+            tail -f "$log_file"
+        elif [ -z "$lines" ]; then
+            cat "$log_file"
+        else
+            tail -n "$lines" "$log_file"
+        fi
+        ;;
+        
+    clean)
+        # Clean locks and temporary files
+        echo "${BOLD}Cleaning Access temporary files...${NC}"
+        
+        # Remove stale locks
+        if [ -f "$ACCESS_DATA_HOME/run.lock" ]; then
+            rm -f "$ACCESS_DATA_HOME/run.lock"
+            echo "  ${GREEN}✓${NC} Removed run lock"
+        fi
+        
+        if [ -f "$ACCESS_DATA_HOME/daemon.lock" ]; then
+            daemon_pid=$(cat "$ACCESS_DATA_HOME/daemon.lock" 2>/dev/null)
+            if [ -n "$daemon_pid" ] && kill -0 "$daemon_pid" 2>/dev/null; then
+                echo "  ${YELLOW}!${NC} Daemon is still running (PID: $daemon_pid)"
+                echo "    Use 'pkill -f \"access daemon\"' to stop it first"
+            else
+                rm -f "$ACCESS_DATA_HOME/daemon.lock"
+                echo "  ${GREEN}✓${NC} Removed stale daemon lock"
+            fi
+        fi
+        
+        # Clean old logs (keep last 1000 lines)
+        if [ -f "$ACCESS_DATA_HOME/access.log" ]; then
+            temp_log=$(mktemp)
+            tail -n 1000 "$ACCESS_DATA_HOME/access.log" > "$temp_log"
+            mv "$temp_log" "$ACCESS_DATA_HOME/access.log"
+            echo "  ${GREEN}✓${NC} Trimmed log file (kept last 1000 lines)"
+        fi
+        
+        echo ""
+        echo "${GREEN}Cleanup complete${NC}"
+        ;;
+        
     version)
         echo "${BOLD}Access v$VERSION${NC} - Pure shell DNS synchronization"
         ;;
@@ -907,6 +1098,7 @@ case "${1:-help}" in
         echo "${BOLD}------${NC}"
         echo ""
         echo "${BOLD}Commands:${NC}"
+        echo "    ${BLUE}access status${NC}          Show configuration and service status"
         echo "    ${BLUE}access ip${NC}              Detect public IP (IPv6 priority)"
         echo "    ${BLUE}access ipv4${NC}            Force IPv4 detection only"
         echo "    ${BLUE}access ipv6${NC}            Force IPv6 detection only"
@@ -920,6 +1112,8 @@ case "${1:-help}" in
         echo "    ${BLUE}access health${NC}          Check provider health"
         echo "    ${BLUE}access test${NC} [provider] Test provider connectivity"
         echo "    ${BLUE}access daemon${NC}          Run as daemon (updates every 5 minutes)"
+        echo "    ${BLUE}access logs${NC}            View Access logs"
+        echo "    ${BLUE}access clean${NC}           Clean locks and temporary files"
         echo "    ${BLUE}access self-update${NC}     Update using Manager framework"
         echo "    ${BLUE}access version${NC}         Show version"
         echo "    ${BLUE}access help${NC}            Show this help"
@@ -939,11 +1133,19 @@ case "${1:-help}" in
         echo ""
         echo "${BOLD}Examples:${NC}"
         echo "${BOLD}---------${NC}"
+        echo "  ${BOLD}Configuration:${NC}"
         echo "    ${DIM}access config godaddy --domain=example.com --key=KEY --secret=SECRET${NC}"
         echo "    ${DIM}access config godaddy --domain=example.com --key=KEY --secret=SECRET --discovery=true${NC}"
         echo "    ${DIM}access config cloudflare --domain=example.com --email=EMAIL --api-key=KEY --zone-id=ZONE${NC}"
-        echo "    ${DIM}access config azure --domain=example.com --subscription-id=ID --resource-group=RG${NC}"
-        echo "    ${DIM}access config gcloud --domain=example.com --project-id=PROJECT --zone-name=ZONE${NC}"
+        echo ""
+        echo "  ${BOLD}Daily Usage:${NC}"
+        echo "    ${DIM}access status${NC}                               # Check configuration and service status"
+        echo "    ${DIM}access ip${NC}                                   # Show current public IP"
+        echo "    ${DIM}access update${NC}                               # Update DNS immediately"
+        echo "    ${DIM}access discovery enable${NC}                     # Enable peer auto-discovery"
+        echo "    ${DIM}access logs -f${NC}                              # Follow real-time logs"
+        echo "    ${DIM}access logs -n50${NC}                            # Show last 50 log entries"
+        echo "    ${DIM}access clean${NC}                                # Clean temporary files and locks"
         echo ""
         echo "${BOLD}Environment variables:${NC}"
         echo "${BOLD}---------------------${NC}"
