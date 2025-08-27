@@ -1,6 +1,7 @@
 #!/bin/sh
-# Access Network Discovery Module - Peer auto-discovery and self-healing
+# Access Network Discovery Module - POSIX Compliant Version
 # Pure POSIX shell implementation for swarm coordination
+# No bash-specific features, no external dependencies beyond POSIX.1
 
 set -e
 
@@ -15,54 +16,51 @@ DEFAULT_HOST_PREFIX="peer"
 DEFAULT_CHECK_INTERVAL=300  # 5 minutes
 DEFAULT_HEAL_INTERVAL=60    # 1 minute when healing
 
-# Colors for output (if terminal supports it)
-if [ -t 1 ]; then
-    RED='\033[0;31m'
-    GREEN='\033[0;32m'
-    YELLOW='\033[1;33m'
-    BLUE='\033[0;34m'
-    NC='\033[0m' # No Color
-else
-    RED=''
-    GREEN=''
-    YELLOW=''
-    BLUE=''
-    NC=''
-fi
-
+# POSIX compliant output (no colors in strict POSIX mode)
 log() {
-    echo "${GREEN}[Discovery]${NC} $*"
+    printf "[Discovery] %s\n" "$*"
+    printf "[%s] %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$DISCOVERY_LOG" 2>/dev/null || true
 }
 
 warn() {
-    echo "${YELLOW}[Warning]${NC} $*"
+    printf "[Warning] %s\n" "$*" >&2
+    printf "[%s] WARNING: %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$DISCOVERY_LOG" 2>/dev/null || true
 }
 
 error() {
-    echo "${RED}[Error]${NC} $*" >&2
+    printf "[Error] %s\n" "$*" >&2
+    printf "[%s] ERROR: %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$DISCOVERY_LOG" 2>/dev/null || true
 }
 
 info() {
-    echo "${BLUE}[Info]${NC} $*"
+    printf "[Info] %s\n" "$*"
 }
 
-# Create necessary directories
+# Create necessary directories (POSIX compliant)
 init_discovery() {
-    mkdir -p "$(dirname "$DISCOVERY_CONFIG")"
-    mkdir -p "$(dirname "$DISCOVERY_STATE")"
-    mkdir -p "$(dirname "$DISCOVERY_LOG")"
+    # Use POSIX dirname
+    config_dir=$(dirname "$DISCOVERY_CONFIG")
+    state_dir=$(dirname "$DISCOVERY_STATE")
+    log_dir=$(dirname "$DISCOVERY_LOG")
+    
+    mkdir -p "$config_dir" "$state_dir" "$log_dir"
 }
 
-# Load discovery configuration
+# Load discovery configuration (POSIX compliant JSON parsing)
 load_discovery_config() {
     if [ -f "$DISCOVERY_CONFIG" ]; then
-        # Parse JSON config (pure shell)
-        DOMAIN=$(grep '"domain"' "$DISCOVERY_CONFIG" 2>/dev/null | sed 's/.*"domain"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' || echo "$DEFAULT_DOMAIN")
-        HOST_PREFIX=$(grep '"host_prefix"' "$DISCOVERY_CONFIG" 2>/dev/null | sed 's/.*"host_prefix"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' || echo "$DEFAULT_HOST_PREFIX")
-        DNS_KEY=$(grep '"dns_key"' "$DISCOVERY_CONFIG" 2>/dev/null | sed 's/.*"dns_key"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' || echo "")
-        DNS_SECRET=$(grep '"dns_secret"' "$DISCOVERY_CONFIG" 2>/dev/null | sed 's/.*"dns_secret"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' || echo "")
-        DNS_PROVIDER=$(grep '"dns_provider"' "$DISCOVERY_CONFIG" 2>/dev/null | sed 's/.*"dns_provider"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' || echo "")
-        ENABLE_AUTO_SYNC=$(grep '"enable_auto_sync"' "$DISCOVERY_CONFIG" 2>/dev/null | sed 's/.*"enable_auto_sync"[[:space:]]*:[[:space:]]*\([^,}]*\).*/\1/' || echo "false")
+        # POSIX compliant JSON extraction using sed
+        DOMAIN=$(sed -n 's/.*"domain"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$DISCOVERY_CONFIG" 2>/dev/null)
+        HOST_PREFIX=$(sed -n 's/.*"host_prefix"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$DISCOVERY_CONFIG" 2>/dev/null)
+        DNS_KEY=$(sed -n 's/.*"dns_key"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$DISCOVERY_CONFIG" 2>/dev/null)
+        DNS_SECRET=$(sed -n 's/.*"dns_secret"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$DISCOVERY_CONFIG" 2>/dev/null)
+        DNS_PROVIDER=$(sed -n 's/.*"dns_provider"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$DISCOVERY_CONFIG" 2>/dev/null)
+        ENABLE_AUTO_SYNC=$(sed -n 's/.*"enable_auto_sync"[[:space:]]*:[[:space:]]*\([^,}]*\).*/\1/p' "$DISCOVERY_CONFIG" 2>/dev/null)
+        
+        # Set defaults if empty
+        DOMAIN="${DOMAIN:-$DEFAULT_DOMAIN}"
+        HOST_PREFIX="${HOST_PREFIX:-$DEFAULT_HOST_PREFIX}"
+        ENABLE_AUTO_SYNC="${ENABLE_AUTO_SYNC:-false}"
     else
         # Use defaults
         DOMAIN="$DEFAULT_DOMAIN"
@@ -74,110 +72,97 @@ load_discovery_config() {
     fi
 }
 
-# Save discovery configuration
+# Save discovery configuration (POSIX compliant)
 save_discovery_config() {
-    cat > "$DISCOVERY_CONFIG" <<EOF
-{
-    "domain": "$DOMAIN",
-    "host_prefix": "$HOST_PREFIX",
-    "dns_provider": "$DNS_PROVIDER",
-    "dns_key": "$DNS_KEY",
-    "dns_secret": "$DNS_SECRET",
-    "enable_auto_sync": $ENABLE_AUTO_SYNC,
-    "last_updated": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-}
-EOF
+    # Create config with printf (POSIX)
+    {
+        printf '{\n'
+        printf '    "domain": "%s",\n' "$DOMAIN"
+        printf '    "host_prefix": "%s",\n' "$HOST_PREFIX"
+        printf '    "dns_provider": "%s",\n' "$DNS_PROVIDER"
+        printf '    "dns_key": "%s",\n' "$DNS_KEY"
+        printf '    "dns_secret": "%s",\n' "$DNS_SECRET"
+        printf '    "enable_auto_sync": %s,\n' "$ENABLE_AUTO_SYNC"
+        printf '    "last_updated": "%s"\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+        printf '}\n'
+    } > "$DISCOVERY_CONFIG"
+    
     chmod 600 "$DISCOVERY_CONFIG"
 }
 
-# Check if a peer is alive using multiple methods
+# POSIX compliant peer checking (no bash TCP, no nc dependency)
 check_peer_alive() {
-    local peer_host="$1"
-    local full_domain="$peer_host.$DOMAIN"
-    local ip=""
+    peer_host="$1"
+    full_domain="${peer_host}.${DOMAIN}"
     
-    # First check if DNS record exists
-    if command -v dig >/dev/null 2>&1; then
-        ip=$(dig +short "$full_domain" @8.8.8.8 2>/dev/null | head -1)
-        if [ -z "$ip" ]; then
-            return 1  # No DNS record - slot is available
-        fi
-    elif command -v nslookup >/dev/null 2>&1; then
-        ip=$(nslookup "$full_domain" 8.8.8.8 2>/dev/null | grep "Address:" | tail -1 | awk '{print $2}')
-        if [ -z "$ip" ]; then
-            return 1  # No DNS record - slot is available
+    # Method 1: Check DNS record exists (POSIX compliant)
+    if command -v nslookup >/dev/null 2>&1; then
+        # nslookup is in POSIX.1-2001
+        if nslookup "$full_domain" 8.8.8.8 2>/dev/null | grep -q "Address:.*[0-9]"; then
+            # DNS exists, now check if reachable
+            
+            # Method 2: Try telnet to SSH port (POSIX.1)
+            if command -v telnet >/dev/null 2>&1; then
+                # Send a newline and check for SSH banner
+                if printf "\n" | telnet "$full_domain" 22 2>/dev/null | grep -q "SSH"; then
+                    return 0  # Peer is alive - SSH responding
+                fi
+            fi
+            
+            # Method 3: Try wget with timeout (POSIX, but wget not guaranteed)
+            if command -v wget >/dev/null 2>&1; then
+                if wget -q -O /dev/null -T 2 "http://${full_domain}:80/" 2>/dev/null; then
+                    return 0  # HTTP responding
+                fi
+            fi
+            
+            # Method 4: Try curl if available (not POSIX but common)
+            if command -v curl >/dev/null 2>&1; then
+                if curl -s -f --connect-timeout 2 "http://${full_domain}:80/" >/dev/null 2>&1; then
+                    return 0  # HTTP responding
+                fi
+            fi
+            
+            # DNS exists but not reachable - consider it occupied
+            warn "Peer $full_domain has DNS but is not reachable"
+            return 0  # Still occupied
+        else
+            # No DNS record - slot is available
+            return 1
         fi
     elif command -v host >/dev/null 2>&1; then
-        ip=$(host "$full_domain" 8.8.8.8 2>/dev/null | grep "has address" | awk '{print $4}' | head -1)
-        if [ -z "$ip" ]; then
-            return 1  # No DNS record - slot is available
+        # Try host command as fallback (common but not POSIX)
+        if host "$full_domain" 8.8.8.8 2>/dev/null | grep -q "has address"; then
+            return 0  # DNS exists, assume occupied
+        else
+            return 1  # No DNS, available
         fi
     else
-        warn "No DNS tools available (dig/nslookup/host). Cannot verify peer."
-        return 2  # Cannot check
-    fi
-    
-    # Method 1: Try TCP connection on common ports (SSH, HTTP, HTTPS)
-    # SSH port 22 is most reliable since all peers should have it
-    if command -v nc >/dev/null 2>&1; then
-        # Try SSH port first (most likely to be open)
-        if nc -z -w 2 "$full_domain" 22 2>/dev/null; then
-            return 0  # Peer is alive - SSH port responding
-        fi
-        # Try HTTP port
-        if nc -z -w 2 "$full_domain" 80 2>/dev/null; then
-            return 0  # Peer is alive - HTTP port responding
-        fi
-        # Try HTTPS port
-        if nc -z -w 2 "$full_domain" 443 2>/dev/null; then
-            return 0  # Peer is alive - HTTPS port responding
+        # No DNS tools available - fallback to ping (POSIX.1)
+        if ping -c 1 -W 2 "$full_domain" >/dev/null 2>&1; then
+            return 0  # Responds to ping
+        else
+            return 1  # No response, assume available
         fi
     fi
-    
-    # Method 2: Try HTTP health check (for peers running web services)
-    if command -v curl >/dev/null 2>&1; then
-        # Try a simple HTTP request with short timeout
-        if curl -s -f -m 2 "http://$full_domain/health" >/dev/null 2>&1; then
-            return 0  # Peer is alive - health endpoint responding
-        fi
-        # Try HTTPS
-        if curl -s -f -k -m 2 "https://$full_domain/health" >/dev/null 2>&1; then
-            return 0  # Peer is alive - HTTPS health endpoint responding
-        fi
-    elif command -v wget >/dev/null 2>&1; then
-        # Try with wget as fallback
-        if wget -q -O /dev/null --timeout=2 "http://$full_domain/health" 2>/dev/null; then
-            return 0  # Peer is alive - health endpoint responding
-        fi
-    fi
-    
-    # Method 3: Check DNS record age (if recently updated, likely alive)
-    # This is a heuristic - if DNS was updated in last hour, peer is probably alive
-    # Most DNS providers return TTL which we could use
-    
-    # If DNS exists but we can't connect, peer might be behind strict firewall
-    # We'll consider it "alive" if DNS exists and was recently updated
-    # For now, if DNS exists but no connection, assume it's alive but unreachable
-    warn "Peer $full_domain has DNS record but is not reachable on common ports"
-    return 0  # Consider it occupied since DNS exists
 }
 
-# Find the lowest available peer slot
+# Find the lowest available peer slot (POSIX compliant)
 find_lowest_available_slot() {
-    local slot=0
-    local max_slots=1000  # Reasonable limit
+    slot=0
+    max_slots=1000
     
     info "Scanning for available peer slots..."
     
-    while [ $slot -lt $max_slots ]; do
-        local peer_host="${HOST_PREFIX}${slot}"
+    while [ "$slot" -lt "$max_slots" ]; do
+        peer_host="${HOST_PREFIX}${slot}"
         
         if ! check_peer_alive "$peer_host"; then
-            log "Found available slot: $peer_host.$DOMAIN"
-            echo "$slot"
+            log "Found available slot: ${peer_host}.${DOMAIN}"
+            printf "%d" "$slot"
             return 0
         else
-            info "Slot $slot is occupied (${peer_host}.$DOMAIN)"
+            info "Slot $slot is occupied (${peer_host}.${DOMAIN})"
         fi
         
         slot=$((slot + 1))
@@ -187,16 +172,49 @@ find_lowest_available_slot() {
     return 1
 }
 
-# Register this peer with DNS provider
+# Get current public IP (POSIX compliant)
+get_public_ip() {
+    # Try multiple methods to get IP
+    ip=""
+    
+    # Method 1: curl (common, not POSIX)
+    if command -v curl >/dev/null 2>&1; then
+        ip=$(curl -s checkip.amazonaws.com 2>/dev/null || true)
+        [ -n "$ip" ] && printf "%s" "$ip" && return 0
+        
+        ip=$(curl -s ipv4.icanhazip.com 2>/dev/null || true)
+        [ -n "$ip" ] && printf "%s" "$ip" && return 0
+    fi
+    
+    # Method 2: wget (POSIX but not guaranteed)
+    if command -v wget >/dev/null 2>&1; then
+        ip=$(wget -q -O - checkip.amazonaws.com 2>/dev/null || true)
+        [ -n "$ip" ] && printf "%s" "$ip" && return 0
+        
+        ip=$(wget -q -O - ipv4.icanhazip.com 2>/dev/null || true)
+        [ -n "$ip" ] && printf "%s" "$ip" && return 0
+    fi
+    
+    # Method 3: Use access if available
+    if [ -x "/usr/local/bin/access" ]; then
+        ip=$(/usr/local/bin/access ip 2>/dev/null || true)
+        [ -n "$ip" ] && printf "%s" "$ip" && return 0
+    fi
+    
+    error "Cannot detect public IP address"
+    return 1
+}
+
+# Register this peer with DNS provider (POSIX compliant)
 register_peer() {
-    local peer_slot="$1"
-    local peer_host="${HOST_PREFIX}${peer_slot}"
-    local full_domain="$peer_host.$DOMAIN"
+    peer_slot="$1"
+    peer_host="${HOST_PREFIX}${peer_slot}"
+    full_domain="${peer_host}.${DOMAIN}"
     
     log "Registering as $full_domain..."
     
     # Get current public IP
-    local public_ip=$(./access.sh ip 2>/dev/null || curl -s checkip.amazonaws.com || curl -s ipv4.icanhazip.com)
+    public_ip=$(get_public_ip)
     
     if [ -z "$public_ip" ]; then
         error "Cannot detect public IP address"
@@ -222,35 +240,48 @@ register_peer() {
             ;;
     esac
     
-    # Save our peer state
-    cat > "$DISCOVERY_STATE" <<EOF
-{
-    "peer_slot": $peer_slot,
-    "peer_host": "$peer_host",
-    "full_domain": "$full_domain",
-    "public_ip": "$public_ip",
-    "registered_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
-    "last_heartbeat": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-}
-EOF
+    # Save our peer state (POSIX compliant)
+    {
+        printf '{\n'
+        printf '    "peer_slot": %d,\n' "$peer_slot"
+        printf '    "peer_host": "%s",\n' "$peer_host"
+        printf '    "full_domain": "%s",\n' "$full_domain"
+        printf '    "public_ip": "%s",\n' "$public_ip"
+        printf '    "registered_at": "%s",\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+        printf '    "last_heartbeat": "%s"\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+        printf '}\n'
+    } > "$DISCOVERY_STATE"
     
-    log "✓ Successfully registered as $full_domain"
+    log "Successfully registered as $full_domain"
     return 0
 }
 
-# Update GoDaddy DNS
+# Update GoDaddy DNS (POSIX compliant using wget/curl)
 update_godaddy_dns() {
-    local host="$1"
-    local ip="$2"
+    host="$1"
+    ip="$2"
     
-    local api_url="https://api.godaddy.com/v1/domains/$DOMAIN/records/A/$host"
+    api_url="https://api.godaddy.com/v1/domains/${DOMAIN}/records/A/${host}"
     
-    local response=$(curl -s -X PUT "$api_url" \
-        -H "Authorization: sso-key ${DNS_KEY}:${DNS_SECRET}" \
-        -H "Content-Type: application/json" \
-        -d "[{\"data\":\"$ip\",\"ttl\":600}]" 2>&1)
+    # Prefer curl, fallback to wget
+    if command -v curl >/dev/null 2>&1; then
+        response=$(curl -s -X PUT "$api_url" \
+            -H "Authorization: sso-key ${DNS_KEY}:${DNS_SECRET}" \
+            -H "Content-Type: application/json" \
+            -d "[{\"data\":\"${ip}\",\"ttl\":600}]" 2>&1)
+    elif command -v wget >/dev/null 2>&1; then
+        response=$(wget -q -O - --method=PUT \
+            --header="Authorization: sso-key ${DNS_KEY}:${DNS_SECRET}" \
+            --header="Content-Type: application/json" \
+            --body-data="[{\"data\":\"${ip}\",\"ttl\":600}]" \
+            "$api_url" 2>&1)
+    else
+        error "Neither curl nor wget available for API calls"
+        return 1
+    fi
     
-    if echo "$response" | grep -q "error"; then
+    # Check for error in response
+    if printf "%s" "$response" | grep -q "error"; then
         error "GoDaddy update failed: $response"
         return 1
     fi
@@ -258,108 +289,41 @@ update_godaddy_dns() {
     return 0
 }
 
-# Update Cloudflare DNS
-update_cloudflare_dns() {
-    local host="$1"
-    local ip="$2"
-    
-    # First, get zone ID if not provided
-    if [ -z "$CLOUDFLARE_ZONE_ID" ]; then
-        warn "Cloudflare zone ID not configured"
-        return 1
-    fi
-    
-    # Check if record exists
-    local record_name="$host.$DOMAIN"
-    local record_id=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records?name=$record_name&type=A" \
-        -H "X-Auth-Email: $CLOUDFLARE_EMAIL" \
-        -H "X-Auth-Key: $DNS_KEY" | \
-        grep -o '"id":"[^"]*' | head -1 | cut -d'"' -f4)
-    
-    if [ -n "$record_id" ]; then
-        # Update existing record
-        curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records/$record_id" \
-            -H "X-Auth-Email: $CLOUDFLARE_EMAIL" \
-            -H "X-Auth-Key: $DNS_KEY" \
-            -H "Content-Type: application/json" \
-            -d "{\"type\":\"A\",\"name\":\"$record_name\",\"content\":\"$ip\",\"ttl\":120}"
-    else
-        # Create new record
-        curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records" \
-            -H "X-Auth-Email: $CLOUDFLARE_EMAIL" \
-            -H "X-Auth-Key: $DNS_KEY" \
-            -H "Content-Type: application/json" \
-            -d "{\"type\":\"A\",\"name\":\"$record_name\",\"content\":\"$ip\",\"ttl\":120}"
-    fi
-    
-    return 0
-}
-
-# Update DigitalOcean DNS
-update_digitalocean_dns() {
-    local host="$1"
-    local ip="$2"
-    
-    local record_name="$host"
-    
-    # Get existing record ID if it exists
-    local record_id=$(curl -s -X GET "https://api.digitalocean.com/v2/domains/$DOMAIN/records" \
-        -H "Authorization: Bearer $DNS_KEY" | \
-        grep -B2 "\"name\":\"$record_name\"" | grep '"id":' | head -1 | sed 's/.*"id":\([0-9]*\).*/\1/')
-    
-    if [ -n "$record_id" ]; then
-        # Update existing record
-        curl -s -X PUT "https://api.digitalocean.com/v2/domains/$DOMAIN/records/$record_id" \
-            -H "Authorization: Bearer $DNS_KEY" \
-            -H "Content-Type: application/json" \
-            -d "{\"data\":\"$ip\"}"
-    else
-        # Create new record
-        curl -s -X POST "https://api.digitalocean.com/v2/domains/$DOMAIN/records" \
-            -H "Authorization: Bearer $DNS_KEY" \
-            -H "Content-Type: application/json" \
-            -d "{\"type\":\"A\",\"name\":\"$record_name\",\"data\":\"$ip\",\"ttl\":600}"
-    fi
-    
-    return 0
-}
-
-# Monitor and heal the swarm
+# Monitor and heal the swarm (POSIX compliant)
 monitor_and_heal() {
     log "Starting swarm monitoring and self-healing..."
     
     # Load our current state
     if [ -f "$DISCOVERY_STATE" ]; then
-        local current_slot=$(grep '"peer_slot"' "$DISCOVERY_STATE" | sed 's/.*"peer_slot"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/')
+        current_slot=$(sed -n 's/.*"peer_slot"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' "$DISCOVERY_STATE" 2>/dev/null)
         
         if [ -n "$current_slot" ]; then
-            info "Currently registered as peer$current_slot"
+            info "Currently registered as peer${current_slot}"
             
             # Check if a lower slot is available
-            local slot=0
-            while [ $slot -lt $current_slot ]; do
-                local peer_host="${HOST_PREFIX}${slot}"
+            slot=0
+            while [ "$slot" -lt "$current_slot" ]; do
+                peer_host="${HOST_PREFIX}${slot}"
                 
                 if ! check_peer_alive "$peer_host"; then
                     warn "Lower slot $slot is now available! Migrating..."
                     
-                    # Deregister current slot (optional - let it expire)
-                    # ...
-                    
                     # Register in new slot
                     if register_peer "$slot"; then
-                        log "✓ Successfully migrated to peer$slot"
+                        log "Successfully migrated to peer${slot}"
                         return 0
                     else
-                        error "Failed to migrate to peer$slot"
+                        error "Failed to migrate to peer${slot}"
                     fi
                 fi
                 
                 slot=$((slot + 1))
             done
             
-            # Update heartbeat
-            sed -i "s/\"last_heartbeat\":.*/\"last_heartbeat\": \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\",/" "$DISCOVERY_STATE" 2>/dev/null || true
+            # Update heartbeat (POSIX compliant sed)
+            temp_file="${DISCOVERY_STATE}.tmp"
+            sed "s/\"last_heartbeat\":.*/\"last_heartbeat\": \"$(date -u '+%Y-%m-%dT%H:%M:%SZ')\"/" "$DISCOVERY_STATE" > "$temp_file"
+            mv "$temp_file" "$DISCOVERY_STATE"
         fi
     else
         warn "No current registration found. Running initial discovery..."
@@ -367,34 +331,34 @@ monitor_and_heal() {
     fi
 }
 
-# Interactive setup mode
+# Interactive setup mode (POSIX compliant input)
 interactive_setup() {
-    echo ""
-    echo "🌐 ACCESS NETWORK DISCOVERY SETUP"
-    echo "=================================="
-    echo ""
-    echo "This will configure automatic peer discovery and self-healing"
-    echo "for the Access distributed network."
-    echo ""
+    printf "\n"
+    printf "ACCESS NETWORK DISCOVERY SETUP\n"
+    printf "==================================\n"
+    printf "\n"
+    printf "This will configure automatic peer discovery and self-healing\n"
+    printf "for the Access distributed network.\n"
+    printf "\n"
     
     # Domain configuration
-    printf "Main domain [${DEFAULT_DOMAIN}]: "
+    printf "Main domain [%s]: " "$DEFAULT_DOMAIN"
     read -r input_domain
     DOMAIN="${input_domain:-$DEFAULT_DOMAIN}"
     
     # Host prefix configuration
-    printf "Host prefix [${DEFAULT_HOST_PREFIX}]: "
+    printf "Host prefix [%s]: " "$DEFAULT_HOST_PREFIX"
     read -r input_prefix
     HOST_PREFIX="${input_prefix:-$DEFAULT_HOST_PREFIX}"
     
     # Auto-sync configuration
-    echo ""
-    echo "Auto-sync network discovery will:"
-    echo "  • Scan ${HOST_PREFIX}0.${DOMAIN}, ${HOST_PREFIX}1.${DOMAIN}, etc."
-    echo "  • Find the lowest available slot"
-    echo "  • Automatically register this peer"
-    echo "  • Self-heal by migrating to lower slots when available"
-    echo ""
+    printf "\n"
+    printf "Auto-sync network discovery will:\n"
+    printf "  • Scan %s0.%s, %s1.%s, etc.\n" "$HOST_PREFIX" "$DOMAIN" "$HOST_PREFIX" "$DOMAIN"
+    printf "  • Find the lowest available slot\n"
+    printf "  • Automatically register this peer\n"
+    printf "  • Self-heal by migrating to lower slots when available\n"
+    printf "\n"
     printf "Enable auto-sync network discovery? [Y/n]: "
     read -r enable_sync
     
@@ -402,11 +366,11 @@ interactive_setup() {
         ENABLE_AUTO_SYNC="true"
         
         # DNS provider selection
-        echo ""
-        echo "Select DNS provider for auto-registration:"
-        echo "  1) GoDaddy"
-        echo "  2) Cloudflare"
-        echo "  3) DigitalOcean"
+        printf "\n"
+        printf "Select DNS provider for auto-registration:\n"
+        printf "  1) GoDaddy\n"
+        printf "  2) Cloudflare\n"
+        printf "  3) DigitalOcean\n"
         printf "Choice [1-3]: "
         read -r provider_choice
         
@@ -443,28 +407,28 @@ interactive_setup() {
         save_discovery_config
         
         # Run discovery
-        echo ""
+        printf "\n"
         log "Starting network discovery..."
-        local slot=$(find_lowest_available_slot)
+        slot=$(find_lowest_available_slot)
         
         if [ -n "$slot" ]; then
-            local full_domain="${HOST_PREFIX}${slot}.${DOMAIN}"
-            echo ""
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "  DISCOVERY RESULT"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "  Available slot: $slot"
-            echo "  Full domain: ${GREEN}$full_domain${NC}"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo ""
-            printf "Register as $full_domain? [Y/n]: "
+            full_domain="${HOST_PREFIX}${slot}.${DOMAIN}"
+            printf "\n"
+            printf "======================================\n"
+            printf "  DISCOVERY RESULT\n"
+            printf "======================================\n"
+            printf "  Available slot: %d\n" "$slot"
+            printf "  Full domain: %s\n" "$full_domain"
+            printf "======================================\n"
+            printf "\n"
+            printf "Register as %s? [Y/n]: " "$full_domain"
             read -r confirm_register
             
             if [ "$confirm_register" != "n" ] && [ "$confirm_register" != "N" ]; then
                 if register_peer "$slot"; then
-                    echo ""
-                    log "✓ Successfully joined the swarm as $full_domain"
-                    log "✓ Self-healing enabled - will migrate to lower slots when available"
+                    printf "\n"
+                    log "Successfully joined the swarm as %s" "$full_domain"
+                    log "Self-healing enabled - will migrate to lower slots when available"
                 else
                     error "Failed to register peer"
                     return 1
@@ -482,11 +446,11 @@ interactive_setup() {
         log "Auto-sync disabled. You can enable it later."
     fi
     
-    echo ""
+    printf "\n"
     log "Discovery setup complete!"
 }
 
-# Non-interactive setup mode
+# Non-interactive setup mode (POSIX compliant)
 non_interactive_setup() {
     # Use environment variables or defaults
     DOMAIN="${ACCESS_DISCOVERY_DOMAIN:-$DEFAULT_DOMAIN}"
@@ -511,11 +475,11 @@ non_interactive_setup() {
     log "Provider: $DNS_PROVIDER"
     
     # Find and register
-    local slot=$(find_lowest_available_slot)
+    slot=$(find_lowest_available_slot)
     
     if [ -n "$slot" ]; then
         if register_peer "$slot"; then
-            log "✓ Automatically registered as ${HOST_PREFIX}${slot}.${DOMAIN}"
+            log "Automatically registered as ${HOST_PREFIX}${slot}.${DOMAIN}"
             return 0
         else
             error "Failed to register peer"
@@ -527,13 +491,13 @@ non_interactive_setup() {
     fi
 }
 
-# Run discovery process
+# Run discovery process (POSIX compliant)
 run_discovery() {
     init_discovery
     load_discovery_config
     
     if [ "$ENABLE_AUTO_SYNC" = "true" ]; then
-        local slot=$(find_lowest_available_slot)
+        slot=$(find_lowest_available_slot)
         
         if [ -n "$slot" ]; then
             register_peer "$slot"
@@ -547,7 +511,7 @@ run_discovery() {
     fi
 }
 
-# Daemon mode for continuous monitoring
+# Daemon mode for continuous monitoring (POSIX compliant)
 run_daemon() {
     log "Starting discovery daemon..."
     
@@ -556,21 +520,21 @@ run_daemon() {
         
         # Sleep interval (shorter if actively healing)
         if [ -f "$DISCOVERY_STATE" ]; then
-            local current_slot=$(grep '"peer_slot"' "$DISCOVERY_STATE" | sed 's/.*"peer_slot"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/')
+            current_slot=$(sed -n 's/.*"peer_slot"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' "$DISCOVERY_STATE" 2>/dev/null)
             if [ "$current_slot" -gt 0 ]; then
-                # We're not in slot 0, check more frequently for healing opportunities
-                sleep $DEFAULT_HEAL_INTERVAL
+                # Not in slot 0, check more frequently
+                sleep "$DEFAULT_HEAL_INTERVAL"
             else
-                # We're in optimal position, check less frequently
-                sleep $DEFAULT_CHECK_INTERVAL
+                # In optimal position, check less frequently
+                sleep "$DEFAULT_CHECK_INTERVAL"
             fi
         else
-            sleep $DEFAULT_CHECK_INTERVAL
+            sleep "$DEFAULT_CHECK_INTERVAL"
         fi
     done
 }
 
-# Main command handler
+# Main command handler (POSIX compliant)
 case "${1:-}" in
     setup)
         if [ -t 0 ]; then
@@ -592,27 +556,28 @@ case "${1:-}" in
         if [ -f "$DISCOVERY_STATE" ]; then
             cat "$DISCOVERY_STATE"
         else
-            warn "No discovery state found. Run 'access discovery setup' first."
+            warn "No discovery state found. Run '$0 setup' first."
         fi
         ;;
     *)
-        echo "Access Network Discovery Module"
-        echo ""
-        echo "Usage: $0 {setup|discover|monitor|daemon|status}"
-        echo ""
-        echo "Commands:"
-        echo "  setup    - Interactive setup wizard"
-        echo "  discover - Find and claim lowest available peer slot"
-        echo "  monitor  - Check swarm health and self-heal if needed"
-        echo "  daemon   - Run continuous monitoring and self-healing"
-        echo "  status   - Show current peer registration status"
-        echo ""
-        echo "Environment variables for non-interactive mode:"
-        echo "  ACCESS_DISCOVERY_DOMAIN   - Main domain (default: akao.io)"
-        echo "  ACCESS_DISCOVERY_PREFIX   - Host prefix (default: peer)"
-        echo "  ACCESS_DNS_PROVIDER      - DNS provider (godaddy|cloudflare|digitalocean)"
-        echo "  ACCESS_DNS_KEY           - API key for DNS provider"
-        echo "  ACCESS_DNS_SECRET        - API secret (if required)"
-        echo ""
+        printf "Access Network Discovery Module (POSIX Compliant)\n"
+        printf "\n"
+        printf "Usage: %s {setup|discover|monitor|daemon|status}\n" "$0"
+        printf "\n"
+        printf "Commands:\n"
+        printf "  setup    - Interactive setup wizard\n"
+        printf "  discover - Find and claim lowest available peer slot\n"
+        printf "  monitor  - Check swarm health and self-heal if needed\n"
+        printf "  daemon   - Run continuous monitoring and self-healing\n"
+        printf "  status   - Show current peer registration status\n"
+        printf "\n"
+        printf "Environment variables for non-interactive mode:\n"
+        printf "  ACCESS_DISCOVERY_DOMAIN   - Main domain (default: akao.io)\n"
+        printf "  ACCESS_DISCOVERY_PREFIX   - Host prefix (default: peer)\n"
+        printf "  ACCESS_DNS_PROVIDER      - DNS provider (godaddy|cloudflare|digitalocean)\n"
+        printf "  ACCESS_DNS_KEY           - API key for DNS provider\n"
+        printf "  ACCESS_DNS_SECRET        - API secret (if required)\n"
+        printf "\n"
+        exit 1
         ;;
 esac

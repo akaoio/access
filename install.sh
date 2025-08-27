@@ -162,14 +162,14 @@ setup_network_discovery() {
     manager_log "Setting up network discovery..."
     
     # Copy discovery scripts to installation directory
-    if [ -f "$MANAGER_CLEAN_CLONE_DIR/discovery-posix.sh" ]; then
+    if [ -f "$MANAGER_CLEAN_CLONE_DIR/discovery.sh" ]; then
         discovery_dest="$MANAGER_INSTALL_DIR/access-discovery"
         
         if [ -w "$MANAGER_INSTALL_DIR" ]; then
-            cp "$MANAGER_CLEAN_CLONE_DIR/discovery-posix.sh" "$discovery_dest"
+            cp "$MANAGER_CLEAN_CLONE_DIR/discovery.sh" "$discovery_dest"
             chmod +x "$discovery_dest"
         else
-            sudo cp "$MANAGER_CLEAN_CLONE_DIR/discovery-posix.sh" "$discovery_dest"
+            sudo cp "$MANAGER_CLEAN_CLONE_DIR/discovery.sh" "$discovery_dest"
             sudo chmod +x "$discovery_dest"
         fi
         

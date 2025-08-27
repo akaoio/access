@@ -43,12 +43,12 @@ setup_test_env() {
     mkdir -p "$TEST_DIR/logs"
     
     # Copy scripts to test
-    cp discovery-posix.sh "$TEST_DIR/" 2>/dev/null || {
-        error "discovery-posix.sh not found"
+    cp discovery.sh "$TEST_DIR/" 2>/dev/null || {
+        error "discovery.sh not found"
         return 1
     }
-    cp health-posix.sh "$TEST_DIR/" 2>/dev/null || {
-        error "health-posix.sh not found"
+    cp health.sh "$TEST_DIR/" 2>/dev/null || {
+        error "health.sh not found"
         return 1
     }
     
@@ -71,23 +71,23 @@ test_shell_compatibility() {
             verbose "Testing with $shell..."
             
             # Test syntax
-            if $shell -n "$TEST_DIR/discovery-posix.sh" 2>/dev/null; then
-                pass "  $shell: discovery-posix.sh syntax OK"
+            if $shell -n "$TEST_DIR/discovery.sh" 2>/dev/null; then
+                pass "  $shell: discovery.sh syntax OK"
             else
-                fail "  $shell: discovery-posix.sh syntax error"
+                fail "  $shell: discovery.sh syntax error"
             fi
             
-            if $shell -n "$TEST_DIR/health-posix.sh" 2>/dev/null; then
-                pass "  $shell: health-posix.sh syntax OK"
+            if $shell -n "$TEST_DIR/health.sh" 2>/dev/null; then
+                pass "  $shell: health.sh syntax OK"
             else
-                fail "  $shell: health-posix.sh syntax error"
+                fail "  $shell: health.sh syntax error"
             fi
             
             # Test execution
-            if $shell "$TEST_DIR/discovery-posix.sh" 2>&1 | grep -q "Usage:"; then
-                pass "  $shell: discovery-posix.sh executes"
+            if $shell "$TEST_DIR/discovery.sh" 2>&1 | grep -q "Usage:"; then
+                pass "  $shell: discovery.sh executes"
             else
-                fail "  $shell: discovery-posix.sh execution failed"
+                fail "  $shell: discovery.sh execution failed"
             fi
         else
             verbose "  $shell not installed, skipping"
@@ -215,7 +215,7 @@ EOF
     # Test loading config
     (
         cd "$TEST_DIR"
-        . ./discovery-posix.sh
+        . ./discovery.sh
         load_discovery_config
         
         if [ "$DOMAIN" = "test.local" ]; then
@@ -249,7 +249,7 @@ test_health_system() {
 EOF
     
     # Test health update
-    if sh "$TEST_DIR/health-posix.sh" update 2>/dev/null; then
+    if sh "$TEST_DIR/health.sh" update 2>/dev/null; then
         pass "  Health update: OK"
     else
         fail "  Health update: Failed"
@@ -359,7 +359,7 @@ test_error_handling() {
     rm -f "$DISCOVERY_CONFIG"
     rm -f "$DISCOVERY_STATE"
     
-    missing_output=$(sh "$TEST_DIR/discovery-posix.sh" status 2>&1)
+    missing_output=$(sh "$TEST_DIR/discovery.sh" status 2>&1)
     if echo "$missing_output" | grep -E "Warning|No discovery state" >/dev/null; then
         pass "  Missing config: Handled"
     else
@@ -371,7 +371,7 @@ test_error_handling() {
     
     (
         cd "$TEST_DIR"
-        . ./discovery-posix.sh
+        . ./discovery.sh
         load_discovery_config
         
         # Should use defaults
@@ -388,14 +388,14 @@ test_cli_interface() {
     log "Testing command-line interface..."
     
     # Test help output
-    if sh "$TEST_DIR/discovery-posix.sh" 2>&1 | grep -q "Usage:"; then
+    if sh "$TEST_DIR/discovery.sh" 2>&1 | grep -q "Usage:"; then
         pass "  Help output: OK"
     else
         fail "  Help output: Missing"
     fi
     
     # Test status command
-    status_output=$(sh "$TEST_DIR/discovery-posix.sh" status 2>&1)
+    status_output=$(sh "$TEST_DIR/discovery.sh" status 2>&1)
     if echo "$status_output" | grep -E "discovery|Warning|peer" >/dev/null; then
         pass "  Status command: OK"
     else
@@ -403,7 +403,7 @@ test_cli_interface() {
     fi
     
     # Test health CLI
-    if sh "$TEST_DIR/health-posix.sh" status 2>&1 | grep -q "health"; then
+    if sh "$TEST_DIR/health.sh" status 2>&1 | grep -q "health"; then
         pass "  Health CLI: OK"
     else
         fail "  Health CLI: Failed"
@@ -415,7 +415,7 @@ test_posix_compliance() {
     log "Verifying POSIX compliance..."
     
     # Check for bash-specific constructs
-    for script in discovery-posix.sh health-posix.sh; do
+    for script in discovery.sh health.sh; do
         if [ -f "$TEST_DIR/$script" ]; then
             # Check for bash-specific features (but not POSIX character classes)
             if grep -E '\[\[.*\]\]' "$TEST_DIR/$script" | grep -v ':\[[:' >/dev/null 2>&1; then
@@ -460,7 +460,7 @@ test_integration() {
 EOF
     
     # Run discovery status
-    output=$(sh "$TEST_DIR/discovery-posix.sh" status 2>&1)
+    output=$(sh "$TEST_DIR/discovery.sh" status 2>&1)
     if echo "$output" | grep -E "No discovery state|Warning" >/dev/null; then
         pass "  Discovery integration: OK"
     else
@@ -473,7 +473,7 @@ EOF
     fi
     
     # Update health
-    if sh "$TEST_DIR/health-posix.sh" update 2>/dev/null; then
+    if sh "$TEST_DIR/health.sh" update 2>/dev/null; then
         pass "  Health integration: OK"
     else
         fail "  Health integration: Failed"
