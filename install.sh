@@ -4,6 +4,16 @@
 
 set -e
 
+# Support test mode for CI/CD
+if [ "$1" = "--test-mode" ]; then
+    TEST_MODE=true
+    INSTALL_DIR="${TEST_INSTALL_DIR:-$HOME/test-access}"
+    mkdir -p "$INSTALL_DIR"
+else
+    TEST_MODE=false
+    INSTALL_DIR="$HOME/.local/bin"
+fi
+
 
 # Check if Stacker framework is available
 check_stacker() {
@@ -334,6 +344,12 @@ EOF
     
     # Show completion summary
     show_summary
+    
+    # For test mode, create symlink in expected location
+    if [ "$TEST_MODE" = true ]; then
+        ln -sf "$PWD/access.sh" "$INSTALL_DIR/access"
+        echo "Test mode: Created symlink at $INSTALL_DIR/access"
+    fi
 }
 
 # Setup network scan (simplified - files already installed by Stacker)
