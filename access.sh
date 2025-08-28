@@ -431,33 +431,33 @@ load_config() {
     DOMAIN="${ACCESS_DOMAIN:-$DOMAIN}"
     HOST="${ACCESS_HOST:-$HOST}"
     
-    # Handle empty host based on discovery setting
+    # Handle empty host based on scan setting
     if [ -z "$HOST" ]; then
-        # Check if discovery is enabled (from config or environment)
-        DISCOVERY_ENABLED="${ACCESS_DISCOVERY:-false}"
+        # Check if scan is enabled (from config or environment)
+        SCAN_ENABLED="${ACCESS_SCAN:-false}"
         if [ -f "$ACCESS_CONFIG" ] && command -v jq >/dev/null 2>&1; then
-            DISCOVERY_ENABLED=$(jq -r '.discovery // false' "$ACCESS_CONFIG" 2>/dev/null || echo "false")
+            SCAN_ENABLED=$(jq -r '.scan // false' "$ACCESS_CONFIG" 2>/dev/null || echo "false")
         fi
         
-        if [ "$DISCOVERY_ENABLED" = "true" ] && [ -n "$DOMAIN" ]; then
-            log "Host is empty with discovery enabled - finding available slot..."
+        if [ "$SCAN_ENABLED" = "true" ] && [ -n "$DOMAIN" ]; then
+            log "Host is empty with scan enabled - finding available slot..."
             
-            # Check if discovery.sh exists
-            DISCOVERY_SCRIPT="$(dirname "$0")/discovery.sh"
-            if [ ! -f "$DISCOVERY_SCRIPT" ]; then
+            # Check if scan.sh exists
+            SCAN_SCRIPT="$(dirname "$0")/scan.sh"
+            if [ ! -f "$SCAN_SCRIPT" ]; then
                 # Try installed location
-                DISCOVERY_SCRIPT="/usr/local/bin/access-discovery"
-                if [ ! -f "$DISCOVERY_SCRIPT" ]; then
+                SCAN_SCRIPT="/usr/local/bin/access-scan"
+                if [ ! -f "$SCAN_SCRIPT" ]; then
                     # Try user location
-                    DISCOVERY_SCRIPT="$HOME/.local/bin/access-discovery"
+                    SCAN_SCRIPT="$HOME/.local/bin/access-scan"
                 fi
             fi
             
-            if [ -f "$DISCOVERY_SCRIPT" ] && [ -x "$DISCOVERY_SCRIPT" ]; then
-                # Source discovery functions
-                . "$DISCOVERY_SCRIPT"
+            if [ -f "$SCAN_SCRIPT" ] && [ -x "$SCAN_SCRIPT" ]; then
+                # Source scan functions
+                . "$SCAN_SCRIPT"
                 
-                # Set discovery variables
+                # Set scan variables
                 DOMAIN="$DOMAIN"
                 HOST_PREFIX="${HOST_PREFIX:-peer}"
                 
@@ -473,16 +473,16 @@ load_config() {
                         log "Saved auto-discovered host to configuration"
                     fi
                 else
-                    log_warning "Auto-discovery failed - using root domain (@)"
+                    log_warning "Auto-scan failed - using root domain (@)"
                     HOST="@"
                 fi
             else
-                log_warning "Discovery module not found - using root domain (@)"
+                log_warning "Scan module not found - using root domain (@)"
                 HOST="@"
             fi
         else
-            # Discovery not enabled or no domain - use root
-            log_debug "Host empty, discovery disabled - using root domain (@)"
+            # Scan not enabled or no domain - use root
+            log_debug "Host empty, scan disabled - using root domain (@)"
             HOST="@"
         fi
     fi
@@ -526,18 +526,18 @@ save_config() {
     
     config_json="$config_json\n}"
     
-    # Add discovery flag if set in environment
-    if [ -n "$DISCOVERY_ENABLED" ]; then
-        # Parse existing config and add discovery flag
+    # Add scan flag if set in environment
+    if [ -n "$SCAN_ENABLED" ]; then
+        # Parse existing config and add scan flag
         if command -v jq >/dev/null 2>&1 && [ -f "$ACCESS_CONFIG" ]; then
             # First save the basic config
             printf "%b\n" "$config_json" > "$ACCESS_CONFIG"
-            # Then add discovery flag using jq
+            # Then add scan flag using jq
             temp_file=$(mktemp)
-            jq ".discovery = $DISCOVERY_ENABLED" "$ACCESS_CONFIG" > "$temp_file" && mv "$temp_file" "$ACCESS_CONFIG"
+            jq ".scan = $SCAN_ENABLED" "$ACCESS_CONFIG" > "$temp_file" && mv "$temp_file" "$ACCESS_CONFIG"
         else
-            # Fallback: manually add discovery field before closing brace
-            config_json=$(echo "$config_json" | sed 's/\n}$/,\n    "discovery": '"$DISCOVERY_ENABLED"'\n}/')
+            # Fallback: manually add scan field before closing brace
+            config_json=$(echo "$config_json" | sed 's/\n}$/,\n    "scan": '"$SCAN_ENABLED"'\n}/')
             printf "%b\n" "$config_json" > "$ACCESS_CONFIG"
         fi
     else
@@ -761,13 +761,13 @@ case "${1:-help}" in
             case "$arg" in
                 --domain=*) DOMAIN="${arg#*=}" ;;
                 --host=*) HOST="${arg#*=}" ;;
-                --discovery=*) 
-                    DISCOVERY_ENABLED="${arg#*=}"
+                --scan=*) 
+                    SCAN_ENABLED="${arg#*=}"
                     # Validate boolean value
-                    case "$DISCOVERY_ENABLED" in
+                    case "$SCAN_ENABLED" in
                         true|false) ;;
                         *) 
-                            log_error "Invalid discovery value: $DISCOVERY_ENABLED (must be true or false)"
+                            log_error "Invalid scan value: $SCAN_ENABLED (must be true or false)"
                             exit 1
                             ;;
                     esac
@@ -835,14 +835,14 @@ case "${1:-help}" in
         list_providers
         ;;
         
-    discovery)
-        # Manage network discovery settings
+    scan)
+        # Manage network scan settings
         shift
         if [ "$1" = "enable" ]; then
             if command -v jq >/dev/null 2>&1 && [ -f "$ACCESS_CONFIG" ]; then
                 temp_file=$(mktemp)
-                jq '.discovery = true' "$ACCESS_CONFIG" > "$temp_file" && mv "$temp_file" "$ACCESS_CONFIG"
-                log_success "Network discovery enabled"
+                jq '.scan = true' "$ACCESS_CONFIG" > "$temp_file" && mv "$temp_file" "$ACCESS_CONFIG"
+                log_success "Network scan enabled"
                 log "When host is empty, Access will auto-discover available peer slots"
             else
                 log_error "Config file not found. Run 'access config <provider>' first"
@@ -851,8 +851,8 @@ case "${1:-help}" in
         elif [ "$1" = "disable" ]; then
             if command -v jq >/dev/null 2>&1 && [ -f "$ACCESS_CONFIG" ]; then
                 temp_file=$(mktemp)
-                jq '.discovery = false' "$ACCESS_CONFIG" > "$temp_file" && mv "$temp_file" "$ACCESS_CONFIG"
-                log_success "Network discovery disabled"
+                jq '.scan = false' "$ACCESS_CONFIG" > "$temp_file" && mv "$temp_file" "$ACCESS_CONFIG"
+                log_success "Network scan disabled"
                 log "When host is empty, Access will use root domain (@)"
             else
                 log_error "Config file not found. Run 'access config <provider>' first"
@@ -860,23 +860,23 @@ case "${1:-help}" in
             fi
         elif [ "$1" = "status" ] || [ -z "$1" ]; then
             if [ -f "$ACCESS_CONFIG" ] && command -v jq >/dev/null 2>&1; then
-                discovery_status=$(jq -r '.discovery // false' "$ACCESS_CONFIG" 2>/dev/null || echo "false")
-                echo "Network discovery: $discovery_status"
-                if [ "$discovery_status" = "true" ]; then
-                    echo "  When host is empty, auto-discovery will find available peer slots"
+                scan_status=$(jq -r '.scan // false' "$ACCESS_CONFIG" 2>/dev/null || echo "false")
+                echo "Network scan: $scan_status"
+                if [ "$scan_status" = "true" ]; then
+                    echo "  When host is empty, auto-scan will find available peer slots"
                 else
                     echo "  When host is empty, root domain (@) will be used"
                 fi
             else
-                echo "Network discovery: not configured"
+                echo "Network scan: not configured"
                 echo "  Run 'access config <provider>' first"
             fi
         else
-            echo "Usage: access discovery [enable|disable|status]"
+            echo "Usage: access scan [enable|disable|status]"
             echo ""
-            echo "  enable   - Enable auto-discovery for empty host"
-            echo "  disable  - Disable auto-discovery (use @ for empty host)"
-            echo "  status   - Show current discovery setting (default)"
+            echo "  enable   - Enable auto-scan for empty host"
+            echo "  disable  - Disable auto-scan (use @ for empty host)"
+            echo "  status   - Show current scan setting (default)"
             exit 1
         fi
         ;;
@@ -951,10 +951,10 @@ case "${1:-help}" in
             echo "  Domain: ${YELLOW}${DOMAIN:-not configured}${NC}"
             echo "  Host: ${YELLOW}${HOST:-not configured}${NC}"
             
-            # Show discovery status
+            # Show scan status
             if [ -f "$ACCESS_CONFIG" ] && command -v jq >/dev/null 2>&1; then
-                discovery_status=$(jq -r '.discovery // false' "$ACCESS_CONFIG" 2>/dev/null || echo "false")
-                echo "  Discovery: ${YELLOW}$discovery_status${NC}"
+                scan_status=$(jq -r '.scan // false' "$ACCESS_CONFIG" 2>/dev/null || echo "false")
+                echo "  Scan: ${YELLOW}$scan_status${NC}"
             fi
             
             # Show provider-specific config (without sensitive data)
@@ -1145,7 +1145,7 @@ case "${1:-help}" in
         echo "    ${BLUE}access ipv6${NC}            Force IPv6 detection only"
         echo "    ${BLUE}access update${NC}          Update DNS with current IP"  
         echo "    ${BLUE}access config${NC}          Configure DNS provider"
-        echo "    ${BLUE}access discovery${NC}       Manage auto-discovery settings"
+        echo "    ${BLUE}access scan${NC}       Manage auto-scan settings"
         echo "    ${BLUE}access providers${NC}       List available providers"
         echo "    ${BLUE}access discover${NC}        Auto-discover all providers"
         echo "    ${BLUE}access capabilities${NC}    Show provider capabilities"
@@ -1163,9 +1163,9 @@ case "${1:-help}" in
         echo "${BOLD}-------------${NC}"
         echo "    ${YELLOW}access config${NC} <provider> ${DIM}--help${NC}     Show provider configuration help"
         echo "    ${YELLOW}access config${NC} <provider> ${DIM}[options]${NC}  Configure provider"
-        echo "    ${YELLOW}access discovery${NC} [enable|disable]   Manage peer auto-discovery"
+        echo "    ${YELLOW}access scan${NC} [enable|disable]   Manage peer auto-scan"
         echo ""
-        echo "${BOLD}Provider Discovery:${NC}"
+        echo "${BOLD}Provider Scan:${NC}"
         echo "${BOLD}------------------${NC}"
         echo "    ${GREEN}access discover${NC}                     List all discovered providers"
         echo "    ${GREEN}access capabilities${NC} <provider>      Show what a provider can do"
@@ -1176,14 +1176,14 @@ case "${1:-help}" in
         echo "${BOLD}---------${NC}"
         echo "  ${BOLD}Configuration:${NC}"
         echo "    ${DIM}access config godaddy --domain=example.com --key=KEY --secret=SECRET${NC}"
-        echo "    ${DIM}access config godaddy --domain=example.com --key=KEY --secret=SECRET --discovery=true${NC}"
+        echo "    ${DIM}access config godaddy --domain=example.com --key=KEY --secret=SECRET --scan=true${NC}"
         echo "    ${DIM}access config cloudflare --domain=example.com --email=EMAIL --api-key=KEY --zone-id=ZONE${NC}"
         echo ""
         echo "  ${BOLD}Daily Usage:${NC}"
         echo "    ${DIM}access status${NC}                               # Check configuration and service status"
         echo "    ${DIM}access ip${NC}                                   # Show current public IP"
         echo "    ${DIM}access update${NC}                               # Update DNS immediately"
-        echo "    ${DIM}access discovery enable${NC}                     # Enable peer auto-discovery"
+        echo "    ${DIM}access scan enable${NC}                     # Enable peer auto-scan"
         echo "    ${DIM}access logs -f${NC}                              # Follow real-time logs"
         echo "    ${DIM}access logs -n50${NC}                            # Show last 50 log entries"
         echo "    ${DIM}access clean${NC}                                # Clean temporary files and locks"
@@ -1195,7 +1195,7 @@ case "${1:-help}" in
         echo "    ${YELLOW}ACCESS_HOST${NC}       Host record (default: @)"
         echo "    ${YELLOW}ACCESS_INTERVAL${NC}   Update interval in seconds (default: 300)"
         echo ""
-        echo "${DIM}Access v$VERSION - Pure shell DNS synchronization with auto-discovery${NC}"
+        echo "${DIM}Access v$VERSION - Pure shell DNS synchronization with auto-scan${NC}"
         echo ""
         ;;
 esac

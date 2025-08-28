@@ -1,6 +1,6 @@
 #!/bin/sh
-# Provider Abstraction Layer - Fully Agnostic Auto-Discovery
-# No hardcoded provider knowledge - complete runtime discovery
+# Provider Abstraction Layer - Fully Agnostic Auto-Scan
+# No hardcoded provider knowledge - complete runtime scan
 
 PROVIDER_DIR="${PROVIDER_DIR:-$(dirname "$0")/providers}"
 

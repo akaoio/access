@@ -8,7 +8,7 @@ set -e
 # Configuration
 HEALTH_PORT="${HEALTH_PORT:-8089}"
 HEALTH_FILE="${HEALTH_FILE:-$HOME/.local/share/access/health.status}"
-DISCOVERY_STATE="${DISCOVERY_STATE:-$HOME/.local/share/access/discovery.state}"
+SCAN_STATE="${SCAN_STATE:-$HOME/.local/share/access/scan.state}"
 HEALTH_LOG="${HEALTH_LOG:-$HOME/.local/share/access/health.log}"
 
 # POSIX compliant logging
@@ -36,10 +36,10 @@ init_health() {
 
 # Get peer information (POSIX compliant)
 get_peer_info() {
-    if [ -f "$DISCOVERY_STATE" ]; then
-        peer_host=$(sed -n 's/.*"peer_host"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$DISCOVERY_STATE")
-        peer_slot=$(sed -n 's/.*"peer_slot"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' "$DISCOVERY_STATE")
-        full_domain=$(sed -n 's/.*"full_domain"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$DISCOVERY_STATE")
+    if [ -f "$SCAN_STATE" ]; then
+        peer_host=$(sed -n 's/.*"peer_host"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$SCAN_STATE")
+        peer_slot=$(sed -n 's/.*"peer_slot"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' "$SCAN_STATE")
+        full_domain=$(sed -n 's/.*"full_domain"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$SCAN_STATE")
         
         printf '{"peer":"%s","slot":%s,"domain":"%s","status":"alive","timestamp":"%s"}' \
             "$peer_host" "${peer_slot:-0}" "$full_domain" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
@@ -71,12 +71,12 @@ monitor_health() {
         update_health_file
         
         # Also check if we can reach other peers
-        if [ -f "$DISCOVERY_STATE" ]; then
-            peer_slot=$(sed -n 's/.*"peer_slot"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' "$DISCOVERY_STATE")
+        if [ -f "$SCAN_STATE" ]; then
+            peer_slot=$(sed -n 's/.*"peer_slot"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' "$SCAN_STATE")
             
             # Check next peer in sequence
             next_slot=$((peer_slot + 1))
-            next_peer="peer${next_slot}.$(sed -n 's/.*"domain"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$DISCOVERY_STATE" || echo "akao.io")"
+            next_peer="peer${next_slot}.$(sed -n 's/.*"domain"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$SCAN_STATE" || echo "akao.io")"
             
             # Try to check if next peer exists (POSIX compliant)
             if nslookup "$next_peer" >/dev/null 2>&1; then

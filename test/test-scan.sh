@@ -1,5 +1,5 @@
 #!/bin/sh
-# Test script for Access Network Discovery mechanism
+# Test script for Access Network Scan mechanism
 # Tests both interactive and non-interactive modes
 
 set -e
@@ -34,7 +34,7 @@ info() {
 # Test configuration
 TEST_DOMAIN="test.local"
 TEST_PREFIX="testpeer"
-TEST_DIR="/tmp/access-discovery-test"
+TEST_DIR="/tmp/access-scan-test"
 
 # Create test environment
 setup_test_env() {
@@ -44,12 +44,12 @@ setup_test_env() {
     mkdir -p "$TEST_DIR/config"
     mkdir -p "$TEST_DIR/state"
     
-    # Copy discovery script
-    if [ -f "./discovery.sh" ]; then
-        cp ./discovery.sh "$TEST_DIR/discovery.sh"
-        chmod +x "$TEST_DIR/discovery.sh"
+    # Copy scan script
+    if [ -f "./scan.sh" ]; then
+        cp ./scan.sh "$TEST_DIR/scan.sh"
+        chmod +x "$TEST_DIR/scan.sh"
     else
-        error "discovery.sh not found in current directory"
+        error "scan.sh not found in current directory"
         exit 1
     fi
     
@@ -61,7 +61,7 @@ test_dns_checks() {
     log "Testing DNS check functions..."
     
     # Check if DNS check function exists in the script
-    if grep -q "check_peer_alive" "$TEST_DIR/discovery.sh"; then
+    if grep -q "check_peer_alive" "$TEST_DIR/scan.sh"; then
         info "DNS check function exists"
     else
         error "DNS check function not found"
@@ -71,12 +71,12 @@ test_dns_checks() {
     log "✓ DNS check tests passed"
 }
 
-# Test slot discovery
-test_slot_discovery() {
-    log "Testing slot discovery algorithm..."
+# Test slot scan
+test_slot_scan() {
+    log "Testing slot scan algorithm..."
     
     # Create mock config for testing
-    cat > "$TEST_DIR/config/discovery.json" <<EOF
+    cat > "$TEST_DIR/config/scan.json" <<EOF
 {
     "domain": "$TEST_DOMAIN",
     "host_prefix": "$TEST_PREFIX",
@@ -85,21 +85,21 @@ test_slot_discovery() {
 }
 EOF
     
-    export DISCOVERY_CONFIG="$TEST_DIR/config/discovery.json"
-    export DISCOVERY_STATE="$TEST_DIR/state/discovery.state"
+    export SCAN_CONFIG="$TEST_DIR/config/scan.json"
+    export SCAN_STATE="$TEST_DIR/state/scan.state"
     
     info "Testing with domain: $TEST_DOMAIN"
     info "Testing with prefix: $TEST_PREFIX"
     
     # Since we can't actually query DNS in test mode, we'll verify the logic
-    if grep -q "find_lowest_available_slot" "$TEST_DIR/discovery.sh"; then
-        log "✓ Slot discovery function found"
+    if grep -q "find_lowest_available_slot" "$TEST_DIR/scan.sh"; then
+        log "✓ Slot scan function found"
     else
-        error "Slot discovery function missing"
+        error "Slot scan function missing"
         return 1
     fi
     
-    log "✓ Slot discovery tests passed"
+    log "✓ Slot scan tests passed"
 }
 
 # Test interactive mode simulation
@@ -107,7 +107,7 @@ test_interactive_mode() {
     log "Testing interactive mode logic..."
     
     # Check if interactive functions exist
-    if grep -q "interactive_setup" "$TEST_DIR/discovery.sh"; then
+    if grep -q "interactive_setup" "$TEST_DIR/scan.sh"; then
         log "✓ Interactive setup function found"
     else
         error "Interactive setup function missing"
@@ -122,14 +122,14 @@ test_non_interactive_mode() {
     log "Testing non-interactive mode..."
     
     # Set environment variables
-    export ACCESS_DISCOVERY_DOMAIN="$TEST_DOMAIN"
-    export ACCESS_DISCOVERY_PREFIX="$TEST_PREFIX"
+    export ACCESS_SCAN_DOMAIN="$TEST_DOMAIN"
+    export ACCESS_SCAN_PREFIX="$TEST_PREFIX"
     export ACCESS_DNS_PROVIDER="godaddy"
     export ACCESS_DNS_KEY="test-key"
     export ACCESS_DNS_SECRET="test-secret"
     
     # Check if non-interactive functions exist
-    if grep -q "non_interactive_setup" "$TEST_DIR/discovery.sh"; then
+    if grep -q "non_interactive_setup" "$TEST_DIR/scan.sh"; then
         log "✓ Non-interactive setup function found"
     else
         error "Non-interactive setup function missing"
@@ -144,7 +144,7 @@ test_self_healing() {
     log "Testing self-healing mechanism..."
     
     # Create a mock state file
-    cat > "$TEST_DIR/state/discovery.state" <<EOF
+    cat > "$TEST_DIR/state/scan.state" <<EOF
 {
     "peer_slot": 5,
     "peer_host": "${TEST_PREFIX}5",
@@ -156,11 +156,11 @@ test_self_healing() {
 EOF
     
     # Check if monitor and heal function exists
-    if grep -q "monitor_and_heal" "$TEST_DIR/discovery.sh"; then
+    if grep -q "monitor_and_heal" "$TEST_DIR/scan.sh"; then
         log "✓ Self-healing function found"
         
         # Verify it checks for lower slots
-        if grep -q "while \[ \$slot -lt \$current_slot \]" "$TEST_DIR/discovery.sh"; then
+        if grep -q "while \[ \$slot -lt \$current_slot \]" "$TEST_DIR/scan.sh"; then
             log "✓ Lower slot checking logic found"
         else
             error "Lower slot checking logic missing"
@@ -177,11 +177,11 @@ EOF
 test_daemon_mode() {
     log "Testing daemon mode..."
     
-    if grep -q "run_daemon" "$TEST_DIR/discovery.sh"; then
+    if grep -q "run_daemon" "$TEST_DIR/scan.sh"; then
         log "✓ Daemon mode function found"
         
         # Check for continuous loop
-        if grep -q "while true" "$TEST_DIR/discovery.sh"; then
+        if grep -q "while true" "$TEST_DIR/scan.sh"; then
             log "✓ Continuous monitoring loop found"
         else
             error "Continuous monitoring loop missing"
@@ -199,27 +199,27 @@ test_installer_integration() {
     log "Testing installer integration..."
     
     if [ -f "./install.sh" ]; then
-        # Check if installer has network discovery support
-        if grep -q "setup_network_discovery" "./install.sh"; then
-            log "✓ Network discovery setup function found in installer"
+        # Check if installer has network scan support
+        if grep -q "setup_network_scan" "./install.sh"; then
+            log "✓ Network scan setup function found in installer"
         else
-            error "Network discovery not integrated in installer"
+            error "Network scan not integrated in installer"
             return 1
         fi
         
-        # Check for discovery service setup
-        if grep -q "setup_discovery_service" "./install.sh"; then
-            log "✓ Discovery service setup found"
+        # Check for scan service setup
+        if grep -q "setup_scan_service" "./install.sh"; then
+            log "✓ Scan service setup found"
         else
-            error "Discovery service setup missing"
+            error "Scan service setup missing"
             return 1
         fi
         
         # Check for command line flags
-        if grep -q "\-\-network-discovery" "./install.sh"; then
-            log "✓ Network discovery CLI flag found"
+        if grep -q "\-\-network-scan" "./install.sh"; then
+            log "✓ Network scan CLI flag found"
         else
-            error "Network discovery CLI flag missing"
+            error "Network scan CLI flag missing"
             return 1
         fi
     else
@@ -271,7 +271,7 @@ cleanup_test_env() {
 run_all_tests() {
     echo ""
     echo "========================================="
-    echo "  ACCESS NETWORK DISCOVERY TEST SUITE"
+    echo "  ACCESS NETWORK SCAN TEST SUITE"
     echo "========================================="
     echo ""
     
@@ -282,7 +282,7 @@ run_all_tests() {
     setup_test_env
     
     # Run tests
-    tests="test_dns_checks test_slot_discovery test_interactive_mode test_non_interactive_mode test_self_healing test_daemon_mode test_installer_integration test_config_persistence"
+    tests="test_dns_checks test_slot_scan test_interactive_mode test_non_interactive_mode test_self_healing test_daemon_mode test_installer_integration test_config_persistence"
     
     for test in $tests; do
         total_tests=$((total_tests + 1))

@@ -78,11 +78,11 @@ test_ssh_port() {
     return 1
 }
 
-# Test discovery function
-test_peer_discovery() {
-    log "Testing peer discovery logic..."
+# Test scan function
+test_peer_scan() {
+    log "Testing peer scan logic..."
     
-    # Source the discovery script functions
+    # Source the scan script functions
     DOMAIN="akao.io"
     HOST_PREFIX="peer"
     
@@ -135,8 +135,8 @@ test_health_endpoint() {
 }
 
 # Simulate finding next available slot
-simulate_slot_discovery() {
-    log "Simulating slot discovery..."
+simulate_slot_scan() {
+    log "Simulating slot scan..."
     
     DOMAIN="akao.io"
     HOST_PREFIX="peer"
@@ -185,7 +185,7 @@ run_all_tests() {
     local total=0
     local passed=0
     
-    tests="test_dns test_ssh_port test_peer_discovery simulate_slot_discovery test_health_endpoint"
+    tests="test_dns test_ssh_port test_peer_scan simulate_slot_scan test_health_endpoint"
     
     for test in $tests; do
         total=$((total + 1))
@@ -207,7 +207,7 @@ run_all_tests() {
         echo ""
         echo "  ${GREEN}✓ ALL TESTS PASSED${NC}"
         echo ""
-        log "Peer discovery works without ping!"
+        log "Peer scan works without ping!"
         log "Methods used:"
         log "  1. DNS resolution check"
         log "  2. SSH port 22 connectivity"

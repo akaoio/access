@@ -1,5 +1,5 @@
 #!/bin/sh
-# Comprehensive POSIX Compliance Test Suite for Access Discovery
+# Comprehensive POSIX Compliance Test Suite for Access Scan
 # Tests every function with multiple shells and edge cases
 
 set -e
@@ -43,8 +43,8 @@ setup_test_env() {
     mkdir -p "$TEST_DIR/logs"
     
     # Copy scripts to test
-    cp discovery.sh "$TEST_DIR/" 2>/dev/null || {
-        error "discovery.sh not found"
+    cp scan.sh "$TEST_DIR/" 2>/dev/null || {
+        error "scan.sh not found"
         return 1
     }
     cp health.sh "$TEST_DIR/" 2>/dev/null || {
@@ -53,9 +53,9 @@ setup_test_env() {
     }
     
     # Set test environment variables
-    export DISCOVERY_CONFIG="$TEST_DIR/config/discovery.json"
-    export DISCOVERY_STATE="$TEST_DIR/state/discovery.state"
-    export DISCOVERY_LOG="$TEST_DIR/logs/discovery.log"
+    export SCAN_CONFIG="$TEST_DIR/config/scan.json"
+    export SCAN_STATE="$TEST_DIR/state/scan.state"
+    export SCAN_LOG="$TEST_DIR/logs/scan.log"
     export HEALTH_FILE="$TEST_DIR/state/health.status"
     export HEALTH_LOG="$TEST_DIR/logs/health.log"
     
@@ -71,10 +71,10 @@ test_shell_compatibility() {
             verbose "Testing with $shell..."
             
             # Test syntax
-            if $shell -n "$TEST_DIR/discovery.sh" 2>/dev/null; then
-                pass "  $shell: discovery.sh syntax OK"
+            if $shell -n "$TEST_DIR/scan.sh" 2>/dev/null; then
+                pass "  $shell: scan.sh syntax OK"
             else
-                fail "  $shell: discovery.sh syntax error"
+                fail "  $shell: scan.sh syntax error"
             fi
             
             if $shell -n "$TEST_DIR/health.sh" 2>/dev/null; then
@@ -84,10 +84,10 @@ test_shell_compatibility() {
             fi
             
             # Test execution
-            if $shell "$TEST_DIR/discovery.sh" 2>&1 | grep -q "Usage:"; then
-                pass "  $shell: discovery.sh executes"
+            if $shell "$TEST_DIR/scan.sh" 2>&1 | grep -q "Usage:"; then
+                pass "  $shell: scan.sh executes"
             else
-                fail "  $shell: discovery.sh execution failed"
+                fail "  $shell: scan.sh execution failed"
             fi
         else
             verbose "  $shell not installed, skipping"
@@ -200,7 +200,7 @@ test_config_operations() {
     log "Testing configuration operations..."
     
     # Create test config using the script
-    cat > "$DISCOVERY_CONFIG" <<EOF
+    cat > "$SCAN_CONFIG" <<EOF
 {
     "domain": "test.local",
     "host_prefix": "testpeer",
@@ -215,8 +215,8 @@ EOF
     # Test loading config
     (
         cd "$TEST_DIR"
-        . ./discovery.sh
-        load_discovery_config
+        . ./scan.sh
+        load_scan_config
         
         if [ "$DOMAIN" = "test.local" ]; then
             pass "  Config load: Domain OK"
@@ -237,7 +237,7 @@ test_health_system() {
     log "Testing health monitoring system..."
     
     # Create test state
-    cat > "$DISCOVERY_STATE" <<EOF
+    cat > "$SCAN_STATE" <<EOF
 {
     "peer_slot": 5,
     "peer_host": "testpeer5",
@@ -356,23 +356,23 @@ test_error_handling() {
     log "Testing error handling..."
     
     # Test with missing config
-    rm -f "$DISCOVERY_CONFIG"
-    rm -f "$DISCOVERY_STATE"
+    rm -f "$SCAN_CONFIG"
+    rm -f "$SCAN_STATE"
     
-    missing_output=$(sh "$TEST_DIR/discovery.sh" status 2>&1)
-    if echo "$missing_output" | grep -E "Warning|No discovery state" >/dev/null; then
+    missing_output=$(sh "$TEST_DIR/scan.sh" status 2>&1)
+    if echo "$missing_output" | grep -E "Warning|No scan state" >/dev/null; then
         pass "  Missing config: Handled"
     else
         fail "  Missing config: Not handled properly - output: $missing_output"
     fi
     
     # Test with invalid JSON
-    printf "invalid json{" > "$DISCOVERY_CONFIG"
+    printf "invalid json{" > "$SCAN_CONFIG"
     
     (
         cd "$TEST_DIR"
-        . ./discovery.sh
-        load_discovery_config
+        . ./scan.sh
+        load_scan_config
         
         # Should use defaults
         if [ "$DOMAIN" = "akao.io" ]; then
@@ -388,15 +388,15 @@ test_cli_interface() {
     log "Testing command-line interface..."
     
     # Test help output
-    if sh "$TEST_DIR/discovery.sh" 2>&1 | grep -q "Usage:"; then
+    if sh "$TEST_DIR/scan.sh" 2>&1 | grep -q "Usage:"; then
         pass "  Help output: OK"
     else
         fail "  Help output: Missing"
     fi
     
     # Test status command
-    status_output=$(sh "$TEST_DIR/discovery.sh" status 2>&1)
-    if echo "$status_output" | grep -E "discovery|Warning|peer" >/dev/null; then
+    status_output=$(sh "$TEST_DIR/scan.sh" status 2>&1)
+    if echo "$status_output" | grep -E "scan|Warning|peer" >/dev/null; then
         pass "  Status command: OK"
     else
         fail "  Status command: Failed - output: $status_output"
@@ -415,7 +415,7 @@ test_posix_compliance() {
     log "Verifying POSIX compliance..."
     
     # Check for bash-specific constructs
-    for script in discovery.sh health.sh; do
+    for script in scan.sh health.sh; do
         if [ -f "$TEST_DIR/$script" ]; then
             # Check for bash-specific features (but not POSIX character classes)
             if grep -E '\[\[.*\]\]' "$TEST_DIR/$script" | grep -v ':\[[:' >/dev/null 2>&1; then
@@ -450,7 +450,7 @@ test_integration() {
     log "Running integration test..."
     
     # Set up complete environment
-    cat > "$DISCOVERY_CONFIG" <<EOF
+    cat > "$SCAN_CONFIG" <<EOF
 {
     "domain": "test.local",
     "host_prefix": "inttest",
@@ -459,16 +459,16 @@ test_integration() {
 }
 EOF
     
-    # Run discovery status
-    output=$(sh "$TEST_DIR/discovery.sh" status 2>&1)
-    if echo "$output" | grep -E "No discovery state|Warning" >/dev/null; then
-        pass "  Discovery integration: OK"
+    # Run scan status
+    output=$(sh "$TEST_DIR/scan.sh" status 2>&1)
+    if echo "$output" | grep -E "No scan state|Warning" >/dev/null; then
+        pass "  Scan integration: OK"
     else
         # Also pass if it shows unconfigured status
         if echo "$output" | grep -E "status.*unconfigured" >/dev/null; then
-            pass "  Discovery integration: OK (unconfigured)"
+            pass "  Scan integration: OK (unconfigured)"
         else
-            fail "  Discovery integration: Unexpected output - got: $output"
+            fail "  Scan integration: Unexpected output - got: $output"
         fi
     fi
     

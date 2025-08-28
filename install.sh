@@ -74,13 +74,13 @@ interactive_setup() {
         fi
     fi
     
-    # Ask about network discovery
+    # Ask about network scan
     echo ""
-    printf "Enable network discovery for peer detection? (y/N): "
-    read -r discovery_choice
-    case "$discovery_choice" in
-        [yY]|[yY][eE][sS]) USE_DISCOVERY=true ;;
-        *) USE_DISCOVERY=false ;;
+    printf "Enable network scan for peer detection? (y/N): "
+    read -r scan_choice
+    case "$scan_choice" in
+        [yY]|[yY][eE][sS]) USE_SCAN=true ;;
+        *) USE_SCAN=false ;;
     esac
     
     # Ask about auto-updates
@@ -104,8 +104,8 @@ interactive_setup() {
     if [ "$USE_CRON" = true ]; then
         echo "  ✓ Cron job will run every $CRON_INTERVAL minutes"
     fi
-    if [ "$USE_DISCOVERY" = true ]; then
-        echo "  ✓ Network discovery will be enabled"
+    if [ "$USE_SCAN" = true ]; then
+        echo "  ✓ Network scan will be enabled"
     fi
     if [ "$USE_AUTO_UPDATE" = true ]; then
         echo "  ✓ Weekly auto-updates will be enabled"
@@ -142,7 +142,7 @@ main() {
     USE_CRON=false
     USE_REDUNDANT=false
     USE_AUTO_UPDATE=false
-    USE_DISCOVERY=false
+    USE_SCAN=false
     CRON_INTERVAL=5
     SHOW_HELP=false
     INTERACTIVE=true
@@ -161,8 +161,8 @@ main() {
                 USE_AUTO_UPDATE=true
                 INTERACTIVE=false
                 ;;
-            --discovery)
-                USE_DISCOVERY=true
+            --scan)
+                USE_SCAN=true
                 INTERACTIVE=false
                 ;;
             --interval=*)
@@ -200,7 +200,7 @@ Options:
   --cron          Setup cron job for periodic updates
   --interval=N    Cron interval in minutes (default: 5)
   --redundant     Both service and cron (recommended)
-  --discovery     Enable network discovery for swarm mode
+  --scan     Enable network scan for swarm mode
   --auto-update   Enable weekly auto-updates
   --non-interactive Skip interactive prompts (use with other options)
   --help          Show this help
@@ -211,7 +211,7 @@ Interactive Mode:
 Examples:
   ./install.sh                    # Interactive setup (recommended)
   ./install.sh --redundant --auto-update
-  ./install.sh --service --discovery
+  ./install.sh --service --scan
   ./install.sh --cron --interval=10
   ./install.sh --non-interactive --cron  # Non-interactive with defaults
 
@@ -266,8 +266,8 @@ EOF
     }
     
     # Handle Access-specific features
-    if [ "$USE_DISCOVERY" = true ]; then
-        setup_network_discovery
+    if [ "$USE_SCAN" = true ]; then
+        setup_network_scan
     fi
     
     # Setup Access configuration using Manager's config management
@@ -280,31 +280,31 @@ EOF
     show_summary
 }
 
-# Setup network discovery (simplified - files already installed by Manager)
-setup_network_discovery() {
-    manager_log "Network discovery enabled via Manager framework"
+# Setup network scan (simplified - files already installed by Manager)
+setup_network_scan() {
+    manager_log "Network scan enabled via Manager framework"
     
-    # Discovery.sh is automatically installed by Manager via .manager-config
+    # Scan.sh is automatically installed by Manager via .manager-config
     # Just notify user that it's available
-    if [ -x "$MANAGER_INSTALL_DIR/discovery" ]; then
-        manager_log "✓ Network discovery available"
-        manager_log "  Command: discovery"
+    if [ -x "$MANAGER_INSTALL_DIR/scan" ]; then
+        manager_log "✓ Network scan available"
+        manager_log "  Command: scan"
     fi
     
-    # Setup discovery service if using systemd
+    # Setup scan service if using systemd
     if [ "$USE_SERVICE" = true ]; then
-        setup_discovery_service
+        setup_scan_service
     fi
 }
 
-# Setup discovery service
-setup_discovery_service() {
-    manager_log "Creating discovery service..."
+# Setup scan service
+setup_scan_service() {
+    manager_log "Creating scan service..."
     
-    # For now, just log that discovery service would be created
-    # TODO: Implement proper discovery service integration with Manager
-    manager_log "✓ Discovery service setup placeholder"
-    manager_log "  Note: Discovery runs alongside main Access service"
+    # For now, just log that scan service would be created
+    # TODO: Implement proper scan service integration with Manager
+    manager_log "✓ Scan service setup placeholder"
+    manager_log "  Note: Scan runs alongside main Access service"
 }
 
 # Setup Access configuration using Manager's config management
@@ -365,9 +365,9 @@ show_summary() {
     fi
     echo ""
     
-    if [ "$USE_DISCOVERY" = true ]; then
-        echo "🌐 Network Discovery:"
-        echo "   access-discovery       # Find and claim peer slot"
+    if [ "$USE_SCAN" = true ]; then
+        echo "🌐 Network Scan:"
+        echo "   access-scan       # Find and claim peer slot"
         echo "   Swarm: peer0.akao.io, peer1.akao.io, ..."
         echo ""
     fi

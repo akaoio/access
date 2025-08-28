@@ -1,14 +1,14 @@
 #!/bin/sh
-# Access Network Discovery Module - POSIX Compliant Version
+# Access Network Scan Module - POSIX Compliant Version
 # Pure POSIX shell implementation for swarm coordination
 # No bash-specific features, no external dependencies beyond POSIX.1
 
 set -e
 
 # Configuration
-DISCOVERY_CONFIG="${DISCOVERY_CONFIG:-$HOME/.config/access/discovery.json}"
-DISCOVERY_LOG="${DISCOVERY_LOG:-$HOME/.config/access/discovery.log}"
-DISCOVERY_STATE="${DISCOVERY_STATE:-$HOME/.local/share/access/discovery.state}"
+SCAN_CONFIG="${SCAN_CONFIG:-$HOME/.config/access/scan.json}"
+SCAN_LOG="${SCAN_LOG:-$HOME/.config/access/scan.log}"
+SCAN_STATE="${SCAN_STATE:-$HOME/.local/share/access/scan.state}"
 
 # Default values
 DEFAULT_DOMAIN=""  # Use domain from Access config, not hardcoded
@@ -18,18 +18,18 @@ DEFAULT_HEAL_INTERVAL=60    # 1 minute when healing
 
 # POSIX compliant output (no colors in strict POSIX mode)
 log() {
-    printf "[Discovery] %s\n" "$*" >&2
-    printf "[%s] %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$DISCOVERY_LOG" 2>/dev/null || true
+    printf "[Scan] %s\n" "$*" >&2
+    printf "[%s] %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$SCAN_LOG" 2>/dev/null || true
 }
 
 warn() {
     printf "[Warning] %s\n" "$*" >&2
-    printf "[%s] WARNING: %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$DISCOVERY_LOG" 2>/dev/null || true
+    printf "[%s] WARNING: %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$SCAN_LOG" 2>/dev/null || true
 }
 
 error() {
     printf "[Error] %s\n" "$*" >&2
-    printf "[%s] ERROR: %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$DISCOVERY_LOG" 2>/dev/null || true
+    printf "[%s] ERROR: %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$SCAN_LOG" 2>/dev/null || true
 }
 
 info() {
@@ -37,17 +37,17 @@ info() {
 }
 
 # Create necessary directories (POSIX compliant)
-init_discovery() {
+init_scan() {
     # Use POSIX dirname
-    config_dir=$(dirname "$DISCOVERY_CONFIG")
-    state_dir=$(dirname "$DISCOVERY_STATE")
-    log_dir=$(dirname "$DISCOVERY_LOG")
+    config_dir=$(dirname "$SCAN_CONFIG")
+    state_dir=$(dirname "$SCAN_STATE")
+    log_dir=$(dirname "$SCAN_LOG")
     
     mkdir -p "$config_dir" "$state_dir" "$log_dir"
 }
 
-# Load discovery configuration (POSIX compliant JSON parsing)
-load_discovery_config() {
+# Load scan configuration (POSIX compliant JSON parsing)
+load_scan_config() {
     # First try to load from Access main config if domain not set
     ACCESS_CONFIG="${ACCESS_CONFIG:-$HOME/.config/access/config.json}"
     if [ -z "$DOMAIN" ] && [ -f "$ACCESS_CONFIG" ]; then
@@ -59,14 +59,14 @@ load_discovery_config() {
         fi
     fi
     
-    if [ -f "$DISCOVERY_CONFIG" ]; then
+    if [ -f "$SCAN_CONFIG" ]; then
         # POSIX compliant JSON extraction using sed
-        DOMAIN="${DOMAIN:-$(sed -n 's/.*"domain"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$DISCOVERY_CONFIG" 2>/dev/null)}"
-        HOST_PREFIX=$(sed -n 's/.*"host_prefix"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$DISCOVERY_CONFIG" 2>/dev/null)
-        DNS_KEY=$(sed -n 's/.*"dns_key"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$DISCOVERY_CONFIG" 2>/dev/null)
-        DNS_SECRET=$(sed -n 's/.*"dns_secret"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$DISCOVERY_CONFIG" 2>/dev/null)
-        DNS_PROVIDER=$(sed -n 's/.*"dns_provider"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$DISCOVERY_CONFIG" 2>/dev/null)
-        ENABLE_AUTO_SYNC=$(sed -n 's/.*"enable_auto_sync"[[:space:]]*:[[:space:]]*\([^,}]*\).*/\1/p' "$DISCOVERY_CONFIG" 2>/dev/null)
+        DOMAIN="${DOMAIN:-$(sed -n 's/.*"domain"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$SCAN_CONFIG" 2>/dev/null)}"
+        HOST_PREFIX=$(sed -n 's/.*"host_prefix"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$SCAN_CONFIG" 2>/dev/null)
+        DNS_KEY=$(sed -n 's/.*"dns_key"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$SCAN_CONFIG" 2>/dev/null)
+        DNS_SECRET=$(sed -n 's/.*"dns_secret"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$SCAN_CONFIG" 2>/dev/null)
+        DNS_PROVIDER=$(sed -n 's/.*"dns_provider"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$SCAN_CONFIG" 2>/dev/null)
+        ENABLE_AUTO_SYNC=$(sed -n 's/.*"enable_auto_sync"[[:space:]]*:[[:space:]]*\([^,}]*\).*/\1/p' "$SCAN_CONFIG" 2>/dev/null)
         
         # Set defaults if empty
         DOMAIN="${DOMAIN:-$DEFAULT_DOMAIN}"
@@ -83,8 +83,8 @@ load_discovery_config() {
     fi
 }
 
-# Save discovery configuration (POSIX compliant)
-save_discovery_config() {
+# Save scan configuration (POSIX compliant)
+save_scan_config() {
     # Create config with printf (POSIX)
     {
         printf '{\n'
@@ -96,9 +96,9 @@ save_discovery_config() {
         printf '    "enable_auto_sync": %s,\n' "$ENABLE_AUTO_SYNC"
         printf '    "last_updated": "%s"\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
         printf '}\n'
-    } > "$DISCOVERY_CONFIG"
+    } > "$SCAN_CONFIG"
     
-    chmod 600 "$DISCOVERY_CONFIG"
+    chmod 600 "$SCAN_CONFIG"
 }
 
 # POSIX compliant peer checking (no bash TCP, no nc dependency)
@@ -312,7 +312,7 @@ register_peer() {
             update_digitalocean_dns "$peer_host" "$public_ip"
             ;;
         *)
-            error "DNS provider '$DNS_PROVIDER' not supported for auto-discovery"
+            error "DNS provider '$DNS_PROVIDER' not supported for auto-scan"
             return 1
             ;;
     esac
@@ -327,7 +327,7 @@ register_peer() {
         printf '    "registered_at": "%s",\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
         printf '    "last_heartbeat": "%s"\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
         printf '}\n'
-    } > "$DISCOVERY_STATE"
+    } > "$SCAN_STATE"
     
     log "Successfully registered as $full_domain"
     return 0
@@ -371,8 +371,8 @@ monitor_and_heal() {
     log "Starting swarm monitoring and self-healing..."
     
     # Load our current state
-    if [ -f "$DISCOVERY_STATE" ]; then
-        current_slot=$(sed -n 's/.*"peer_slot"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' "$DISCOVERY_STATE" 2>/dev/null)
+    if [ -f "$SCAN_STATE" ]; then
+        current_slot=$(sed -n 's/.*"peer_slot"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' "$SCAN_STATE" 2>/dev/null)
         
         if [ -n "$current_slot" ]; then
             info "Currently registered as peer${current_slot}"
@@ -398,23 +398,23 @@ monitor_and_heal() {
             done
             
             # Update heartbeat (POSIX compliant sed)
-            temp_file="${DISCOVERY_STATE}.tmp"
-            sed "s/\"last_heartbeat\":.*/\"last_heartbeat\": \"$(date -u '+%Y-%m-%dT%H:%M:%SZ')\"/" "$DISCOVERY_STATE" > "$temp_file"
-            mv "$temp_file" "$DISCOVERY_STATE"
+            temp_file="${SCAN_STATE}.tmp"
+            sed "s/\"last_heartbeat\":.*/\"last_heartbeat\": \"$(date -u '+%Y-%m-%dT%H:%M:%SZ')\"/" "$SCAN_STATE" > "$temp_file"
+            mv "$temp_file" "$SCAN_STATE"
         fi
     else
-        warn "No current registration found. Running initial discovery..."
-        run_discovery
+        warn "No current registration found. Running initial scan..."
+        run_scan
     fi
 }
 
 # Interactive setup mode (POSIX compliant input)
 interactive_setup() {
     printf "\n"
-    printf "ACCESS NETWORK DISCOVERY SETUP\n"
+    printf "ACCESS NETWORK SCAN SETUP\n"
     printf "==================================\n"
     printf "\n"
-    printf "This will configure automatic peer discovery and self-healing\n"
+    printf "This will configure automatic peer scan and self-healing\n"
     printf "for the Access distributed network.\n"
     printf "\n"
     
@@ -430,13 +430,13 @@ interactive_setup() {
     
     # Auto-sync configuration
     printf "\n"
-    printf "Auto-sync network discovery will:\n"
+    printf "Auto-sync network scan will:\n"
     printf "  • Scan %s0.%s, %s1.%s, etc.\n" "$HOST_PREFIX" "$DOMAIN" "$HOST_PREFIX" "$DOMAIN"
     printf "  • Find the lowest available slot\n"
     printf "  • Automatically register this peer\n"
     printf "  • Self-heal by migrating to lower slots when available\n"
     printf "\n"
-    printf "Enable auto-sync network discovery? [Y/n]: "
+    printf "Enable auto-sync network scan? [Y/n]: "
     read -r enable_sync
     
     if [ "$enable_sync" != "n" ] && [ "$enable_sync" != "N" ]; then
@@ -481,18 +481,18 @@ interactive_setup() {
         esac
         
         # Save configuration
-        save_discovery_config
+        save_scan_config
         
-        # Run discovery
+        # Run scan
         printf "\n"
-        log "Starting network discovery..."
+        log "Starting network scan..."
         slot=$(find_lowest_available_slot)
         
         if [ -n "$slot" ]; then
             full_domain="${HOST_PREFIX}${slot}.${DOMAIN}"
             printf "\n"
             printf "======================================\n"
-            printf "  DISCOVERY RESULT\n"
+            printf "  SCAN RESULT\n"
             printf "======================================\n"
             printf "  Available slot: %d\n" "$slot"
             printf "  Full domain: %s\n" "$full_domain"
@@ -519,19 +519,19 @@ interactive_setup() {
         fi
     else
         ENABLE_AUTO_SYNC="false"
-        save_discovery_config
+        save_scan_config
         log "Auto-sync disabled. You can enable it later."
     fi
     
     printf "\n"
-    log "Discovery setup complete!"
+    log "Scan setup complete!"
 }
 
 # Non-interactive setup mode (POSIX compliant)
 non_interactive_setup() {
     # Use environment variables or defaults
-    DOMAIN="${ACCESS_DISCOVERY_DOMAIN:-$DEFAULT_DOMAIN}"
-    HOST_PREFIX="${ACCESS_DISCOVERY_PREFIX:-$DEFAULT_HOST_PREFIX}"
+    DOMAIN="${ACCESS_SCAN_DOMAIN:-$DEFAULT_DOMAIN}"
+    HOST_PREFIX="${ACCESS_SCAN_PREFIX:-$DEFAULT_HOST_PREFIX}"
     DNS_PROVIDER="${ACCESS_DNS_PROVIDER:-}"
     DNS_KEY="${ACCESS_DNS_KEY:-}"
     DNS_SECRET="${ACCESS_DNS_SECRET:-}"
@@ -544,9 +544,9 @@ non_interactive_setup() {
     fi
     
     ENABLE_AUTO_SYNC="true"
-    save_discovery_config
+    save_scan_config
     
-    log "Running automatic discovery..."
+    log "Running automatic scan..."
     log "Domain: $DOMAIN"
     log "Host prefix: $HOST_PREFIX"
     log "Provider: $DNS_PROVIDER"
@@ -568,10 +568,10 @@ non_interactive_setup() {
     fi
 }
 
-# Run discovery process (POSIX compliant)
-run_discovery() {
-    init_discovery
-    load_discovery_config
+# Run scan process (POSIX compliant)
+run_scan() {
+    init_scan
+    load_scan_config
     
     if [ "$ENABLE_AUTO_SYNC" = "true" ]; then
         slot=$(find_lowest_available_slot)
@@ -583,21 +583,21 @@ run_discovery() {
             return 1
         fi
     else
-        warn "Auto-sync is disabled. Run 'access discovery setup' to enable."
+        warn "Auto-sync is disabled. Run 'access scan setup' to enable."
         return 1
     fi
 }
 
 # Daemon mode for continuous monitoring (POSIX compliant)
 run_daemon() {
-    log "Starting discovery daemon..."
+    log "Starting scan daemon..."
     
     while true; do
         monitor_and_heal
         
         # Sleep interval (shorter if actively healing)
-        if [ -f "$DISCOVERY_STATE" ]; then
-            current_slot=$(sed -n 's/.*"peer_slot"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' "$DISCOVERY_STATE" 2>/dev/null)
+        if [ -f "$SCAN_STATE" ]; then
+            current_slot=$(sed -n 's/.*"peer_slot"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' "$SCAN_STATE" 2>/dev/null)
             if [ "$current_slot" -gt 0 ]; then
                 # Not in slot 0, check more frequently
                 sleep "$DEFAULT_HEAL_INTERVAL"
@@ -613,7 +613,7 @@ run_daemon() {
 
 # Main command handler (POSIX compliant)
 # Only run main logic if executed directly (not sourced)
-if [ "${0##*/}" = "discovery.sh" ] || [ "${0##*/}" = "access-discovery" ]; then
+if [ "${0##*/}" = "scan.sh" ] || [ "${0##*/}" = "access-scan" ]; then
     case "${1:-}" in
     setup)
         if [ -t 0 ]; then
@@ -623,7 +623,7 @@ if [ "${0##*/}" = "discovery.sh" ] || [ "${0##*/}" = "access-discovery" ]; then
         fi
         ;;
     discover)
-        run_discovery
+        run_scan
         ;;
     monitor)
         monitor_and_heal
@@ -632,14 +632,14 @@ if [ "${0##*/}" = "discovery.sh" ] || [ "${0##*/}" = "access-discovery" ]; then
         run_daemon
         ;;
     status)
-        if [ -f "$DISCOVERY_STATE" ]; then
-            cat "$DISCOVERY_STATE"
+        if [ -f "$SCAN_STATE" ]; then
+            cat "$SCAN_STATE"
         else
-            warn "No discovery state found. Run '$0 setup' first."
+            warn "No scan state found. Run '$0 setup' first."
         fi
         ;;
     *)
-        printf "Access Network Discovery Module (POSIX Compliant)\n"
+        printf "Access Network Scan Module (POSIX Compliant)\n"
         printf "\n"
         printf "Usage: %s {setup|discover|monitor|daemon|status}\n" "$0"
         printf "\n"
@@ -651,8 +651,8 @@ if [ "${0##*/}" = "discovery.sh" ] || [ "${0##*/}" = "access-discovery" ]; then
         printf "  status   - Show current peer registration status\n"
         printf "\n"
         printf "Environment variables for non-interactive mode:\n"
-        printf "  ACCESS_DISCOVERY_DOMAIN   - Main domain (from Access config)\n"
-        printf "  ACCESS_DISCOVERY_PREFIX   - Host prefix (default: peer)\n"
+        printf "  ACCESS_SCAN_DOMAIN   - Main domain (from Access config)\n"
+        printf "  ACCESS_SCAN_PREFIX   - Host prefix (default: peer)\n"
         printf "  ACCESS_DNS_PROVIDER      - DNS provider (godaddy|cloudflare|digitalocean)\n"
         printf "  ACCESS_DNS_KEY           - API key for DNS provider\n"
         printf "  ACCESS_DNS_SECRET        - API secret (if required)\n"
