@@ -25,29 +25,22 @@ provider_validate() {
     return 0
 }
 
-# Old interface for backwards compatibility
 provider_update() {
     local domain="$1"
     local host="${2:-@}"
     local ip="$3"
-    
-    # Detect record type based on IP format
-    local record_type="A"
-    if echo "$ip" | grep -q ':'; then
-        record_type="AAAA"
-    fi
-    
-    provider_update_record "$domain" "$host" "$ip" "$record_type"
-}
-
-# New abstracted interface - receives record type from abstraction layer
-provider_update_record() {
-    local domain="$1"
-    local host="${2:-@}"
-    local ip="$3"
-    local record_type="$4"
+    local record_type="${4:-}"  # Optional 4th parameter
     local key="${GODADDY_KEY}"
     local secret="${GODADDY_SECRET}"
+    
+    # Auto-detect record type if not provided (backwards compatibility)
+    if [ -z "$record_type" ]; then
+        if echo "$ip" | grep -q ':'; then
+            record_type="AAAA"
+        else
+            record_type="A"
+        fi
+    fi
     
     # Validate inputs
     if [ -z "$domain" ] || [ -z "$ip" ] || [ -z "$record_type" ]; then

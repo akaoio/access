@@ -98,11 +98,7 @@ load_provider() {
     # Verify required functions exist
     for func in provider_info provider_config provider_validate provider_update; do
         if ! command -v "$func" >/dev/null 2>&1; then
-            # Note: provider_update exists but command -v doesn't detect it properly
-            # Suppressing warning as function works correctly
-            if [ "$func" != "provider_update" ]; then
-                echo "Warning: Provider $provider_name missing function: $func" >&2
-            fi
+            echo "Warning: Provider $provider_name missing function: $func" >&2
         fi
     done
     
@@ -244,14 +240,9 @@ update_with_provider() {
     local record_type=$(get_record_type "$ip")
     echo "[$provider_name] Updating $record_type record for $host.$domain with IP: $ip"
     
-    # Check if provider supports record type abstraction
-    if command -v provider_update_record >/dev/null 2>&1; then
-        # New abstracted interface - provider handles record types
-        provider_update_record "$domain" "$host" "$ip" "$record_type"
-    else
-        # Legacy interface - pass raw IP, provider handles internally
-        provider_update "$domain" "$host" "$ip"
-    fi
+    # Call provider_update with optional 4th parameter for record type
+    # Providers can use it if provided, or auto-detect from IP if not
+    provider_update "$domain" "$host" "$ip" "$record_type"
 }
 
 # Test provider connectivity
