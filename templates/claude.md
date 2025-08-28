@@ -1,213 +1,94 @@
-# CLAUDE.md - @akaoio/access
+# CLAUDE.md - {{project.name}}
 
-This file provides guidance to Claude Code (claude.ai/code) when working with the @akaoio/access codebase.
+This file provides guidance to Claude Code (claude.ai/code) when working with the {{project.name}} codebase.
 
 ## Project Overview
 
-**@akaoio/access** - Pure POSIX shell implementation for automatic IP synchronization with multiple DNS providers
+**{{project.name}}** - {{project.description}}
 
-**Version**: 0.0.1  
-**License**: MIT  
-**Author**: AKAO Team  
-**Repository**: https://github.com/akaoio/access  
-**Philosophy**: "While languages come and go, shell is eternal."
+**Version**: {{project.version}}  
+**License**: {{project.license}}  
+**Author**: {{project.author}}  
+**Repository**: {{project.repository}}  
+**Philosophy**: "{{project.philosophy}}"
 
 ## Core Development Principles
 
+{{#each core_principles}}
+### {{this.title}}
+{{this.description}}
+{{#if this.critical}}
+**Critical**: true
+{{/if}}
 
-### Pure Shell Promise
-NEVER requires Node.js, Python, Go, Rust, NPM, pip, cargo, compilation, transpilation, or build steps. Only POSIX shell and provider CLIs.
-
-
-
-### Zero Dependencies Philosophy
-Uses only standard POSIX utilities (sh, curl/wget, dig/nslookup, cron) and provider-specific CLIs
-
-
-
-### Single Responsibility
-Does ONE thing extremely well - IP synchronization with DNS providers. No feature creep allowed.
-
-
-
-### Eternal Infrastructure
-Sits below all other infrastructure - when everything else fails, Access survives
-
-
-
+{{/each}}
 
 ## Architecture Overview
 
 ### System Design
 
-Access is designed as eternal infrastructure with multiple layers providing automatic DNS IP synchronization that works forever.
+{{architecture.overview}}
 
 ### Core Components
 
+{{#each architecture.components}}
+**{{this.name}}**
+- {{this.description}}
+- Responsibility: {{this.responsibility}}
 
+{{/each}}
 
 ## Features
 
+{{#each features}}
+### {{this.name}}
+{{this.description}}
 
-### 
-
-
-
-### 
-
-
-
-### 
-
-
-
+{{/each}}
 
 ## Command Interface
 
 ### Core Commands
 
 ```bash
-
-access ip  # Detect and display public IP
-
-access update  # Update DNS with current IP
-
-access daemon  # Run continuous updates (foreground)
-
-access config [provider] [options]  # Configure DNS provider
-
-access auto-update  # Check and install updates
-
-access discover  # Auto-discover available providers
-
-access providers  # List providers with descriptions
-
-access capabilities [provider]  # Show what a provider can do
-
-access suggest [domain]  # Suggest provider for your domain
-
-access health  # Check health of all providers
-
-access version  # Show version
-
-access help [command]  # Show help
-
+{{#each commands.subcommands}}
+{{this.usage}}  # {{this.description}}
+{{/each}}
 ```
 
 ### Detailed Command Reference
 
+{{#each commands.subcommands}}
+#### `{{this.name}}` Command
+**Purpose**: {{this.description}}  
+**Usage**: `{{this.usage}}`
 
-#### `ip` Command
-**Purpose**: Detect and display public IP  
-**Usage**: `access ip`
+{{#if this.options}}
+**Options**:
+{{#each this.options}}
+- `{{this.flag}}`: {{this.description}}{{#if this.default}} (default: {{this.default}}){{/if}}
+{{/each}}
+{{/if}}
 
+{{#if this.examples}}
+**Examples**:
+```bash
+{{#each this.examples}}
+{{this.command}}  # {{this.description}}
+{{/each}}
+```
+{{/if}}
 
-
-#### `update` Command
-**Purpose**: Update DNS with current IP  
-**Usage**: `access update`
-
-
-
-#### `daemon` Command
-**Purpose**: Run continuous updates (foreground)  
-**Usage**: `access daemon`
-
-
-
-#### `config` Command
-**Purpose**: Configure DNS provider  
-**Usage**: `access config [provider] [options]`
-
-
-
-#### `auto-update` Command
-**Purpose**: Check and install updates  
-**Usage**: `access auto-update`
-
-
-
-#### `discover` Command
-**Purpose**: Auto-discover available providers  
-**Usage**: `access discover`
-
-
-
-#### `providers` Command
-**Purpose**: List providers with descriptions  
-**Usage**: `access providers`
-
-
-
-#### `capabilities` Command
-**Purpose**: Show what a provider can do  
-**Usage**: `access capabilities [provider]`
-
-
-
-#### `suggest` Command
-**Purpose**: Suggest provider for your domain  
-**Usage**: `access suggest [domain]`
-
-
-
-#### `health` Command
-**Purpose**: Check health of all providers  
-**Usage**: `access health`
-
-
-
-#### `version` Command
-**Purpose**: Show version  
-**Usage**: `access version`
-
-
-
-#### `help` Command
-**Purpose**: Show help  
-**Usage**: `access help [command]`
-
-
-
-
-
-
-
-
+{{/each}}
 
 ## Environment Variables
 
+{{#each environment_variables}}
+### {{this.name}}
+- **Description**: {{this.description}}
+- **Default**: `{{this.default}}`
 
-### ACCESS_PROVIDER
-- **Description**: DNS provider to use
-- **Default**: ``
-
-
-### ACCESS_DOMAIN
-- **Description**: Domain to update
-- **Default**: ``
-
-
-### ACCESS_HOST
-- **Description**: Host record (@ for root)
-- **Default**: `@`
-
-
-### ACCESS_INTERVAL
-- **Description**: Update interval in seconds
-- **Default**: `300`
-
-
-### AUTO_UPDATE
-- **Description**: Enable auto-updates
-- **Default**: `false`
-
-
-### ACCESS_DRY_RUN
-- **Description**: Test mode without making changes
-- **Default**: `false`
-
-
+{{/each}}
 
 ## Development Guidelines
 
@@ -338,7 +219,9 @@ load_module "module-name" || {
 
 ## Use Cases
 
-
+{{#each use_cases}}
+### {{@index}}. {{this}}
+{{/each}}
 
 ## Security Considerations
 
@@ -428,15 +311,17 @@ When extending Manager:
 4. Add tests for new functionality
 5. Document in module header
 
-## 
+## {{why_manager.title}}
 
-
+{{why_manager.description}}
 
 ### Benefits
-
+{{#each why_manager.benefits}}
+- {{this}}
+{{/each}}
 
 ---
 
 *Manager is the foundation - bringing order to chaos through universal shell patterns.*
 
-*Version: 0.0.1 | License: MIT | Author: AKAO Team*
+*Version: {{project.version}} | License: {{project.license}} | Author: {{project.author}}*

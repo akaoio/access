@@ -7,6 +7,13 @@ set -e
 
 # Check if Manager framework is available
 check_manager() {
+    # For testing: use local modular manager
+    local script_dir="$(dirname "$0")"
+    if [ -f "$script_dir/manager.sh" ]; then
+        MANAGER_DIR="$script_dir"
+        return 0
+    fi
+    
     # Check if manager is in user's home (standard location)
     if [ -d "$HOME/manager" ]; then
         MANAGER_DIR="$HOME/manager"

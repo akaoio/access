@@ -1,0 +1,117 @@
+commands:
+  main:
+    name: "access"
+    description: "Pure POSIX shell DNS IP synchronization tool"
+    usage: "access [command] [options]"
+    
+  subcommands:
+    - name: "ip"
+      description: "Detect and display public IP"
+      usage: "access ip"
+      examples:
+        - command: "access ip"
+          description: "Show current public IP"
+        - command: "access ip --debug"
+          description: "Show IP with debug information"
+    
+    - name: "update"
+      description: "Update DNS with current IP"
+      usage: "access update"
+      examples:
+        - command: "access update"
+          description: "Update DNS records"
+        - command: "ACCESS_DRY_RUN=true access update"
+          description: "Test update without making changes"
+    
+    - name: "daemon"
+      description: "Run continuous updates (foreground)"
+      usage: "access daemon"
+      examples:
+        - command: "access daemon"
+          description: "Run in foreground with default interval"
+        - command: "ACCESS_INTERVAL=10 access daemon"
+          description: "Run with 10 second interval"
+    
+    - name: "config"
+      description: "Configure DNS provider"
+      usage: "access config [provider] [options]"
+      examples:
+        - command: "access config godaddy --key=KEY --secret=SECRET"
+          description: "Configure GoDaddy provider"
+        - command: "access config cloudflare --email=EMAIL --api-key=KEY"
+          description: "Configure Cloudflare provider"
+    
+    - name: "auto-update"
+      description: "Check and install updates"
+      usage: "access auto-update"
+      examples:
+        - command: "access auto-update"
+          description: "Check for and apply updates"
+    
+    - name: "discover"
+      description: "Auto-discover available providers"
+      usage: "access discover"
+      examples:
+        - command: "access discover"
+          description: "Scan for available DNS providers"
+    
+    - name: "providers"
+      description: "List providers with descriptions"
+      usage: "access providers"
+      examples:
+        - command: "access providers"
+          description: "Show all supported providers"
+    
+    - name: "capabilities"
+      description: "Show what a provider can do"
+      usage: "access capabilities [provider]"
+      examples:
+        - command: "access capabilities godaddy"
+          description: "Show GoDaddy capabilities"
+    
+    - name: "suggest"
+      description: "Suggest provider for your domain"
+      usage: "access suggest [domain]"
+      examples:
+        - command: "access suggest example.com"
+          description: "Get provider recommendation"
+    
+    - name: "health"
+      description: "Check health of all providers"
+      usage: "access health"
+      examples:
+        - command: "access health"
+          description: "Check provider connectivity"
+    
+    - name: "version"
+      description: "Show version"
+      usage: "access version"
+    
+    - name: "help"
+      description: "Show help"
+      usage: "access help [command]"
+
+environment_variables:
+  - name: "ACCESS_PROVIDER"
+    description: "DNS provider to use"
+    default: ""
+  
+  - name: "ACCESS_DOMAIN"
+    description: "Domain to update"
+    default: ""
+  
+  - name: "ACCESS_HOST"
+    description: "Host record (@ for root)"
+    default: "@"
+  
+  - name: "ACCESS_INTERVAL"
+    description: "Update interval in seconds"
+    default: "300"
+  
+  - name: "AUTO_UPDATE"
+    description: "Enable auto-updates"
+    default: "false"
+  
+  - name: "ACCESS_DRY_RUN"
+    description: "Test mode without making changes"
+    default: "false"
