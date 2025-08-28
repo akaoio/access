@@ -172,7 +172,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y curl dig dnsutils
 
-      - name: Test provider discovery
+      - name: Test provider scanning
         run: |
           # Test provider detection
           bash providers/test.sh

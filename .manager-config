@@ -5,7 +5,7 @@
 MAIN_SCRIPT="access.sh"
 
 # Additional files to copy during installation
-ADDITIONAL_FILES="providers.sh discovery.sh health.sh"
+ADDITIONAL_FILES="providers.sh scan.sh health.sh"
 
 # Legacy files to remove (cleanup)
 LEGACY_FILES="provider-agnostic.sh provider.sh health-server.sh"

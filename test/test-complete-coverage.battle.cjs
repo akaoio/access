@@ -521,7 +521,7 @@ suite.test('Provider Implementation', 'GCloud pure shell implementation', async 
 // PROVIDER-AGNOSTIC SYSTEM
 // ============================================================================
 
-suite.test('Provider-Agnostic', 'Auto-discovery works', async () => {
+suite.test('Provider-Agnostic', 'Auto-scan works', async () => {
     const content = await fs.readFile(TEST_CONFIG.providerPath, 'utf8');
     
     const functions = [

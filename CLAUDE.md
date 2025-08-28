@@ -86,7 +86,7 @@ Access is designed as eternal infrastructure with multiple layers:
 - Private/reserved IP filtering
 
 **Provider System**
-- Auto-agnostic discovery: Providers discovered at runtime
+- Auto-agnostic scanning: Providers discovered at runtime
 - Big Tech support: AWS Route53, Google Cloud DNS, Azure DNS
 - Traditional providers: GoDaddy, Cloudflare, DigitalOcean
 - Unified configuration interface
