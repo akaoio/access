@@ -1,10 +1,10 @@
 project:
   name: "@akaoio/access"
-  version: "0.0.1"
+  version: "0.0.3"
   license: "MIT"
   author: "AKAO Team"
   repository: "https://github.com/akaoio/access"
-  description: "Pure POSIX shell implementation for automatic IP synchronization with multiple DNS providers"
+  description: "Pure POSIX shell implementation for automatic IP synchronization with multiple DNS providers - The eternal foundation layer for network infrastructure"
   philosophy: "While languages come and go, shell is eternal."
   tagline: "Access is the eternal foundation - while applications come and go, Access ensures your DNS always points home."
 
@@ -26,28 +26,41 @@ core_principles:
     critical: true
 
 architecture:
-  overview: "Access is designed as eternal infrastructure with multiple layers providing automatic DNS IP synchronization that works forever."
+  overview: "Access is designed as eternal infrastructure with multiple layers providing automatic DNS IP synchronization that works forever. Version 0.0.3 introduces modular provider system with color logging and enhanced module organization."
+  
+  components:
+    - name: "Core Engine (access.sh)"
+      description: "Main orchestration engine with color logging and enhanced error handling"
+      responsibility: "Command processing, provider coordination, and system integration"
+    
+    - name: "Provider Modules (providers/)"
+      description: "Modular provider implementations for different DNS services"
+      responsibility: "DNS provider-specific operations with standardized interfaces"
+    
+    - name: "Shared Modules (modules/)"
+      description: "Common functionality shared across all providers"
+      responsibility: "Utility functions, IP detection, and configuration management"
   
   layers:
     - name: "USER INTERFACE"
-      description: "Simple command interface for all operations"
-      commands: ["access ip", "access update", "access config"]
+      description: "Simple command interface with color-coded output for all operations"
+      commands: ["access ip", "access update", "access config", "access providers"]
     
     - name: "PROVIDER SCANNING"
-      description: "Auto-agnostic runtime provider detection"
-      capability: "Discovers available providers without configuration"
+      description: "Auto-agnostic runtime provider detection with modular loading"
+      capability: "Discovers available providers dynamically from providers/ directory"
     
     - name: "PROVIDER ABSTRACTION"
-      description: "Unified interface for all DNS providers"
-      capability: "Consistent API across different provider types"
+      description: "Unified interface for all DNS providers with modular architecture"
+      capability: "Consistent API across different provider types with hot-swappable modules"
     
     - name: "IP DETECTION"
       description: "Multi-tier detection with DNS resolution and HTTP fallback chain"
-      capability: "Reliable IP detection even in degraded conditions"
+      capability: "Reliable IP detection even in degraded conditions with color status feedback"
     
     - name: "POSIX SHELL CORE"
-      description: "Pure /bin/sh with no external dependencies"
-      capability: "Runs on any Unix-like system forever"
+      description: "Pure /bin/sh with no external dependencies and enhanced modularity"
+      capability: "Runs on any Unix-like system forever with hot-loadable modules"
 
 providers:
   cloud:
@@ -83,6 +96,15 @@ providers:
       status: "✅ Supported"
 
 features:
+  - name: "Modular Provider Architecture"
+    description: "Hot-swappable provider modules in providers/ directory with standardized interfaces"
+  
+  - name: "Color-Coded Logging"
+    description: "Enhanced visual feedback with color-coded status messages and error reporting"
+  
+  - name: "Dynamic Module Loading"
+    description: "Runtime loading of provider and utility modules without restart"
+  
   - name: "Multi-Provider Support"
     description: "Works with major cloud providers and traditional DNS services"
   
@@ -90,7 +112,7 @@ features:
     description: "Reliable multi-tier IP detection with DNS and HTTP fallbacks"
   
   - name: "Provider Discovery"
-    description: "Auto-discover available providers at runtime"
+    description: "Auto-discover available providers at runtime from modular directory structure"
   
   - name: "XDG Compliance"
     description: "Follows XDG Base Directory specification for configuration"

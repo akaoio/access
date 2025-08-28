@@ -1,22 +1,22 @@
 #!/bin/sh
-# Access Uninstaller - Powered by Manager Framework
-# Manager handles ALL the shit: services, cron, binaries, configs, everything
+# Access Uninstaller - Powered by Stacker Framework
+# Stacker handles ALL the shit: services, cron, binaries, configs, everything
 
 set -e
 
-# Find and load Manager - it's strong enough to handle this
+# Find and load Stacker - it's strong enough to handle this
 if [ -f "$HOME/manager/manager.sh" ]; then
     . "$HOME/manager/manager.sh"
 elif [ -f "/usr/local/lib/manager/manager.sh" ]; then
     . "/usr/local/lib/manager/manager.sh"
 else
-    echo "ERROR: Manager framework not found!"
-    echo "Manager is required for proper uninstallation."
+    echo "ERROR: Stacker framework not found!"
+    echo "Stacker is required for proper uninstallation."
     echo ""
-    echo "Install Manager first:"
+    echo "Install Stacker first:"
     echo "  git clone https://github.com/akaoio/manager.git ~/manager"
     echo ""
-    echo "Manager handles all aspects of uninstallation properly."
+    echo "Stacker handles all aspects of uninstallation properly."
     exit 1
 fi
 
@@ -41,14 +41,14 @@ if [ "$1" != "--force" ] && [ "$1" != "-f" ]; then
     fi
 fi
 
-# Initialize Manager for Access
-manager_init "access" \
+# Initialize Stacker for Access
+stacker_init "access" \
              "https://github.com/akaoio/access.git" \
              "access.sh" \
              "Dynamic DNS IP Synchronization"
 
-# Let Manager handle ALL the shit - it's strong enough!
-manager_log "Manager will now handle complete removal of Access..."
+# Let Stacker handle ALL the shit - it's strong enough!
+stacker_log "Stacker will now handle complete removal of Access..."
 
 # Parse options
 UNINSTALL_OPTS=""
@@ -56,16 +56,16 @@ for arg in "$@"; do
     case "$arg" in
         --keep-config)
             UNINSTALL_OPTS="$UNINSTALL_OPTS --keep-config"
-            manager_log "Keeping configuration files (API keys preserved)"
+            stacker_log "Keeping configuration files (API keys preserved)"
             ;;
         --keep-data)
             UNINSTALL_OPTS="$UNINSTALL_OPTS --keep-data"
-            manager_log "Keeping data and log files"
+            stacker_log "Keeping data and log files"
             ;;
     esac
 done
 
-# Manager handles everything:
+# Stacker handles everything:
 # - Stops and removes systemd services (system AND user)
 # - Removes cron jobs
 # - Deletes binaries from all locations
@@ -73,10 +73,10 @@ done
 # - Removes data and logs (unless --keep-data)
 # - Handles both root and non-root installations
 # - Cleans up symlinks
-# - Updates the Manager registry
+# - Updates the Stacker registry
 
-manager_uninstall $UNINSTALL_OPTS || {
-    manager_error "Uninstallation failed!"
+stacker_uninstall $UNINSTALL_OPTS || {
+    stacker_error "Uninstallation failed!"
     exit 1
 }
 
@@ -88,8 +88,8 @@ echo ""
 echo "Thank you for using Access!"
 echo ""
 
-# Final note about Manager
+# Final note about Stacker
 if [ -z "$UNINSTALL_OPTS" ]; then
     echo "Note: All Access files have been removed."
-    echo "Manager framework remains installed for other tools."
+    echo "Stacker framework remains installed for other tools."
 fi

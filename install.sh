@@ -1,74 +1,94 @@
 #!/bin/sh
-# Access installation using Manager framework
-# This replaces the complex install.sh with standardized Manager patterns
+# Access installation using Stacker framework
+# This replaces the complex install.sh with standardized Stacker patterns
 
 set -e
 
 
-# Check if Manager framework is available
-check_manager() {
+# Check if Stacker framework is available
+check_stacker() {
     # For testing: use local modular manager
     local script_dir="$(dirname "$0")"
-    if [ -f "$script_dir/manager.sh" ]; then
-        MANAGER_DIR="$script_dir"
+    if [ -f "$script_dir/stacker.sh" ]; then
+        STACKER_DIR="$script_dir"
         return 0
     fi
     
     # Check if manager is in user's home (standard location)
-    if [ -d "$HOME/manager" ]; then
-        MANAGER_DIR="$HOME/manager"
+    if [ -d "$HOME/stacker" ]; then
+        STACKER_DIR="$HOME/stacker"
         return 0
     fi
     
     # Check if manager is installed in the system
-    if [ -d "/usr/local/lib/manager" ]; then
-        MANAGER_DIR="/usr/local/lib/manager"
+    if [ -d "/usr/local/lib/stacker" ]; then
+        STACKER_DIR="/usr/local/lib/stacker"
         return 0
     fi
     
-    # Manager not found - need to clone it
-    echo "Manager framework not found. Installing..."
-    git clone https://github.com/akaoio/manager.git "$HOME/manager" || {
-        echo "Failed to install Manager framework"
+    # Stacker not found - need to clone it
+    echo "Stacker framework not found. Installing..."
+    git clone https://github.com/akaoio/manager.git "$HOME/stacker" || {
+        echo "Failed to install Stacker framework"
         exit 1
     }
-    MANAGER_DIR="$HOME/manager"
-    echo "Manager framework installed successfully at $HOME/manager"
+    STACKER_DIR="$HOME/stacker"
+    echo "Stacker framework installed successfully at $HOME/stacker"
 }
 
-# Load Manager framework
-check_manager
-. "$MANAGER_DIR/manager.sh"
+# Load Stacker framework
+check_stacker
+. "$STACKER_DIR/stacker.sh"
 
 # Display header
-manager_header() {
+stacker_header() {
     echo "=================================================="
     echo "  Access - Dynamic DNS IP Synchronization v2.1.0"
-    echo "  Pure Shell | Multi-Provider | Manager-Powered"
+    echo "  Pure Shell | Multi-Provider | Stacker-Powered"
     echo "=================================================="
     echo ""
 }
 
 # Interactive prompts for user preferences
 interactive_setup() {
-    manager_log "Welcome to Access installation!"
+    stacker_log "Welcome to Access installation!"
     echo ""
     
     # Ask about automation method
-    echo "How would you like Access to run?"
-    echo "  1) Systemd service (recommended for servers)"
-    echo "  2) Cron job (recommended for personal use)"
-    echo "  3) Both (redundant automation - most reliable)"
-    echo "  4) Manual only (no automation)"
-    printf "Choice (1-4): "
+    echo "Access will be installed with REDUNDANT AUTOMATION (both systemd + cron)"
+    echo "This ensures maximum reliability - if one method fails, the other continues."
+    echo ""
+    echo "Default setup:"
+    echo "  ✓ Systemd service (immediate start, system integration)"
+    echo "  ✓ Cron job (backup automation, survives system changes)"
+    echo ""
+    printf "Continue with redundant automation? (Y/n): "
     read -r automation_choice
     
     case "$automation_choice" in
-        1) USE_SERVICE=true ;;
-        2) USE_CRON=true ;;
-        3) USE_SERVICE=true; USE_CRON=true ;;
-        4) ;;
-        *) manager_warn "Invalid choice, defaulting to cron"; USE_CRON=true ;;
+        [nN]|[nN][oO])
+            echo ""
+            echo "Manual automation selection:"
+            echo "  1) Systemd service only"
+            echo "  2) Cron job only"
+            echo "  3) Both (redundant - recommended)"
+            echo "  4) Manual only (no automation)"
+            printf "Choice (1-4): "
+            read -r manual_choice
+            
+            case "$manual_choice" in
+                1) USE_SERVICE=true ;;
+                2) USE_CRON=true ;;
+                3) USE_SERVICE=true; USE_CRON=true ;;
+                4) ;;
+                *) stacker_warn "Invalid choice, using redundant automation"; USE_SERVICE=true; USE_CRON=true ;;
+            esac
+            ;;
+        *)
+            # Default: redundant automation (both service and cron)
+            USE_SERVICE=true
+            USE_CRON=true
+            ;;
     esac
     
     # Ask about cron interval if using cron
@@ -100,7 +120,7 @@ interactive_setup() {
     esac
     
     echo ""
-    manager_log "Configuration complete!"
+    stacker_log "Configuration complete!"
     
     # Show summary of choices
     echo ""
@@ -125,7 +145,7 @@ interactive_setup() {
     read -r confirm
     case "$confirm" in
         [nN]|[nN][oO]) 
-            manager_log "Installation cancelled by user"
+            stacker_log "Installation cancelled by user"
             exit 0
             ;;
     esac
@@ -133,20 +153,21 @@ interactive_setup() {
 
 # Main installation
 main() {
-    manager_header
+    stacker_header
     
-    # Initialize Manager for Access
-    manager_init "access" \
+    # Initialize Stacker for Access
+    stacker_init "access" \
                  "https://github.com/akaoio/access.git" \
                  "access.sh" \
                  "Dynamic DNS IP Synchronization"
     
-    # Create XDG-compliant directory structure using Manager
-    manager_create_xdg_dirs
+    # Create XDG-compliant directory structure using Stacker
+    stacker_create_xdg_dirs
     
     # Parse command line arguments
-    USE_SERVICE=false
-    USE_CRON=false
+    # DEFAULT: Redundant automation (both systemd service and cron)
+    USE_SERVICE=true
+    USE_CRON=true
     USE_REDUNDANT=false
     USE_AUTO_UPDATE=false
     USE_SCAN=false
@@ -156,12 +177,30 @@ main() {
     
     for arg in "$@"; do
         case "$arg" in
+            --service-only|--systemd-only)
+                # Override default: systemd only
+                USE_SERVICE=true
+                USE_CRON=false
+                INTERACTIVE=false
+                ;;
             --service|--systemd)
                 USE_SERVICE=true
                 INTERACTIVE=false
                 ;;
+            --cron-only)
+                # Override default: cron only
+                USE_SERVICE=false
+                USE_CRON=true
+                INTERACTIVE=false
+                ;;
             --cron)
                 USE_CRON=true
+                INTERACTIVE=false
+                ;;
+            --manual-only|--no-automation)
+                # Override default: no automation
+                USE_SERVICE=false
+                USE_CRON=false
                 INTERACTIVE=false
                 ;;
             --auto-update)
@@ -188,7 +227,7 @@ main() {
                 SHOW_HELP=true
                 ;;
             *)
-                manager_warn "Unknown option: $arg"
+                stacker_warn "Unknown option: $arg"
                 ;;
         esac
     done
@@ -200,29 +239,39 @@ main() {
     
     if [ "$SHOW_HELP" = true ]; then
         cat << 'EOF'
-Access Installation - Manager Framework Edition
+Access Installation - Stacker Framework Edition
 
-Options:
-  --service       Setup systemd service (system or user level)
-  --cron          Setup cron job for periodic updates
+DEFAULT BEHAVIOR:
+  Access installs with REDUNDANT AUTOMATION by default (both systemd + cron)
+  This ensures maximum reliability - if one method fails, the other continues.
+
+Automation Options:
+  --service       Setup systemd service (adds to default)
+  --cron          Setup cron job (adds to default)
+  --service-only  Systemd service ONLY (overrides default)
+  --cron-only     Cron job ONLY (overrides default)
+  --manual-only   No automation (overrides default)
   --interval=N    Cron interval in minutes (default: 5)
-  --redundant     Both service and cron (recommended)
-  --scan     Enable network scan for swarm mode
+  --redundant     Explicit redundant automation (same as default)
+
+Additional Options:
+  --scan          Enable network scan for swarm mode
   --auto-update   Enable weekly auto-updates
-  --non-interactive Skip interactive prompts (use with other options)
+  --non-interactive Skip interactive prompts
   --help          Show this help
 
 Interactive Mode:
-  Run without options for interactive setup with guided prompts
+  Run without options for default redundant automation with prompts
 
 Examples:
-  ./install.sh                    # Interactive setup (recommended)
-  ./install.sh --redundant --auto-update
-  ./install.sh --service --scan
-  ./install.sh --cron --interval=10
-  ./install.sh --non-interactive --cron  # Non-interactive with defaults
+  ./install.sh                    # Default: systemd + cron with prompts
+  ./install.sh --non-interactive  # Default: systemd + cron without prompts
+  ./install.sh --service-only     # Systemd service only
+  ./install.sh --cron-only --interval=10  # Cron every 10 minutes only
+  ./install.sh --manual-only      # No automation
+  ./install.sh --auto-update      # Default + auto-updates
 
-The Manager framework handles:
+The Stacker framework handles:
   ✓ XDG-compliant directory creation
   ✓ Clean clone architecture
   ✓ Automatic sudo/non-sudo detection
@@ -235,9 +284,9 @@ EOF
         exit 0
     fi
     
-    # Handle redundant automation setup using Manager
+    # Handle redundant automation setup using Stacker
     if [ "$USE_REDUNDANT" = true ]; then
-        # Manager's built-in redundant automation (both systemd + cron)
+        # Stacker's built-in redundant automation (both systemd + cron)
         INSTALL_ARGS="--redundant"
     else
         # Build installation arguments for single automation
@@ -247,29 +296,29 @@ EOF
         
         # Default to cron if nothing specified
         if [ "$USE_SERVICE" = false ] && [ "$USE_CRON" = false ] && [ "$USE_REDUNDANT" = false ]; then
-            manager_log "No automation specified, defaulting to cron job"
+            stacker_log "No automation specified, defaulting to cron job"
             INSTALL_ARGS="--cron"
         fi
     fi
     
-    # Add auto-update if requested (Manager handles this)
+    # Add auto-update if requested (Stacker handles this)
     [ "$USE_AUTO_UPDATE" = true ] && INSTALL_ARGS="$INSTALL_ARGS --auto-update"
     
-    # Check and install dependencies using Manager
-    manager_log "Checking system dependencies..."
-    manager_check_requirements "curl" "curl" || manager_auto_install_deps "curl"
-    manager_check_requirements "dig" "bind-utils dnsutils" || manager_auto_install_deps "bind-utils dnsutils"
+    # Check and install dependencies using Stacker
+    stacker_log "Checking system dependencies..."
+    stacker_check_requirements "curl" "curl" || stacker_auto_install_deps "curl"
+    stacker_check_requirements "dig" "bind-utils dnsutils" || stacker_auto_install_deps "bind-utils dnsutils"
     
-    # Run Manager installation (uses .manager-config automatically)
-    manager_log "Installing Access with Manager framework..."
-    manager_install $INSTALL_ARGS || {
-        manager_error "Installation failed"
+    # Run Stacker installation (uses .stacker-config automatically)
+    stacker_log "Installing Access with Stacker framework..."
+    stacker_install $INSTALL_ARGS || {
+        stacker_error "Installation failed"
         exit 1
     }
     
-    # Verify installation using Manager
-    manager_verify_installation || {
-        manager_warn "Installation verification failed - please check manually"
+    # Verify installation using Stacker
+    stacker_verify_installation || {
+        stacker_warn "Installation verification failed - please check manually"
     }
     
     # Handle Access-specific features
@@ -277,25 +326,25 @@ EOF
         setup_network_scan
     fi
     
-    # Setup Access configuration using Manager's config management
+    # Setup Access configuration using Stacker's config management
     setup_access_config
     
     # Check for updates immediately after installation
-    manager_check_updates || true
+    stacker_check_updates || true
     
     # Show completion summary
     show_summary
 }
 
-# Setup network scan (simplified - files already installed by Manager)
+# Setup network scan (simplified - files already installed by Stacker)
 setup_network_scan() {
-    manager_log "Network scan enabled via Manager framework"
+    stacker_log "Network scan enabled via Stacker framework"
     
-    # Scan.sh is automatically installed by Manager via .manager-config
+    # Scan.sh is automatically installed by Stacker via .stacker-config
     # Just notify user that it's available
-    if [ -x "$MANAGER_INSTALL_DIR/scan" ]; then
-        manager_log "✓ Network scan available"
-        manager_log "  Command: scan"
+    if [ -x "$STACKER_INSTALL_DIR/scan" ]; then
+        stacker_log "✓ Network scan available"
+        stacker_log "  Command: scan"
     fi
     
     # Setup scan service if using systemd
@@ -306,36 +355,62 @@ setup_network_scan() {
 
 # Setup scan service
 setup_scan_service() {
-    manager_log "Creating scan service..."
+    stacker_log "Creating scan service..."
     
-    # For now, just log that scan service would be created
-    # TODO: Implement proper scan service integration with Manager
-    manager_log "✓ Scan service setup placeholder"
-    manager_log "  Note: Scan runs alongside main Access service"
+    # Configure scan service integration with Stacker framework
+    if [ -f "./scan.sh" ]; then
+        stacker_log "✓ Scan service integrated with Access"
+        stacker_log "  Note: Scan runs alongside main Access service"
+        
+        # Ensure scan.sh is executable
+        chmod +x ./scan.sh
+        
+        # Create scan service script if systemd installation
+        if [ "$install_method" = "systemd" ]; then
+            cat > "$STACKER_CONFIG_DIR/access-scan.service" << EOF
+[Unit]
+Description=Access Network Scanner
+After=access.service
+Requires=access.service
+
+[Service]
+Type=simple
+ExecStart=$(pwd)/scan.sh --daemon
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+            stacker_log "✓ Scan service configuration created"
+        fi
+    else
+        stacker_log "✓ Scan service not found, skipping integration"
+    fi
 }
 
-# Setup Access configuration using Manager's config management
+# Setup Access configuration using Stacker's config management
 setup_access_config() {
-    manager_log "Setting up Access configuration..."
+    stacker_log "Setting up Access configuration..."
     
-    # Use Manager's configuration management functions
-    manager_load_config || {
+    # Use Stacker's configuration management functions
+    stacker_load_config || {
         # No existing config, create default
-        manager_create_default_config || true
-        manager_log "  Please run: access config <provider> --key=KEY --domain=DOMAIN"
+        stacker_create_default_config || true
+        stacker_log "  Please run: access config <provider> --key=KEY --domain=DOMAIN"
     }
     
     # Load any environment variable overrides
-    manager_load_env_overrides
+    stacker_load_env_overrides
     
     # Check if provider is configured
-    if manager_get_config "provider" >/dev/null 2>&1; then
-        local provider=$(manager_get_config "provider")
-        local domain=$(manager_get_config "domain")
-        manager_log "✓ Existing configuration preserved"
-        manager_log "  Provider: $provider, Domain: $domain"
+    if stacker_get_config "provider" >/dev/null 2>&1; then
+        local provider=$(stacker_get_config "provider")
+        local domain=$(stacker_get_config "domain")
+        stacker_log "✓ Existing configuration preserved"
+        stacker_log "  Provider: $provider, Domain: $domain"
     else
-        manager_log "  Configuration required: access config <provider> --key=KEY --domain=DOMAIN"
+        stacker_log "  Configuration required: access config <provider> --key=KEY --domain=DOMAIN"
     fi
 }
 
@@ -343,11 +418,11 @@ setup_access_config() {
 show_summary() {
     echo ""
     echo "=================================================="
-    echo "  Access Installation Complete (Manager-Powered)"
+    echo "  Access Installation Complete (Stacker-Powered)"
     echo "=================================================="
     echo ""
     
-    echo "📁 File Locations (XDG Compliant via Manager):"
+    echo "📁 File Locations (XDG Compliant via Stacker):"
     echo "   Config:      ~/.config/access/config.json"
     echo "   Data & Logs: ~/.local/share/access/"
     echo "   State Files: ~/.local/state/access/"
@@ -360,8 +435,8 @@ show_summary() {
     echo "   access update          # Update DNS immediately"
     echo ""
     
-    # Use Manager's built-in service command display
-    manager_status || true
+    # Use Stacker's built-in service command display
+    stacker_status || true
     
     # Show additional commands based on what was installed
     echo "📝 Management Commands:"
@@ -379,7 +454,7 @@ show_summary() {
         echo ""
     fi
     
-    echo "Manager Framework Benefits:"
+    echo "Stacker Framework Benefits:"
     echo "  ✓ Standardized installation across AKAO ecosystem"
     echo "  ✓ Automatic sudo/non-sudo detection"
     echo "  ✓ XDG-compliant directory structure"
@@ -388,7 +463,7 @@ show_summary() {
     echo "  ✓ Built-in auto-update system"
     echo ""
     
-    manager_log "Access is ready!"
+    stacker_log "Access is ready!"
 }
 
 # Run main installation

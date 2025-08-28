@@ -1,89 +1,93 @@
 #!/bin/sh
-# @akaoio/manager - Universal Shell Framework
-# MODULAR VERSION - Loads only required modules on-demand
+# @akaoio/access - Stacker Framework Integration
+# Redirects to main Stacker cortex for universal shell framework
 
-# Framework version
-MANAGER_VERSION="2.0.0"
+# Main Stacker directory (always use the central cortex)
+MAIN_STACKER_DIR="/home/x/core/projects/stacker"
 
-# Framework directory detection
-if [ -z "$MANAGER_DIR" ]; then
-    MANAGER_DIR="$(dirname "$0")"
+# Verify main Stacker exists
+if [ ! -f "$MAIN_STACKER_DIR/stacker.sh" ]; then
+    echo "FATAL: Main Stacker cortex not found at $MAIN_STACKER_DIR" >&2
+    exit 1
 fi
 
-# Load the module loading system first
-. "$MANAGER_DIR/manager-loader.sh" || {
-    echo "FATAL: Cannot load module loader" >&2
+# Set STACKER_DIR to point to main cortex before sourcing
+export STACKER_DIR="$MAIN_STACKER_DIR"
+
+# Source the main Stacker framework
+. "$MAIN_STACKER_DIR/stacker.sh" || {
+    echo "FATAL: Cannot load main Stacker framework" >&2
     exit 1
 }
 
 # Initialize the loader (loads core module)
-manager_loader_init || {
+stacker_loader_init || {
     echo "FATAL: Cannot initialize module loader" >&2
     exit 1
 }
 
 # Global configuration variables
-MANAGER_TECH_NAME=""
-MANAGER_REPO_URL=""
-MANAGER_MAIN_SCRIPT=""
-MANAGER_SERVICE_DESCRIPTION=""
+STACKER_TECH_NAME=""
+STACKER_REPO_URL=""
+STACKER_MAIN_SCRIPT=""
+STACKER_SERVICE_DESCRIPTION=""
 
 # Auto-detect best installation directory
 if [ -n "$INSTALL_DIR" ]; then
     # User specified directory
-    MANAGER_INSTALL_DIR="$INSTALL_DIR"
+    STACKER_INSTALL_DIR="$INSTALL_DIR"
 elif [ -n "$FORCE_USER_INSTALL" ] || [ "$FORCE_USER_INSTALL" = "1" ]; then
     # Force user installation
-    MANAGER_INSTALL_DIR="$HOME/.local/bin"
+    STACKER_INSTALL_DIR="$HOME/.local/bin"
     # Ensure directory exists
-    mkdir -p "$MANAGER_INSTALL_DIR"
+    mkdir -p "$STACKER_INSTALL_DIR"
 elif [ -w "/usr/local/bin" ] && [ -z "$NO_SUDO" ] && sudo -n true 2>/dev/null; then
     # System installation (sudo available and not disabled)
-    MANAGER_INSTALL_DIR="/usr/local/bin"
+    STACKER_INSTALL_DIR="/usr/local/bin"
 else
     # User installation (no sudo or disabled)
-    MANAGER_INSTALL_DIR="$HOME/.local/bin"
+    STACKER_INSTALL_DIR="$HOME/.local/bin"
     # Ensure directory exists
-    mkdir -p "$MANAGER_INSTALL_DIR"
+    mkdir -p "$STACKER_INSTALL_DIR"
 fi
 
-MANAGER_HOME_DIR="$HOME"
+STACKER_HOME_DIR="$HOME"
 
 # Initialize manager framework for a technology
-# Usage: manager_init "tech_name" "repo_url" "main_script" ["service_description"]
-manager_init() {
+# Usage: stacker_init "tech_name" "repo_url" "main_script" ["service_description"]
+stacker_init() {
     local tech_name="$1"
     local repo_url="$2"  
     local main_script="$3"
     local service_desc="${4:-$tech_name service}"
     
     if [ -z "$tech_name" ] || [ -z "$repo_url" ] || [ -z "$main_script" ]; then
-        manager_error "manager_init requires: tech_name, repo_url, main_script"
+        stacker_error "stacker_init requires: tech_name, repo_url, main_script"
         return 1
     fi
     
-    MANAGER_TECH_NAME="$tech_name"
-    MANAGER_REPO_URL="$repo_url"
-    MANAGER_MAIN_SCRIPT="$main_script"
-    MANAGER_SERVICE_DESCRIPTION="$service_desc"
+    STACKER_TECH_NAME="$tech_name"
+    STACKER_REPO_URL="$repo_url"
+    STACKER_MAIN_SCRIPT="$main_script"
+    STACKER_SERVICE_DESCRIPTION="$service_desc"
     
     # Set derived paths
-    MANAGER_CLEAN_CLONE_DIR="$MANAGER_HOME_DIR/$tech_name"
-    MANAGER_CONFIG_DIR="$MANAGER_HOME_DIR/.config/$tech_name"
-    MANAGER_DATA_DIR="$MANAGER_HOME_DIR/.local/share/$tech_name"
-    MANAGER_STATE_DIR="$MANAGER_HOME_DIR/.local/state/$tech_name"
+    STACKER_CLEAN_CLONE_DIR="$STACKER_HOME_DIR/$tech_name"
+    STACKER_CONFIG_DIR="$STACKER_HOME_DIR/.config/$tech_name"
+    STACKER_DATA_DIR="$STACKER_HOME_DIR/.local/share/$tech_name"
+    STACKER_STATE_DIR="$STACKER_HOME_DIR/.local/state/$tech_name"
     
     # Log installation mode
-    if [ "$MANAGER_INSTALL_DIR" = "/usr/local/bin" ]; then
-        manager_log "Initialized for $tech_name (system installation)"
+    if [ "$STACKER_INSTALL_DIR" = "/usr/local/bin" ]; then
+        stacker_log "Initialized for $tech_name (system installation)"
     else
-        manager_log "Initialized for $tech_name (user installation: $MANAGER_INSTALL_DIR)"
+        stacker_log "Initialized for $tech_name (user installation: $STACKER_INSTALL_DIR)"
         # Check PATH
         case ":$PATH:" in
-            *":$MANAGER_INSTALL_DIR:"*)
+            *":$STACKER_INSTALL_DIR:"*)
                 ;;
             *)
-                manager_warn "Add to PATH: export PATH=\"$MANAGER_INSTALL_DIR:\$PATH\""
+                stacker_warn "Add to PATH: export PATH=\"$STACKER_INSTALL_DIR:\$PATH\""
                 ;;
         esac
     fi
@@ -91,8 +95,8 @@ manager_init() {
 }
 
 # Complete installation workflow with modular loading
-# Usage: manager_install [--service] [--cron] [--auto-update] [--interval=N]
-manager_install() {
+# Usage: stacker_install [--service] [--cron] [--auto-update] [--interval=N]
+stacker_install() {
     local use_service=false
     local use_cron=false  
     local use_auto_update=false
@@ -119,80 +123,80 @@ manager_install() {
                 use_cron=true
                 ;;
             *)
-                manager_warn "Unknown install option: $1"
+                stacker_warn "Unknown install option: $1"
                 ;;
         esac
         shift
     done
     
     # Validate initialization
-    if [ -z "$MANAGER_TECH_NAME" ]; then
-        manager_error "Manager not initialized. Call manager_init first."
+    if [ -z "$STACKER_TECH_NAME" ]; then
+        stacker_error "Stacker not initialized. Call stacker_init first."
         return 1
     fi
     
-    manager_log "Starting installation of $MANAGER_TECH_NAME..."
+    stacker_log "Starting installation of $STACKER_TECH_NAME..."
     
     # Load required modules for installation
-    manager_require "config install" || return 1
+    stacker_require "config install" || return 1
     
     # Core installation steps
-    manager_check_requirements || return 1
-    manager_create_xdg_dirs || return 1  
-    manager_create_clean_clone || return 1
-    manager_install_from_clone || return 1
+    stacker_check_requirements || return 1
+    stacker_create_xdg_dirs || return 1  
+    stacker_create_clean_clone || return 1
+    stacker_install_from_clone || return 1
     
     # Optional components - load service module if needed
     if [ "$use_service" = true ] || [ "$use_cron" = true ]; then
-        manager_require "service" || return 1
+        stacker_require "service" || return 1
     fi
     
     if [ "$use_service" = true ]; then
-        manager_setup_systemd_service || manager_warn "Failed to setup systemd service"
+        stacker_setup_systemd_service || stacker_warn "Failed to setup systemd service"
     fi
     
     if [ "$use_cron" = true ]; then
-        manager_setup_cron_job "$cron_interval" || manager_warn "Failed to setup cron job"
+        stacker_setup_cron_job "$cron_interval" || stacker_warn "Failed to setup cron job"
     fi
     
     if [ "$use_auto_update" = true ]; then
         # Load update module for auto-update
-        manager_require "update" || return 1
-        manager_setup_auto_update || manager_warn "Failed to setup auto-update"
+        stacker_require "update" || return 1
+        stacker_setup_auto_update || stacker_warn "Failed to setup auto-update"
     fi
     
-    manager_log "Installation of $MANAGER_TECH_NAME completed successfully"
+    stacker_log "Installation of $STACKER_TECH_NAME completed successfully"
     return 0
 }
 
 # Setup services (systemd + optional cron backup) with modular loading
-# Usage: manager_setup_service [interval_minutes]
-manager_setup_service() {
+# Usage: stacker_setup_service [interval_minutes]
+stacker_setup_service() {
     local interval="${1:-5}"
     
-    if [ -z "$MANAGER_TECH_NAME" ]; then
-        manager_error "Manager not initialized"
+    if [ -z "$STACKER_TECH_NAME" ]; then
+        stacker_error "Stacker not initialized"
         return 1
     fi
     
     # Load service module
-    manager_require "service" || return 1
+    stacker_require "service" || return 1
     
-    manager_log "Setting up service management for $MANAGER_TECH_NAME..."
+    stacker_log "Setting up service management for $STACKER_TECH_NAME..."
     
     # Try systemd first
-    if manager_setup_systemd_service; then
-        manager_log "Systemd service configured successfully"
+    if stacker_setup_systemd_service; then
+        stacker_log "Systemd service configured successfully"
         
         # Add cron backup if available
         if command -v crontab >/dev/null 2>&1; then
-            manager_log "Adding cron backup (redundant automation)"
-            manager_setup_cron_job "$interval"
+            stacker_log "Adding cron backup (redundant automation)"
+            stacker_setup_cron_job "$interval"
         fi
-    elif manager_setup_cron_job "$interval"; then
-        manager_log "Cron job configured successfully (systemd not available)"
+    elif stacker_setup_cron_job "$interval"; then
+        stacker_log "Cron job configured successfully (systemd not available)"
     else
-        manager_error "Failed to setup both systemd and cron"
+        stacker_error "Failed to setup both systemd and cron"
         return 1
     fi
     
@@ -200,8 +204,8 @@ manager_setup_service() {
 }
 
 # Uninstall technology with modular loading
-# Usage: manager_uninstall [--keep-config] [--keep-data]
-manager_uninstall() {
+# Usage: stacker_uninstall [--keep-config] [--keep-data]
+stacker_uninstall() {
     local keep_config=false
     local keep_data=false
     
@@ -217,82 +221,82 @@ manager_uninstall() {
         shift
     done
     
-    if [ -z "$MANAGER_TECH_NAME" ]; then
-        manager_error "Manager not initialized"
+    if [ -z "$STACKER_TECH_NAME" ]; then
+        stacker_error "Stacker not initialized"
         return 1
     fi
     
-    manager_log "Uninstalling $MANAGER_TECH_NAME..."
+    stacker_log "Uninstalling $STACKER_TECH_NAME..."
     
     # Load service module for cleanup
-    manager_require "service" || true
+    stacker_require "service" || true
     
     # Stop and disable services
-    manager_stop_service 2>/dev/null || true
-    manager_disable_service 2>/dev/null || true
+    stacker_stop_service 2>/dev/null || true
+    stacker_disable_service 2>/dev/null || true
     
     # Remove cron jobs
-    manager_remove_cron_job 2>/dev/null || true
+    stacker_remove_cron_job 2>/dev/null || true
     
     # Remove installed binary
-    if [ -f "$MANAGER_INSTALL_DIR/$MANAGER_TECH_NAME" ]; then
-        if [ -w "$MANAGER_INSTALL_DIR" ]; then
-            rm -f "$MANAGER_INSTALL_DIR/$MANAGER_TECH_NAME"
+    if [ -f "$STACKER_INSTALL_DIR/$STACKER_TECH_NAME" ]; then
+        if [ -w "$STACKER_INSTALL_DIR" ]; then
+            rm -f "$STACKER_INSTALL_DIR/$STACKER_TECH_NAME"
         else
-            sudo rm -f "$MANAGER_INSTALL_DIR/$MANAGER_TECH_NAME"
+            sudo rm -f "$STACKER_INSTALL_DIR/$STACKER_TECH_NAME"
         fi
-        manager_log "Removed $MANAGER_INSTALL_DIR/$MANAGER_TECH_NAME"
+        stacker_log "Removed $STACKER_INSTALL_DIR/$STACKER_TECH_NAME"
     fi
     
     # Remove clean clone
-    if [ -d "$MANAGER_CLEAN_CLONE_DIR" ]; then
-        rm -rf "$MANAGER_CLEAN_CLONE_DIR"
-        manager_log "Removed clean clone: $MANAGER_CLEAN_CLONE_DIR"
+    if [ -d "$STACKER_CLEAN_CLONE_DIR" ]; then
+        rm -rf "$STACKER_CLEAN_CLONE_DIR"
+        stacker_log "Removed clean clone: $STACKER_CLEAN_CLONE_DIR"
     fi
     
     # Optionally remove config and data
-    if [ "$keep_config" = false ] && [ -d "$MANAGER_CONFIG_DIR" ]; then
-        rm -rf "$MANAGER_CONFIG_DIR"
-        manager_log "Removed config: $MANAGER_CONFIG_DIR"
+    if [ "$keep_config" = false ] && [ -d "$STACKER_CONFIG_DIR" ]; then
+        rm -rf "$STACKER_CONFIG_DIR"
+        stacker_log "Removed config: $STACKER_CONFIG_DIR"
     fi
     
-    if [ "$keep_data" = false ] && [ -d "$MANAGER_DATA_DIR" ]; then
-        rm -rf "$MANAGER_DATA_DIR"
-        manager_log "Removed data: $MANAGER_DATA_DIR"
+    if [ "$keep_data" = false ] && [ -d "$STACKER_DATA_DIR" ]; then
+        rm -rf "$STACKER_DATA_DIR"
+        stacker_log "Removed data: $STACKER_DATA_DIR"
     fi
     
-    if [ "$keep_data" = false ] && [ -d "$MANAGER_STATE_DIR" ]; then
-        rm -rf "$MANAGER_STATE_DIR"  
-        manager_log "Removed state: $MANAGER_STATE_DIR"
+    if [ "$keep_data" = false ] && [ -d "$STACKER_STATE_DIR" ]; then
+        rm -rf "$STACKER_STATE_DIR"  
+        stacker_log "Removed state: $STACKER_STATE_DIR"
     fi
     
-    manager_log "Uninstallation of $MANAGER_TECH_NAME completed"
+    stacker_log "Uninstallation of $STACKER_TECH_NAME completed"
     return 0
 }
 
 # Show status of technology with modular loading
-# Usage: manager_status
-manager_status() {
-    if [ -z "$MANAGER_TECH_NAME" ]; then
-        manager_error "Manager not initialized"
+# Usage: stacker_status
+stacker_status() {
+    if [ -z "$STACKER_TECH_NAME" ]; then
+        stacker_error "Stacker not initialized"
         return 1
     fi
     
     echo "=========================================="
-    echo "  $MANAGER_TECH_NAME Status Report"
+    echo "  $STACKER_TECH_NAME Status Report"
     echo "=========================================="
     echo ""
     
     # Installation status
     echo "📦 Installation:"
-    if [ -f "$MANAGER_INSTALL_DIR/$MANAGER_TECH_NAME" ]; then
-        echo "  ✅ Binary: $MANAGER_INSTALL_DIR/$MANAGER_TECH_NAME"
+    if [ -f "$STACKER_INSTALL_DIR/$STACKER_TECH_NAME" ]; then
+        echo "  ✅ Binary: $STACKER_INSTALL_DIR/$STACKER_TECH_NAME"
     else
         echo "  ❌ Binary: Not found"
     fi
     
-    if [ -d "$MANAGER_CLEAN_CLONE_DIR" ]; then
-        echo "  ✅ Clean clone: $MANAGER_CLEAN_CLONE_DIR"
+    if [ -d "$STACKER_CLEAN_CLONE_DIR" ]; then
+        echo "  ✅ Clean clone: $STACKER_CLEAN_CLONE_DIR"
     else
         echo "  ❌ Clean clone: Not found"
     fi
@@ -300,15 +304,15 @@ manager_status() {
     # Configuration
     echo ""
     echo "⚙️ Configuration:"
-    echo "  📁 Config: $MANAGER_CONFIG_DIR"
-    echo "  📁 Data: $MANAGER_DATA_DIR"  
-    echo "  📁 State: $MANAGER_STATE_DIR"
+    echo "  📁 Config: $STACKER_CONFIG_DIR"
+    echo "  📁 Data: $STACKER_DATA_DIR"  
+    echo "  📁 State: $STACKER_STATE_DIR"
     
     # Service status - load module only if needed
     echo ""
     echo "🔧 Service Status:"
-    if manager_require "service" 2>/dev/null; then
-        manager_service_status
+    if stacker_require "service" 2>/dev/null; then
+        stacker_service_status
     else
         echo "  ❌ Service module not available"
     fi
@@ -316,9 +320,9 @@ manager_status() {
     # Cron status
     echo ""
     echo "⏰ Cron Status:"
-    if crontab -l 2>/dev/null | grep -q "$MANAGER_TECH_NAME"; then
+    if crontab -l 2>/dev/null | grep -q "$STACKER_TECH_NAME"; then
         echo "  ✅ Cron job active"
-        echo "  📅 Schedule: $(crontab -l 2>/dev/null | grep "$MANAGER_TECH_NAME" | head -1)"
+        echo "  📅 Schedule: $(crontab -l 2>/dev/null | grep "$STACKER_TECH_NAME" | head -1)"
     else
         echo "  ❌ No cron job found"
     fi
@@ -328,34 +332,34 @@ manager_status() {
 }
 
 # Show manager framework version
-manager_version() {
-    echo "Manager Framework v$MANAGER_VERSION (Modular)"
+stacker_version() {
+    echo "Stacker Framework v$STACKER_VERSION (Modular)"
     echo "Universal POSIX Shell Framework for AKAO Technologies"
     echo ""
-    echo "Loaded modules: $MANAGER_LOADED_MODULES"
+    echo "Loaded modules: $STACKER_LOADED_MODULES"
     echo "Available modules:"
-    manager_list_available_modules
+    stacker_list_available_modules
 }
 
 # Show help
-manager_help() {
+stacker_help() {
     cat << 'EOF'
-Manager Framework v2.0 - Universal Shell Framework (Modular)
+Stacker Framework v2.0 - Universal Shell Framework (Modular)
 
 Usage:
   ./manager.sh [COMMAND] [OPTIONS]
 
 Commands:
-  init, -i              Initialize Manager framework in current directory
+  init, -i              Initialize Stacker framework in current directory
   config, -c            Manage configuration settings
-  install               Install Manager-based application
-  update, -u            Update Manager-based application
-  service, -s           Control Manager service
+  install               Install Stacker-based application
+  update, -u            Update Stacker-based application
+  service, -s           Control Stacker service
   health                Check system health and diagnostics
   status                Show current status
   rollback, -r          Rollback to previous version
-  self-install          Install Manager globally as command-line tool
-  self-uninstall        Remove global Manager installation
+  self-install          Install Stacker globally as command-line tool
+  self-uninstall        Remove global Stacker installation
   version, -v           Show version information
   help, -h              Show help information
 
@@ -366,130 +370,130 @@ Options (for direct execution):
   --module-info, -m    Show module information
 
 Command Examples:
-  manager init --template=cli --name=mytool
-  manager config set update.interval 3600
-  manager install --systemd --auto-update
-  manager service status
-  manager health --verbose
+  stacker init --template=cli --name=mytool
+  stacker config set update.interval 3600
+  stacker install --systemd --auto-update
+  stacker service status
+  stacker health --verbose
 
 For detailed help on any command:
   manager [COMMAND] --help
 
 Module Management (when sourced):
-  manager_require "module1 module2"  # Load specific modules
-  manager_list_loaded_modules        # Show loaded modules
-  manager_list_available_modules     # Show available modules
-  manager_module_info "module_name"  # Show module information
+  stacker_require "module1 module2"  # Load specific modules
+  stacker_list_loaded_modules        # Show loaded modules
+  stacker_list_available_modules     # Show available modules
+  stacker_module_info "module_name"  # Show module information
 
 EOF
 }
 
 # Backwards compatibility mode
-if [ "${MANAGER_LEGACY_MODE:-0}" = "1" ]; then
-    manager_debug "Legacy mode enabled - loading all modules"
-    manager_require "config install service update self_update" >/dev/null 2>&1 || true
+if [ "${STACKER_LEGACY_MODE:-0}" = "1" ]; then
+    stacker_debug "Legacy mode enabled - loading all modules"
+    stacker_require "config install service update self_update" >/dev/null 2>&1 || true
 fi
 
 # Parse CLI arguments and execute commands
-manager_parse_cli() {
+stacker_parse_cli() {
     case "$1" in
         --help|-h|help)
-            manager_help
+            stacker_help
             exit 0
             ;;
         --version|-v|version)
             local json_output=false
             [ "$2" = "--json" ] && json_output=true
             if [ "$json_output" = true ]; then
-                echo "{\"version\":\"$MANAGER_VERSION\",\"type\":\"modular\",\"loaded_modules\":\"$MANAGER_LOADED_MODULES\"}"
+                echo "{\"version\":\"$STACKER_VERSION\",\"type\":\"modular\",\"loaded_modules\":\"$STACKER_LOADED_MODULES\"}"
             else
-                manager_version
+                stacker_version
             fi
             exit 0
             ;;
         init|-i)
             shift
-            manager_cli_init "$@"
+            stacker_cli_init "$@"
             exit $?
             ;;
         config|-c)
             shift
-            manager_cli_config "$@"
+            stacker_cli_config "$@"
             exit $?
             ;;
         install)
             shift
-            manager_cli_install "$@"
+            stacker_cli_install "$@"
             exit $?
             ;;
         update|-u)
             shift
-            manager_cli_update "$@"
+            stacker_cli_update "$@"
             exit $?
             ;;
         service|-s)
             shift
-            manager_cli_service "$@"
+            stacker_cli_service "$@"
             exit $?
             ;;
         health)
             shift
-            manager_cli_health "$@"
+            stacker_cli_health "$@"
             exit $?
             ;;
         status)
-            manager_status
+            stacker_status
             exit 0
             ;;
         rollback|-r)
             shift
-            manager_cli_rollback "$@"
+            stacker_cli_rollback "$@"
             exit $?
             ;;
         self-install)
             shift
-            manager_cli_self_install "$@"
+            stacker_cli_self_install "$@"
             exit $?
             ;;
         self-uninstall)
             shift
-            manager_cli_self_uninstall "$@"
+            stacker_cli_self_uninstall "$@"
             exit $?
             ;;
         --self-update|--discover|--setup-auto-update|--remove-auto-update|--self-status|--register)
-            if manager_require "self_update"; then
-                manager_handle_self_update "$@"
+            if stacker_require "self_update"; then
+                stacker_handle_self_update "$@"
                 exit $?
             else
-                manager_error "Self-update module not available"
+                stacker_error "Self-update module not available"
                 exit 1
             fi
             ;;
         --module-info|-m)
             if [ -n "$2" ]; then
-                manager_module_info "$2"
+                stacker_module_info "$2"
             else
-                manager_list_available_modules
+                stacker_list_available_modules
             fi
             exit 0
             ;;
         --list-modules|-l)
-            manager_list_loaded_modules
+            stacker_list_loaded_modules
             echo ""
-            manager_list_available_modules
+            stacker_list_available_modules
             exit 0
             ;;
         *)
-            manager_error "Unknown command: $1"
+            stacker_error "Unknown command: $1"
             echo ""
-            manager_help
+            stacker_help
             exit 1
             ;;
     esac
 }
 
 # CLI command implementations
-manager_cli_init() {
+stacker_cli_init() {
     local template="service"
     local name=""
     local repo=""
@@ -527,9 +531,9 @@ manager_cli_init() {
                 ;;
             --help|-h)
                 cat << 'EOF'
-Usage: manager init [OPTIONS]
+Usage: stacker init [OPTIONS]
 
-Initialize Manager framework in current directory
+Initialize Stacker framework in current directory
 
 Options:
   --template, -t TYPE    Project template (service, cli, library) [default: service]
@@ -539,14 +543,14 @@ Options:
   --help, -h             Show this help
 
 Examples:
-  manager init --template=cli --name=mytool
-  manager init -t service -n myservice --repo=https://github.com/user/repo.git
+  stacker init --template=cli --name=mytool
+  stacker init -t service -n myservice --repo=https://github.com/user/repo.git
 EOF
                 return 0
                 ;;
             *)
                 [ -z "$name" ] && name="$1" || {
-                    manager_error "Unknown option: $1"
+                    stacker_error "Unknown option: $1"
                     return 1
                 }
                 ;;
@@ -558,7 +562,7 @@ EOF
     if [ -z "$name" ]; then
         printf "Project name: "
         read -r name
-        [ -z "$name" ] && { manager_error "Project name required"; return 1; }
+        [ -z "$name" ] && { stacker_error "Project name required"; return 1; }
     fi
     
     if [ -z "$repo" ]; then
@@ -570,50 +574,50 @@ EOF
         script="${name}.sh"
     fi
     
-    manager_log "Initializing Manager project: $name"
-    manager_log "  Template: $template"
-    manager_log "  Script: $script"
-    [ -n "$repo" ] && manager_log "  Repository: $repo"
+    stacker_log "Initializing Stacker project: $name"
+    stacker_log "  Template: $template"
+    stacker_log "  Script: $script"
+    [ -n "$repo" ] && stacker_log "  Repository: $repo"
     
     if [ -n "$repo" ]; then
-        manager_init "$name" "$repo" "$script"
+        stacker_init "$name" "$repo" "$script"
     else
-        manager_log "Project initialized (no repository specified)"
+        stacker_log "Project initialized (no repository specified)"
         echo "#!/bin/sh" > "$script"
-        echo "# $name - Generated by Manager framework" >> "$script"
+        echo "# $name - Generated by Stacker framework" >> "$script"
         chmod +x "$script"
-        manager_log "Created: $script"
+        stacker_log "Created: $script"
     fi
 }
 
-manager_cli_config() {
+stacker_cli_config() {
     local action="$1"
     shift
     
     case "$action" in
         get|-g)
             local key="$1"
-            [ -z "$key" ] && { manager_error "Key required for get"; return 1; }
-            manager_require "config"
-            manager_get_config "$key"
+            [ -z "$key" ] && { stacker_error "Key required for get"; return 1; }
+            stacker_require "config"
+            stacker_get_config "$key"
             ;;
         set|-s)
             local key="$1"
             local value="$2"
             [ -z "$key" ] || [ -z "$value" ] && { 
-                manager_error "Key and value required for set"
+                stacker_error "Key and value required for set"
                 return 1
             }
-            manager_require "config"
-            manager_save_config "$key" "$value"
+            stacker_require "config"
+            stacker_save_config "$key" "$value"
             ;;
         list|-l)
-            manager_require "config"
-            manager_show_config
+            stacker_require "config"
+            stacker_show_config
             ;;
         --help|-h|"")
             cat << 'EOF'
-Usage: manager config COMMAND [OPTIONS]
+Usage: stacker config COMMAND [OPTIONS]
 
 Manage configuration settings
 
@@ -626,19 +630,19 @@ Options:
   --help, -h            Show this help
 
 Examples:
-  manager config get update.interval
-  manager config set update.interval 3600
-  manager config list
+  stacker config get update.interval
+  stacker config set update.interval 3600
+  stacker config list
 EOF
             ;;
         *)
-            manager_error "Unknown config command: $action"
+            stacker_error "Unknown config command: $action"
             return 1
             ;;
     esac
 }
 
-manager_cli_install() {
+stacker_cli_install() {
     local use_systemd=false
     local use_cron=false
     local use_manual=false
@@ -668,9 +672,9 @@ manager_cli_install() {
                 ;;
             --help|-h)
                 cat << 'EOF'
-Usage: manager install [OPTIONS]
+Usage: stacker install [OPTIONS]
 
-Install Manager-based application
+Install Stacker-based application
 
 Options:
   --systemd             Install as systemd service
@@ -682,29 +686,29 @@ Options:
   --help, -h            Show this help
 
 Examples:
-  manager install --systemd
-  manager install --cron --interval=300
-  manager install --redundant --auto-update
+  stacker install --systemd
+  stacker install --cron --interval=300
+  stacker install --redundant --auto-update
 EOF
                 return 0
                 ;;
             *)
-                manager_error "Unknown install option: $1"
+                stacker_error "Unknown install option: $1"
                 return 1
                 ;;
         esac
         shift
     done
     
-    if [ -z "$MANAGER_TECH_NAME" ]; then
-        manager_error "Manager not initialized. Run 'manager init' first."
+    if [ -z "$STACKER_TECH_NAME" ]; then
+        stacker_error "Stacker not initialized. Run 'stacker init' first."
         return 1
     fi
     
-    manager_install $install_args
+    stacker_install $install_args
 }
 
-manager_cli_update() {
+stacker_cli_update() {
     local check_only=false
     local force=false
     
@@ -718,9 +722,9 @@ manager_cli_update() {
                 ;;
             --help|-h)
                 cat << 'EOF'
-Usage: manager update [OPTIONS]
+Usage: stacker update [OPTIONS]
 
-Update Manager-based application
+Update Stacker-based application
 
 Options:
   --check, -c           Check for updates without installing
@@ -728,68 +732,111 @@ Options:
   --help, -h            Show this help
 
 Examples:
-  manager update --check
-  manager update --force
+  stacker update --check
+  stacker update --force
 EOF
                 return 0
                 ;;
             *)
-                manager_error "Unknown update option: $1"
+                stacker_error "Unknown update option: $1"
                 return 1
                 ;;
         esac
         shift
     done
     
-    if [ -z "$MANAGER_TECH_NAME" ]; then
-        manager_error "Manager not initialized"
+    if [ -z "$STACKER_TECH_NAME" ]; then
+        stacker_error "Stacker not initialized"
         return 1
     fi
     
     if [ "$check_only" = true ]; then
-        manager_log "Checking for updates..."
-        # TODO: Implement update checking
-        manager_log "Update check not yet implemented"
+        stacker_log "Checking for updates..."
+        
+        # Check if we're in a git repository
+        if [ -d ".git" ]; then
+            local remote_hash local_hash
+            remote_hash=$(git ls-remote origin HEAD | cut -f1)
+            local_hash=$(git rev-parse HEAD)
+            
+            if [ "$remote_hash" != "$local_hash" ]; then
+                stacker_log "✓ Updates available"
+                stacker_log "  Remote: $remote_hash"
+                stacker_log "  Local:  $local_hash"
+                return 0
+            else
+                stacker_log "✓ Access is up to date"
+                return 1
+            fi
+        else
+            stacker_warn "Not in a git repository - cannot check for updates"
+            return 1
+        fi
     else
-        manager_log "Updating $MANAGER_TECH_NAME..."
-        # TODO: Implement actual update
-        manager_log "Update functionality not yet implemented"
+        stacker_log "Updating $STACKER_TECH_NAME..."
+        
+        # Perform git-based update if in repository
+        if [ -d ".git" ]; then
+            # Backup current state
+            local backup_dir="$STACKER_DATA_DIR/backups/$(date +%Y%m%d-%H%M%S)"
+            mkdir -p "$backup_dir"
+            cp -r . "$backup_dir/" 2>/dev/null || true
+            
+            # Pull updates
+            if git pull origin main; then
+                stacker_log "✓ Access updated successfully"
+                stacker_log "  Backup saved: $backup_dir"
+                
+                # Restart service if running
+                if systemctl is-active --quiet access.service 2>/dev/null; then
+                    stacker_log "Restarting Access service..."
+                    sudo systemctl restart access.service
+                fi
+                return 0
+            else
+                stacker_error "Update failed"
+                return 1
+            fi
+        else
+            stacker_error "Not in a git repository - cannot update"
+            return 1
+        fi
     fi
 }
 
-manager_cli_service() {
+stacker_cli_service() {
     local action="$1"
     
     case "$action" in
         start)
-            manager_require "service"
-            manager_start_service
+            stacker_require "service"
+            stacker_start_service
             ;;
         stop)
-            manager_require "service"  
-            manager_stop_service
+            stacker_require "service"  
+            stacker_stop_service
             ;;
         restart)
-            manager_require "service"
-            manager_restart_service
+            stacker_require "service"
+            stacker_restart_service
             ;;
         status)
-            manager_require "service"
-            manager_service_status
+            stacker_require "service"
+            stacker_service_status
             ;;
         enable)
-            manager_require "service"
-            manager_enable_service
+            stacker_require "service"
+            stacker_enable_service
             ;;
         disable)
-            manager_require "service"
-            manager_disable_service
+            stacker_require "service"
+            stacker_disable_service
             ;;
         --help|-h|"")
             cat << 'EOF'
-Usage: manager service COMMAND
+Usage: stacker service COMMAND
 
-Control Manager service
+Control Stacker service
 
 Commands:
   start                 Start the service
@@ -803,18 +850,18 @@ Options:
   --help, -h            Show this help
 
 Examples:
-  manager service start
-  manager service status
+  stacker service start
+  stacker service status
 EOF
             ;;
         *)
-            manager_error "Unknown service command: $action"
+            stacker_error "Unknown service command: $action"
             return 1
             ;;
     esac
 }
 
-manager_cli_health() {
+stacker_cli_health() {
     local verbose=false
     
     while [ $# -gt 0 ]; do
@@ -824,7 +871,7 @@ manager_cli_health() {
                 ;;
             --help|-h)
                 cat << 'EOF'
-Usage: manager health [OPTIONS]
+Usage: stacker health [OPTIONS]
 
 Check system health and diagnostics
 
@@ -833,48 +880,48 @@ Options:
   --help, -h            Show this help
 
 Examples:
-  manager health
-  manager health --verbose
+  stacker health
+  stacker health --verbose
 EOF
                 return 0
                 ;;
             *)
-                manager_error "Unknown health option: $1"
+                stacker_error "Unknown health option: $1"
                 return 1
                 ;;
         esac
         shift
     done
     
-    echo "Manager Framework Health Check"
+    echo "Stacker Framework Health Check"
     echo "=============================="
     echo ""
     
     # Basic health checks
-    echo "✓ Manager framework loaded"
+    echo "✓ Stacker framework loaded"
     echo "✓ Core module functional"
     echo "✓ Module loading system operational"
     
     if [ "$verbose" = true ]; then
         echo ""
         echo "Detailed Diagnostics:"
-        echo "  Version: $MANAGER_VERSION"
-        echo "  Loaded modules: $MANAGER_LOADED_MODULES"
+        echo "  Version: $STACKER_VERSION"
+        echo "  Loaded modules: $STACKER_LOADED_MODULES"
         echo "  Shell: $0"
         echo "  Working directory: $(pwd)"
-        [ -n "$MANAGER_TECH_NAME" ] && echo "  Initialized for: $MANAGER_TECH_NAME"
+        [ -n "$STACKER_TECH_NAME" ] && echo "  Initialized for: $STACKER_TECH_NAME"
     fi
     
     echo ""
     echo "Health check completed ✓"
 }
 
-manager_cli_rollback() {
+stacker_cli_rollback() {
     local version="$1"
     
     if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
         cat << 'EOF'
-Usage: manager rollback [VERSION]
+Usage: stacker rollback [VERSION]
 
 Rollback to previous version
 
@@ -885,28 +932,83 @@ Options:
   --help, -h            Show this help
 
 Examples:
-  manager rollback
-  manager rollback 1.2.3
+  stacker rollback
+  stacker rollback 1.2.3
 EOF
         return 0
     fi
     
-    if [ -z "$MANAGER_TECH_NAME" ]; then
-        manager_error "Manager not initialized"
+    if [ -z "$STACKER_TECH_NAME" ]; then
+        stacker_error "Stacker not initialized"
         return 1
     fi
     
     if [ -n "$version" ]; then
-        manager_log "Rolling back to version: $version"
+        stacker_log "Rolling back to version: $version"
     else
-        manager_log "Rolling back to previous version"
+        stacker_log "Rolling back to previous version"
     fi
     
-    # TODO: Implement rollback functionality
-    manager_log "Rollback functionality not yet implemented"
+    # Implement rollback functionality
+    local backup_dir="$STACKER_DATA_DIR/backups"
+    
+    if [ ! -d "$backup_dir" ]; then
+        stacker_error "No backups found to rollback to"
+        return 1
+    fi
+    
+    # Find most recent backup
+    local latest_backup
+    latest_backup=$(ls -1t "$backup_dir" 2>/dev/null | head -1)
+    
+    if [ -z "$latest_backup" ]; then
+        stacker_error "No backup directories found"
+        return 1
+    fi
+    
+    local backup_path="$backup_dir/$latest_backup"
+    stacker_log "Rolling back to backup: $latest_backup"
+    
+    # Confirm rollback
+    printf "This will replace current files with backup from $latest_backup. Continue? (yes/no): "
+    read confirmation
+    case "$confirmation" in
+        yes|YES|y|Y)
+            # Stop service if running
+            if systemctl is-active --quiet access.service 2>/dev/null; then
+                stacker_log "Stopping Access service..."
+                sudo systemctl stop access.service
+            fi
+            
+            # Create current state backup before rollback
+            local pre_rollback_backup="$backup_dir/pre-rollback-$(date +%Y%m%d-%H%M%S)"
+            mkdir -p "$pre_rollback_backup"
+            cp -r . "$pre_rollback_backup/" 2>/dev/null || true
+            
+            # Restore from backup
+            if cp -r "$backup_path"/* . 2>/dev/null; then
+                stacker_log "✓ Rollback completed successfully"
+                stacker_log "  Pre-rollback state saved: $pre_rollback_backup"
+                
+                # Restart service
+                if systemctl is-enabled --quiet access.service 2>/dev/null; then
+                    stacker_log "Restarting Access service..."
+                    sudo systemctl start access.service
+                fi
+                return 0
+            else
+                stacker_error "Rollback failed"
+                return 1
+            fi
+            ;;
+        *)
+            stacker_log "Rollback cancelled"
+            return 1
+            ;;
+    esac
 }
 
-manager_cli_self_install() {
+stacker_cli_self_install() {
     local install_dir=""
     local use_sudo=false
     local force=false
@@ -938,9 +1040,9 @@ manager_cli_self_install() {
                 ;;
             --help|-h)
                 cat << 'EOF'
-Usage: manager self-install [OPTIONS]
+Usage: stacker self-install [OPTIONS]
 
-Install Manager globally as a command-line tool
+Install Stacker globally as a command-line tool
 
 Options:
   --user                Install in user directory (~/.local/bin)
@@ -958,21 +1060,21 @@ Installation Methods:
   4. Custom prefix: Install to specified directory
 
 Examples:
-  manager self-install                  # Auto-detect best location
-  manager self-install --user           # Install for current user
-  manager self-install --system         # Install system-wide
-  manager self-install --prefix=/opt    # Install to /opt/bin
-  manager self-install --verify         # Check if installed correctly
+  stacker self-install                  # Auto-detect best location
+  stacker self-install --user           # Install for current user
+  stacker self-install --system         # Install system-wide
+  stacker self-install --prefix=/opt    # Install to /opt/bin
+  stacker self-install --verify         # Check if installed correctly
 
 After installation:
-  manager version                       # Verify installation
-  manager init myproject                # Initialize new project
-  manager help                          # Show available commands
+  stacker version                       # Verify installation
+  stacker init myproject                # Initialize new project
+  stacker help                          # Show available commands
 EOF
                 return 0
                 ;;
             *)
-                manager_error "Unknown self-install option: $1"
+                stacker_error "Unknown self-install option: $1"
                 return 1
                 ;;
         esac
@@ -999,33 +1101,33 @@ EOF
     
     # Verify mode - check existing installation
     if [ "$verify_only" = true ]; then
-        echo "Verifying Manager installation..."
+        echo "Verifying Stacker installation..."
         
-        # Check if manager command exists
+        # Check if stacker command exists
         if command -v manager >/dev/null 2>&1; then
             local installed_path="$(command -v manager)"
-            echo "✓ Manager found at: $installed_path"
+            echo "✓ Stacker found at: $installed_path"
             
             # Check if it's our installation
-            if grep -q "MANAGER_DIR=" "$installed_path" 2>/dev/null; then
-                local installed_dir="$(grep "MANAGER_DIR=" "$installed_path" | cut -d'"' -f2)"
-                echo "✓ Manager directory: $installed_dir"
+            if grep -q "STACKER_DIR=" "$installed_path" 2>/dev/null; then
+                local installed_dir="$(grep "STACKER_DIR=" "$installed_path" | cut -d'"' -f2)"
+                echo "✓ Stacker directory: $installed_dir"
                 
                 # Verify it works
-                if manager --version >/dev/null 2>&1; then
-                    echo "✓ Manager is functional"
-                    manager --version
+                if stacker --version >/dev/null 2>&1; then
+                    echo "✓ Stacker is functional"
+                    stacker --version
                     return 0
                 else
-                    echo "✗ Manager command exists but is not functional"
+                    echo "✗ Stacker command exists but is not functional"
                     return 1
                 fi
             else
-                echo "✗ Found different 'manager' command (not Manager Framework)"
+                echo "✗ Found different 'manager' command (not Stacker Framework)"
                 return 1
             fi
         else
-            echo "✗ Manager not found in PATH"
+            echo "✗ Stacker not found in PATH"
             echo ""
             echo "To install, run: $0 self-install"
             return 1
@@ -1034,25 +1136,25 @@ EOF
     
     # Check for existing installation
     if [ -f "$install_dir/manager" ] && [ "$force" != true ]; then
-        echo "Manager is already installed at: $install_dir/manager"
+        echo "Stacker is already installed at: $install_dir/manager"
         echo ""
         
         # Check if it's our installation
-        if grep -q "MANAGER_DIR=" "$install_dir/manager" 2>/dev/null; then
-            local installed_dir="$(grep "MANAGER_DIR=" "$install_dir/manager" | cut -d'"' -f2)"
+        if grep -q "STACKER_DIR=" "$install_dir/manager" 2>/dev/null; then
+            local installed_dir="$(grep "STACKER_DIR=" "$install_dir/manager" | cut -d'"' -f2)"
             echo "Current installation points to: $installed_dir"
             
-            local abs_manager_dir="$(cd "$MANAGER_DIR" 2>/dev/null && pwd)"
-            if [ "$installed_dir" != "$abs_manager_dir" ]; then
-                echo "This directory: $abs_manager_dir"
+            local abs_stacker_dir="$(cd "$STACKER_DIR" 2>/dev/null && pwd)"
+            if [ "$installed_dir" != "$abs_stacker_dir" ]; then
+                echo "This directory: $abs_stacker_dir"
                 echo ""
                 echo "Use --force to update the installation"
             else
-                echo "Already using this Manager instance"
+                echo "Already using this Stacker instance"
             fi
         else
             echo "WARNING: Found different 'manager' command at this location"
-            echo "Use --force to replace it with Manager Framework"
+            echo "Use --force to replace it with Stacker Framework"
         fi
         return 1
     fi
@@ -1062,12 +1164,12 @@ EOF
         echo "Creating directory: $install_dir"
         if [ "$use_sudo" = true ]; then
             sudo mkdir -p "$install_dir" || {
-                manager_error "Failed to create directory: $install_dir"
+                stacker_error "Failed to create directory: $install_dir"
                 return 1
             }
         else
             mkdir -p "$install_dir" || {
-                manager_error "Failed to create directory: $install_dir"
+                stacker_error "Failed to create directory: $install_dir"
                 return 1
             }
         fi
@@ -1075,25 +1177,25 @@ EOF
     
     # Check write permissions
     if [ ! -w "$install_dir" ] && [ "$use_sudo" = false ]; then
-        manager_error "Cannot write to $install_dir. Try with --system or use sudo."
+        stacker_error "Cannot write to $install_dir. Try with --system or use sudo."
         return 1
     fi
     
     # Get absolute paths
-    local abs_manager_dir="$(cd "$MANAGER_DIR" 2>/dev/null && pwd)"
-    if [ -z "$abs_manager_dir" ]; then
-        manager_error "Failed to determine Manager directory path"
+    local abs_stacker_dir="$(cd "$STACKER_DIR" 2>/dev/null && pwd)"
+    if [ -z "$abs_stacker_dir" ]; then
+        stacker_error "Failed to determine Stacker directory path"
         return 1
     fi
     
-    local abs_manager_script="$abs_manager_dir/manager.sh"
-    if [ ! -f "$abs_manager_script" ]; then
-        manager_error "Manager script not found: $abs_manager_script"
+    local abs_stacker_script="$abs_stacker_dir/manager.sh"
+    if [ ! -f "$abs_stacker_script" ]; then
+        stacker_error "Stacker script not found: $abs_stacker_script"
         return 1
     fi
     
-    echo "Installing Manager Framework..."
-    echo "  Source: $abs_manager_dir"
+    echo "Installing Stacker Framework..."
+    echo "  Source: $abs_stacker_dir"
     echo "  Target: $install_dir/manager"
     echo "  Method: $([ "$symlink" = true ] && echo "symlink" || echo "wrapper script")"
     [ "$use_sudo" = true ] && echo "  Permission: sudo required"
@@ -1103,48 +1205,48 @@ EOF
     if [ "$symlink" = true ]; then
         # Create symlink
         if [ "$use_sudo" = true ]; then
-            sudo ln -sf "$abs_manager_script" "$install_dir/manager" || {
-                manager_error "Failed to create symlink"
+            sudo ln -sf "$abs_stacker_script" "$install_dir/manager" || {
+                stacker_error "Failed to create symlink"
                 return 1
             }
         else
-            ln -sf "$abs_manager_script" "$install_dir/manager" || {
-                manager_error "Failed to create symlink"
+            ln -sf "$abs_stacker_script" "$install_dir/manager" || {
+                stacker_error "Failed to create symlink"
                 return 1
             }
         fi
     else
         # Create wrapper script with enhanced features
         local wrapper_content="#!/bin/sh
-# Manager Framework Global Wrapper
+# Stacker Framework Global Wrapper
 # Version: 2.0.0
 # Generated: $(date '+%Y-%m-%d %H:%M:%S')
-# Source: $abs_manager_dir
+# Source: $abs_stacker_dir
 
-# Verify Manager directory still exists
-if [ ! -d \"$abs_manager_dir\" ]; then
-    echo \"ERROR: Manager directory not found: $abs_manager_dir\" >&2
-    echo \"Please reinstall Manager Framework\" >&2
+# Verify Stacker directory still exists
+if [ ! -d \"$abs_stacker_dir\" ]; then
+    echo \"ERROR: Stacker directory not found: $abs_stacker_dir\" >&2
+    echo \"Please reinstall Stacker Framework\" >&2
     exit 1
 fi
 
-# Verify Manager script exists
-if [ ! -f \"$abs_manager_script\" ]; then
-    echo \"ERROR: Manager script not found: $abs_manager_script\" >&2
-    echo \"Please reinstall Manager Framework\" >&2
+# Verify Stacker script exists
+if [ ! -f \"$abs_stacker_script\" ]; then
+    echo \"ERROR: Stacker script not found: $abs_stacker_script\" >&2
+    echo \"Please reinstall Stacker Framework\" >&2
     exit 1
 fi
 
-# Set Manager directory and execute
-export MANAGER_DIR=\"$abs_manager_dir\"
-exec \"\$MANAGER_DIR/manager.sh\" \"\$@\"
+# Set Stacker directory and execute
+export STACKER_DIR=\"$abs_stacker_dir\"
+exec \"\$STACKER_DIR/manager.sh\" \"\$@\"
 "
         
         # Write wrapper to temp file with atomic install
-        local temp_wrapper="$(mktemp /tmp/manager-wrapper.XXXXXX)"
+        local temp_wrapper="$(mktemp /tmp/stacker-wrapper.XXXXXX)"
         echo "$wrapper_content" > "$temp_wrapper" || {
             rm -f "$temp_wrapper"
-            manager_error "Failed to create wrapper script"
+            stacker_error "Failed to create wrapper script"
             return 1
         }
         chmod 755 "$temp_wrapper"
@@ -1153,13 +1255,13 @@ exec \"\$MANAGER_DIR/manager.sh\" \"\$@\"
         if [ "$use_sudo" = true ]; then
             sudo mv -f "$temp_wrapper" "$install_dir/manager" || {
                 rm -f "$temp_wrapper"
-                manager_error "Failed to install manager"
+                stacker_error "Failed to install manager"
                 return 1
             }
         else
             mv -f "$temp_wrapper" "$install_dir/manager" || {
                 rm -f "$temp_wrapper"
-                manager_error "Failed to install manager"
+                stacker_error "Failed to install manager"
                 return 1
             }
         fi
@@ -1167,13 +1269,13 @@ exec \"\$MANAGER_DIR/manager.sh\" \"\$@\"
     
     # Verify installation
     if [ ! -x "$install_dir/manager" ]; then
-        manager_error "Installation failed - manager not executable"
+        stacker_error "Installation failed - manager not executable"
         return 1
     fi
     
     # Test the installation
     if ! "$install_dir/manager" --version >/dev/null 2>&1; then
-        manager_error "Installation test failed - manager not working"
+        stacker_error "Installation test failed - manager not working"
         return 1
     fi
     
@@ -1186,12 +1288,12 @@ exec \"\$MANAGER_DIR/manager.sh\" \"\$@\"
     esac
     
     echo "╔════════════════════════════════════════════════════════════════╗"
-    echo "║             Manager Framework Installed Successfully!          ║"
+    echo "║             Stacker Framework Installed Successfully!          ║"
     echo "╚════════════════════════════════════════════════════════════════╝"
     echo ""
     echo "Installation Details:"
     echo "  • Location: $install_dir/manager"
-    echo "  • Version: $(MANAGER_DIR="$abs_manager_dir" "$install_dir/manager" --version 2>/dev/null || echo "2.0.0")"
+    echo "  • Version: $(STACKER_DIR="$abs_stacker_dir" "$install_dir/manager" --version 2>/dev/null || echo "2.0.0")"
     echo "  • Type: $([ "$symlink" = true ] && echo "Symlink" || echo "Wrapper Script")"
     echo ""
     
@@ -1213,16 +1315,16 @@ exec \"\$MANAGER_DIR/manager.sh\" \"\$@\"
         echo "Then you can use:"
     fi
     
-    echo "  manager version        # Show version"
-    echo "  manager help           # Show commands"
-    echo "  manager init           # Initialize project"
-    echo "  manager self-uninstall # Remove installation"
+    echo "  stacker version        # Show version"
+    echo "  stacker help           # Show commands"
+    echo "  stacker init           # Initialize project"
+    echo "  stacker self-uninstall # Remove installation"
     echo ""
     
     return 0
 }
 
-manager_cli_self_uninstall() {
+stacker_cli_self_uninstall() {
     local force=false
     local all=false
     
@@ -1236,9 +1338,9 @@ manager_cli_self_uninstall() {
                 ;;
             --help|-h)
                 cat << 'EOF'
-Usage: manager self-uninstall [OPTIONS]
+Usage: stacker self-uninstall [OPTIONS]
 
-Remove Manager Framework global installation
+Remove Stacker Framework global installation
 
 Options:
   --force, -f           Skip confirmation prompt
@@ -1251,28 +1353,28 @@ Description:
   Use --all to remove from all common installation directories.
 
 Examples:
-  manager self-uninstall           # Interactive uninstall
-  manager self-uninstall --force   # Uninstall without confirmation
-  manager self-uninstall --all     # Remove all installations
+  stacker self-uninstall           # Interactive uninstall
+  stacker self-uninstall --force   # Uninstall without confirmation
+  stacker self-uninstall --all     # Remove all installations
 
 Note:
-  This only removes the global command. The Manager Framework
+  This only removes the global command. The Stacker Framework
   source directory remains intact and can be reinstalled anytime.
 EOF
                 return 0
                 ;;
             *)
-                manager_error "Unknown self-uninstall option: $1"
+                stacker_error "Unknown self-uninstall option: $1"
                 return 1
                 ;;
         esac
         shift
     done
     
-    echo "Searching for Manager installations..."
+    echo "Searching for Stacker installations..."
     echo ""
     
-    # Find all manager installations
+    # Find all stacker installations
     local found_installations=""
     local found_count=0
     
@@ -1280,9 +1382,9 @@ EOF
     local IFS=':'
     for dir in $PATH; do
         if [ -f "$dir/manager" ] && [ -x "$dir/manager" ]; then
-            # Check if it's our Manager Framework
-            if grep -q "Manager Framework" "$dir/manager" 2>/dev/null || \
-               grep -q "MANAGER_DIR=" "$dir/manager" 2>/dev/null; then
+            # Check if it's our Stacker Framework
+            if grep -q "Stacker Framework" "$dir/manager" 2>/dev/null || \
+               grep -q "STACKER_DIR=" "$dir/manager" 2>/dev/null; then
                 # Avoid duplicates
                 if ! echo "$found_installations" | grep -q "^$dir/manager$"; then
                     found_installations="$found_installations$dir/manager\n"
@@ -1297,10 +1399,10 @@ EOF
     if [ "$all" = true ]; then
         for dir in /usr/local/bin /usr/bin /opt/bin "$HOME/.local/bin" "$HOME/bin"; do
             if [ -f "$dir/manager" ] && [ -x "$dir/manager" ]; then
-                # Check if not already found and it's our Manager
+                # Check if not already found and it's our Stacker
                 if ! echo "$found_installations" | grep -q "$dir/manager" && \
-                   (grep -q "Manager Framework" "$dir/manager" 2>/dev/null || \
-                    grep -q "MANAGER_DIR=" "$dir/manager" 2>/dev/null); then
+                   (grep -q "Stacker Framework" "$dir/manager" 2>/dev/null || \
+                    grep -q "STACKER_DIR=" "$dir/manager" 2>/dev/null); then
                     found_installations="$found_installations$dir/manager\n"
                     found_count=$((found_count + 1))
                     echo "  Found: $dir/manager (not in PATH)"
@@ -1312,15 +1414,15 @@ EOF
     # Check if any installations found
     if [ $found_count -eq 0 ]; then
         echo ""
-        echo "No Manager Framework installations found."
+        echo "No Stacker Framework installations found."
         echo ""
-        echo "Note: Only checking for Manager Framework installations,"
+        echo "Note: Only checking for Stacker Framework installations,"
         echo "not other programs that might be named 'manager'."
         return 0
     fi
     
     echo ""
-    echo "Found $found_count Manager installation(s)"
+    echo "Found $found_count Stacker installation(s)"
     echo ""
     
     # Confirm uninstallation
@@ -1377,16 +1479,16 @@ EOF
     
     echo ""
     echo "╔════════════════════════════════════════════════════════════════╗"
-    echo "║              Manager Framework Uninstalled                     ║"
+    echo "║              Stacker Framework Uninstalled                     ║"
     echo "╚════════════════════════════════════════════════════════════════╝"
     echo ""
-    echo "The Manager Framework has been removed from global installation."
+    echo "The Stacker Framework has been removed from global installation."
     echo ""
     echo "Note: The source directory remains at:"
-    echo "  $(cd "$MANAGER_DIR" 2>/dev/null && pwd)"
+    echo "  $(cd "$STACKER_DIR" 2>/dev/null && pwd)"
     echo ""
     echo "You can reinstall anytime by running:"
-    echo "  $MANAGER_DIR/manager.sh self-install"
+    echo "  $STACKER_DIR/manager.sh self-install"
     echo ""
     
     return 0
@@ -1394,7 +1496,7 @@ EOF
 
 # Handle CLI arguments when run directly
 if [ $# -gt 0 ]; then
-    manager_parse_cli "$@"
+    stacker_parse_cli "$@"
 fi
 
 # Functions are available when this file is sourced

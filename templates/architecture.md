@@ -37,7 +37,7 @@
 **Dependencies**: None (Pure POSIX shell)
 
 **Interface**:
-- Exports functions with `manager_` prefix
+- Exports functions with `stacker_` prefix
 - Uses environment variables for configuration
 - Returns standard exit codes
 - Logs via centralized logging
@@ -73,9 +73,9 @@ Each module follows this structure:
 ```bash
 module-name.sh
 ├── Metadata
-│   ├── MANAGER_MODULE_NAME
-│   ├── MANAGER_MODULE_VERSION
-│   └── MANAGER_MODULE_DESCRIPTION
+│   ├── STACKER_MODULE_NAME
+│   ├── STACKER_MODULE_VERSION
+│   └── STACKER_MODULE_DESCRIPTION
 ├── Lifecycle
 │   ├── module_init()
 │   ├── module_verify()

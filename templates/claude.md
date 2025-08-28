@@ -115,9 +115,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 ```
 manager.sh              # Main entry point
 ├── Core Functions
-│   ├── manager_init()      # Framework initialization
-│   ├── manager_config()    # Configuration management
-│   └── manager_error()     # Error handling
+│   ├── stacker_init()      # Framework initialization
+│   ├── stacker_config()    # Configuration management
+│   └── stacker_error()     # Error handling
 ├── Module Loading
 │   ├── load_module()       # Dynamic module loading
 │   └── verify_module()     # Module verification
@@ -153,8 +153,8 @@ module_cleanup() {
 }
 
 # Export module interface
-MANAGER_MODULE_NAME="module-name"
-MANAGER_MODULE_VERSION="1.0.0"
+STACKER_MODULE_NAME="module-name"
+STACKER_MODULE_VERSION="1.0.0"
 ```
 
 ### Testing Requirements
@@ -244,10 +244,10 @@ load_module "module-name" || {
 **Module Loading Failures**
 ```bash
 # Debug module loading
-MANAGER_DEBUG=true manager init
+STACKER_DEBUG=true manager init
 
 # Check module path
-echo $MANAGER_MODULE_PATH
+echo $STACKER_MODULE_PATH
 
 # Verify module syntax
 sh -n module-name.sh
@@ -304,7 +304,7 @@ When working with Manager:
 - Not testing on minimal systems
 
 ### Framework Extensions
-When extending Manager:
+When extending Stacker:
 1. Create new module following the pattern
 2. Add module to the module registry
 3. Update configuration schema if needed
@@ -322,6 +322,6 @@ When extending Manager:
 
 ---
 
-*Manager is the foundation - bringing order to chaos through universal shell patterns.*
+*Stacker is the foundation - bringing order to chaos through universal shell patterns.*
 
 *Version: {{project.version}} | License: {{project.license}} | Author: {{project.author}}*

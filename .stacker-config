@@ -1,5 +1,5 @@
-# Manager framework configuration for Access
-# This file tells Manager what additional files to install
+# Stacker framework configuration for Access
+# This file tells Stacker what additional files to install
 
 # Main script (access.sh is copied as 'access' by default)
 MAIN_SCRIPT="access.sh"

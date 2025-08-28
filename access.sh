@@ -1,8 +1,17 @@
 #!/bin/sh
 # Access - Pure shell network access layer with modular provider support
 # The eternal foundation that enables connectivity
+# Now with bidirectional Stacker integration - works standalone OR enhanced
 
 VERSION="0.0.3"
+
+# Load the Stacker bridge for bidirectional architecture
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -f "$SCRIPT_DIR/lib/stacker-bridge.sh" ]; then
+    . "$SCRIPT_DIR/lib/stacker-bridge.sh"
+elif [ -f "./lib/stacker-bridge.sh" ]; then
+    . "./lib/stacker-bridge.sh"
+fi
 
 # Color support
 if [ "${FORCE_COLOR:-0}" = "1" ] || { [ -t 1 ] && [ "${NO_COLOR:-0}" != "1" ] && [ "${TERM:-}" != "dumb" ]; }; then
@@ -553,50 +562,50 @@ save_config() {
     log "Provider: $provider, Domain: $DOMAIN, Host: $HOST"
 }
 
-# Self-update using Manager framework
+# Self-update using Stacker framework
 self_update() {
-    log "Checking for updates using Manager framework..."
+    log "Checking for updates using Stacker framework..."
     
-    # Find Manager in various locations
-    local manager_found=false
-    local manager_dirs="$HOME/manager /usr/local/lib/manager"
+    # Find Stacker in various locations
+    local stacker_found=false
+    local stacker_dirs="$HOME/stacker /usr/local/lib/stacker"
     
     # Also check if we can access root's manager (for system installations)
-    if [ -r "/root/manager/manager-self-update.sh" ]; then
-        manager_dirs="$manager_dirs /root/manager"
+    if [ -r "/root/stacker/stacker-self-update.sh" ]; then
+        stacker_dirs="$stacker_dirs /root/stacker"
     fi
     
-    local manager_dir=""
-    for dir in $manager_dirs; do
-        if [ -f "$dir/manager-self-update.sh" ]; then
-            log "Loading Manager from $dir"
-            manager_dir="$dir"
-            manager_found=true
+    local stacker_dir=""
+    for dir in $stacker_dirs; do
+        if [ -f "$dir/stacker-self-update.sh" ]; then
+            log "Loading Stacker from $dir"
+            stacker_dir="$dir"
+            stacker_found=true
             break
         fi
     done
     
-    if [ "$manager_found" = false ]; then
-        # Try to clone Manager if not found
-        log "Manager not found. Installing Manager framework..."
-        git clone https://github.com/akaoio/manager.git "$HOME/manager" || {
-            log "Failed to install Manager framework"
+    if [ "$stacker_found" = false ]; then
+        # Try to clone Stacker if not found
+        log "Stacker not found. Installing Stacker framework..."
+        git clone https://github.com/akaoio/stacker.git "$HOME/stacker" || {
+            log "Failed to install Stacker framework"
             return 1
         }
-        manager_dir="$HOME/manager"
+        stacker_dir="$HOME/stacker"
     fi
     
-    # Load all Manager modules needed
-    if [ -f "$manager_dir/manager-core.sh" ]; then
-        . "$manager_dir/manager-core.sh"
+    # Load all Stacker modules needed
+    if [ -f "$stacker_dir/stacker-core.sh" ]; then
+        . "$stacker_dir/stacker-core.sh"
     fi
-    if [ -f "$manager_dir/manager-update.sh" ]; then
-        . "$manager_dir/manager-update.sh"
+    if [ -f "$stacker_dir/stacker-update.sh" ]; then
+        . "$stacker_dir/stacker-update.sh"
     fi
     
-    # Initialize Manager environment variables for Access
-    export MANAGER_CLEAN_CLONE_DIR="/home/x/access"
-    export MANAGER_CONFIG_DIR="$HOME/.config/access"
+    # Initialize Stacker environment variables for Access
+    export STACKER_CLEAN_CLONE_DIR="/home/x/access"
+    export STACKER_CONFIG_DIR="$HOME/.config/access"
     
     # Now run the actual update
     log "Running update check..."
@@ -612,22 +621,22 @@ self_update() {
         esac
     done
     
-    # Use the correct Manager update functions
+    # Use the correct Stacker update functions
     case "$action" in
         apply)
-            if command -v manager_apply_updates >/dev/null 2>&1; then
+            if command -v stacker_apply_updates >/dev/null 2>&1; then
                 log "Applying updates..."
-                manager_apply_updates || {
+                stacker_apply_updates || {
                     log "Update application completed"
                 }
             else
-                log "Manager update functions not available"
+                log "Stacker update functions not available"
                 return 1
             fi
             ;;
         status)
-            if command -v manager_check_updates >/dev/null 2>&1; then
-                if manager_check_updates; then
+            if command -v stacker_check_updates >/dev/null 2>&1; then
+                if stacker_check_updates; then
                     log "Updates are available"
                     return 0
                 else
@@ -637,8 +646,8 @@ self_update() {
             fi
             ;;
         check|*)
-            if command -v manager_check_updates >/dev/null 2>&1; then
-                if manager_check_updates; then
+            if command -v stacker_check_updates >/dev/null 2>&1; then
+                if stacker_check_updates; then
                     log "Updates are available. Run 'access self-update --apply' to install"
                     return 0
                 else
@@ -646,7 +655,7 @@ self_update() {
                     return 1
                 fi
             else
-                log "Manager update functions not available"
+                log "Stacker update functions not available"
                 return 1
             fi
             ;;
@@ -705,7 +714,7 @@ case "${1:-help}" in
         trap 'remove_run_lock; exit 130' INT TERM
         
         # Check for updates first (optional)
-        # Auto-update removed - use Manager framework instead
+        # Auto-update removed - use Stacker framework instead
         
         load_config
         
@@ -798,40 +807,37 @@ case "${1:-help}" in
         ;;
         
     daemon)
-        log "Starting Access daemon (redundant with cron backup)..."
+        log "Starting Access watchdog daemon..."
+        log "Purpose: Monitor cron health and DNS sync status"
+        
+        # Load the focused service monitoring module
+        if [ -f "./modules/service.sh" ]; then
+            . "./modules/service.sh"
+            service_init || {
+                log_error "Failed to initialize service monitoring module"
+                exit 1
+            }
+        else
+            log_error "Service monitoring module not found"
+            exit 1
+        fi
         
         # Create daemon-specific lock for service identification (XDG data directory)
         DAEMON_LOCK="$ACCESS_DATA_HOME/daemon.lock"
         echo $$ > "$DAEMON_LOCK"
-        trap 'rm -f "$DAEMON_LOCK"; remove_run_lock; exit 130' INT TERM
+        trap 'rm -f "$DAEMON_LOCK"; exit 130' INT TERM
+        
+        log "🐕 Watchdog mission:"
+        log "  1. Monitor cron job health → repair if dead"
+        log "  2. Validate DNS sync status → fix if broken"
+        log "  3. Check sync timestamps → trigger if stale"
+        log "  Interval: ${ACCESS_INTERVAL:-300} seconds"
         
         while true; do
-            # Check if we should skip this cycle due to redundancy
-            if should_skip_redundant; then
-                log "Cron recently ran - daemon cycle skipped (backup working)"
-            else
-                log "Daemon cycle - updating DNS..."
-                create_run_lock
-                
-                # Run update with direct call to avoid recursive redundancy checks
-                load_config
-                
-                if [ -n "$PROVIDER" ]; then
-                    ip=$(detect_ip)
-                    if [ $? -eq 0 ]; then
-                        log_success "Detected IP: $ip"
-                        log_info "Using provider: $PROVIDER"
-                        update_with_provider "$PROVIDER" "$DOMAIN" "$HOST" "$ip"
-                    else
-                        log_error "Failed to detect IP"
-                    fi
-                else
-                    log_error "No provider configured"
-                fi
-                
-                remove_run_lock
-            fi
+            # Run focused watchdog cycle
+            access_watchdog_cycle
             
+            # Sleep until next watchdog cycle
             sleep "${ACCESS_INTERVAL:-300}"
         done
         ;;
@@ -895,16 +901,25 @@ case "${1:-help}" in
         
     capabilities)
         shift
+        # If no provider specified, show integration capabilities
         if [ -z "$1" ]; then
-            echo "Usage: access capabilities <provider>"
-            exit 1
-        fi
-        
-        if command -v get_provider_capabilities >/dev/null 2>&1; then
-            get_provider_capabilities "$1"
+            # Show Access-Stacker integration capabilities
+            if command -v report_capabilities >/dev/null 2>&1; then
+                report_capabilities
+            else
+                echo "Access Integration Status:"
+                echo "  Mode: Standalone (no Stacker bridge)"
+                echo ""
+                echo "For provider capabilities, use: access capabilities <provider>"
+            fi
         else
-            log_error "Provider system not loaded - check SCRIPT_DIR: $SCRIPT_DIR"
-            exit 1
+            # Show provider capabilities
+            if command -v get_provider_capabilities >/dev/null 2>&1; then
+                get_provider_capabilities "$1"
+            else
+                log_error "Provider system not loaded - check SCRIPT_DIR: $SCRIPT_DIR"
+                exit 1
+            fi
         fi
         ;;
         
@@ -986,50 +1001,70 @@ case "${1:-help}" in
             echo "  Run: ${YELLOW}access config <provider> --domain=<domain>${NC}"
         fi
         
-        # Show service status
+        # Show service status using both Stacker framework and Access-specific checks
         echo ""
-        echo "${BOLD}Service status:${NC}"
+        echo "${BOLD}Service Status (Stacker + Access):${NC}"
         
-        # Check if running as daemon
+        # Use Stacker's service status if available
+        if command -v stacker_service_status >/dev/null 2>&1; then
+            stacker_service_status 2>/dev/null || true
+        fi
+        
+        # Access-specific watchdog daemon status  
+        echo ""
+        echo "${BOLD}Access Watchdog:${NC}"
         if [ -f "$ACCESS_DATA_HOME/daemon.lock" ]; then
             daemon_pid=$(cat "$ACCESS_DATA_HOME/daemon.lock")
             if kill -0 "$daemon_pid" 2>/dev/null; then
-                echo "  Daemon: ${GREEN}running${NC} (PID: $daemon_pid)"
+                echo "  🐕 Watchdog: ${GREEN}monitoring${NC} (PID: $daemon_pid)"
+                
+                # Show last watchdog run
+                if [ -f "$ACCESS_DATA_HOME/last_watchdog.log" ]; then
+                    last_watchdog=$(cat "$ACCESS_DATA_HOME/last_watchdog.log" 2>/dev/null)
+                    if [ -n "$last_watchdog" ]; then
+                        current_time=$(date +%s)
+                        watchdog_age=$((current_time - last_watchdog))
+                        minutes_ago=$((watchdog_age / 60))
+                        
+                        if [ "$watchdog_age" -lt 600 ]; then  # 10 minutes
+                            echo "    Last check: ${GREEN}${minutes_ago}m ago${NC} (active)"
+                        else
+                            echo "    Last check: ${YELLOW}${minutes_ago}m ago${NC} (may be stuck)"
+                        fi
+                    fi
+                fi
             else
-                echo "  Daemon: ${RED}stale lock${NC} (PID: $daemon_pid)"
+                echo "  🐕 Watchdog: ${RED}stale lock${NC} (PID: $daemon_pid)"
             fi
         else
-            echo "  Daemon: ${DIM}not running${NC}"
+            echo "  🐕 Watchdog: ${DIM}not running${NC}"
         fi
         
-        # Check cron
-        if crontab -l 2>/dev/null | grep -q "access update"; then
-            echo "  Cron: ${GREEN}configured${NC}"
-            cron_schedule=$(crontab -l | grep "access update" | head -1 | cut -d' ' -f1-5)
+        # Enhanced cron monitoring
+        echo ""
+        echo "${BOLD}Redundant Automation:${NC}"
+        if crontab -l 2>/dev/null | grep -q "access"; then
+            echo "  ✓ Cron: ${GREEN}configured${NC}"
+            cron_schedule=$(crontab -l | grep "access" | head -1 | cut -d' ' -f1-5)
             echo "    Schedule: ${YELLOW}$cron_schedule${NC}"
-        else
-            echo "  Cron: ${DIM}not configured${NC}"
-        fi
-        
-        # Check systemd service
-        if command -v systemctl >/dev/null 2>&1; then
-            if systemctl --user list-unit-files 2>/dev/null | grep -q "^access.service"; then
-                service_status=$(systemctl --user is-active access.service 2>/dev/null)
-                if [ "$service_status" = "active" ]; then
-                    echo "  Systemd: ${GREEN}active${NC} (user service)"
-                else
-                    echo "  Systemd: ${YELLOW}$service_status${NC} (user service)"
+            
+            # Show last cron execution if available
+            if [ -f "$ACCESS_DATA_HOME/last_cron.log" ]; then
+                last_cron=$(stat -c %Y "$ACCESS_DATA_HOME/last_cron.log" 2>/dev/null)
+                if [ -n "$last_cron" ]; then
+                    current_time=$(date +%s)
+                    cron_age=$((current_time - last_cron))
+                    cron_minutes=$((cron_age / 60))
+                    
+                    if [ "$cron_age" -lt 900 ]; then  # 15 minutes
+                        echo "    Last run: ${GREEN}${cron_minutes}m ago${NC}"
+                    else
+                        echo "    Last run: ${YELLOW}${cron_minutes}m ago${NC} (may be stale)"
+                    fi
                 fi
-            elif systemctl list-unit-files 2>/dev/null | grep -q "^access.service"; then
-                service_status=$(systemctl is-active access.service 2>/dev/null)
-                if [ "$service_status" = "active" ]; then
-                    echo "  Systemd: ${GREEN}active${NC} (system service)"
-                else
-                    echo "  Systemd: ${YELLOW}$service_status${NC} (system service)"
-                fi
-            else
-                echo "  Systemd: ${DIM}not configured${NC}"
             fi
+        else
+            echo "  ❌ Cron: ${RED}not configured${NC}"
         fi
         
         # Show last update info
@@ -1153,14 +1188,14 @@ case "${1:-help}" in
         echo "    ${BLUE}access scan${NC}       Manage auto-scan settings"
         echo "    ${BLUE}access providers${NC}       List available providers"
         echo "    ${BLUE}access discover${NC}        Auto-discover all providers"
-        echo "    ${BLUE}access capabilities${NC}    Show provider capabilities"
+        echo "    ${BLUE}access capabilities${NC}    Show integration status & provider capabilities"
         echo "    ${BLUE}access suggest${NC}         Suggest provider for domain"
         echo "    ${BLUE}access health${NC}          Check provider health"
         echo "    ${BLUE}access test${NC} [provider] Test provider connectivity"
-        echo "    ${BLUE}access daemon${NC}          Run as daemon (updates every 5 minutes)"
+        echo "    ${BLUE}access daemon${NC}          Run watchdog daemon (monitors cron health + DNS sync)"
         echo "    ${BLUE}access logs${NC}            View Access logs"
         echo "    ${BLUE}access clean${NC}           Clean locks and temporary files"
-        echo "    ${BLUE}access self-update${NC}     Update using Manager framework"
+        echo "    ${BLUE}access self-update${NC}     Update using Stacker framework"
         echo "    ${BLUE}access version${NC}         Show version"
         echo "    ${BLUE}access help${NC}            Show this help"
         echo ""
