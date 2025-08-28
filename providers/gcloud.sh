@@ -112,7 +112,7 @@ provider_update() {
     
     # Get current record set
     local api_url="https://dns.googleapis.com/dns/v1/projects/$project_id/managedZones/$zone_name/rrsets"
-    local current_rrset=$(curl -s -X GET "$api_url?name=$record_name&type=A" \
+    local current_rrset=$(curl -s -X GET "$api_url?name=$record_name&type=$record_type" \
         -H "Authorization: Bearer $access_token" 2>/dev/null)
     
     # Create change request

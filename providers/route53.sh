@@ -115,8 +115,8 @@ provider_update() {
                 <Action>UPSERT</Action>
                 <ResourceRecordSet>
                     <Name>$record_name</Name>
-                    <Type>A</Type>
-                    <TTL>300</TTL>
+                    <Type>$record_type</Type>
+                    <TTL>${ACCESS_DNS_TTL:-300}</TTL>
                     <ResourceRecords>
                         <ResourceRecord>
                             <Value>$ip</Value>

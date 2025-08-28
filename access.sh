@@ -139,18 +139,20 @@ validate_ipv6() {
 detect_ipv6_dns() {
     local ip=""
     
-    # Try OpenDNS IPv6
+    # Try OpenDNS IPv6 (configurable via environment)
+    local ipv6_dns_primary="${ACCESS_IPV6_DNS_PRIMARY:-2620:119:35::35}"
     if command -v dig >/dev/null 2>&1; then
-        ip=$(dig +short myip.opendns.com @2620:119:35::35 AAAA 2>/dev/null | head -n1)
+        ip=$(dig +short myip.opendns.com @"$ipv6_dns_primary" AAAA 2>/dev/null | head -n1)
         if validate_ipv6 "$ip"; then
             echo "$ip"
             return 0
         fi
     fi
     
-    # Try Google IPv6 DNS
+    # Try secondary IPv6 DNS (configurable via environment)
+    local ipv6_dns_secondary="${ACCESS_IPV6_DNS_SECONDARY:-2001:4860:4860::8888}"
     if command -v dig >/dev/null 2>&1; then
-        ip=$(dig +short @2001:4860:4860::8888 myip.opendns.com AAAA 2>/dev/null | head -n1)
+        ip=$(dig +short @"$ipv6_dns_secondary" myip.opendns.com AAAA 2>/dev/null | head -n1)
         if validate_ipv6 "$ip"; then
             echo "$ip"
             return 0
@@ -164,9 +166,10 @@ detect_ipv6_dns() {
 detect_ipv4_dns() {
     local ip=""
     
-    # Try OpenDNS
+    # Try OpenDNS (configurable via environment)
+    local ipv4_dns_primary="${ACCESS_IPV4_DNS_PRIMARY:-resolver1.opendns.com}"
     if command -v dig >/dev/null 2>&1; then
-        ip=$(dig +short myip.opendns.com @resolver1.opendns.com 2>/dev/null | head -n1)
+        ip=$(dig +short myip.opendns.com @"$ipv4_dns_primary" 2>/dev/null | head -n1)
         if validate_ipv4 "$ip"; then
             echo "$ip"
             return 0
@@ -175,7 +178,7 @@ detect_ipv4_dns() {
     
     # Try nslookup
     if command -v nslookup >/dev/null 2>&1; then
-        ip=$(nslookup myip.opendns.com resolver1.opendns.com 2>/dev/null | grep -A1 "Name:" | tail -n1 | awk '{print $2}')
+        ip=$(nslookup myip.opendns.com "$ipv4_dns_primary" 2>/dev/null | grep -A1 "Name:" | tail -n1 | awk '{print $2}')
         if validate_ipv4 "$ip"; then
             echo "$ip"
             return 0
@@ -209,7 +212,8 @@ detect_ip_dns() {
 # Detect public IPv6 via HTTP
 detect_ipv6_http() {
     local ip=""
-    local services="https://ipv6.icanhazip.com https://v6.ident.me https://ipv6.whatismyip.akamai.com"
+    # Allow custom IP detection services via environment
+    local services="${ACCESS_IPV6_SERVICES:-https://ipv6.icanhazip.com https://v6.ident.me https://ipv6.whatismyip.akamai.com}"
     
     for service in $services; do
         # Try curl with IPv6
@@ -237,7 +241,8 @@ detect_ipv6_http() {
 # Detect public IPv4 via HTTP
 detect_ipv4_http() {
     local ip=""
-    local services="https://checkip.amazonaws.com https://ipv4.icanhazip.com https://ifconfig.me"
+    # Allow custom IP detection services via environment
+    local services="${ACCESS_IPV4_SERVICES:-https://checkip.amazonaws.com https://ipv4.icanhazip.com https://ifconfig.me}"
     
     for service in $services; do
         # Try curl
@@ -353,7 +358,7 @@ LAST_RUN_FILE="$ACCESS_DATA_HOME/last_run"
 # Check if another instance is running and should skip
 should_skip_redundant() {
     local current_time=$(date +%s)
-    local lock_timeout=600  # 10 minutes
+    local lock_timeout=${ACCESS_LOCK_TIMEOUT:-600}  # Default 10 minutes, configurable
     local min_interval=180  # 3 minutes minimum between runs (less than 5 min cron interval)
     
     # Check lock file
