@@ -25,6 +25,21 @@ provider_validate() {
     return 0
 }
 
+# Old interface for backwards compatibility
+provider_update() {
+    local domain="$1"
+    local host="${2:-@}"
+    local ip="$3"
+    
+    # Detect record type based on IP format
+    local record_type="A"
+    if echo "$ip" | grep -q ':'; then
+        record_type="AAAA"
+    fi
+    
+    provider_update_record "$domain" "$host" "$ip" "$record_type"
+}
+
 # New abstracted interface - receives record type from abstraction layer
 provider_update_record() {
     local domain="$1"
