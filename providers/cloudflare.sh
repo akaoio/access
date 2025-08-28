@@ -30,17 +30,29 @@ provider_update() {
     local domain="$1"
     local host="${2:-@}"
     local ip="$3"
+    local record_type="${4:-}"  # Optional 4th parameter
     local email="${CLOUDFLARE_EMAIL}"
     local api_key="${CLOUDFLARE_API_KEY}"
     local zone_id="${CLOUDFLARE_ZONE_ID}"
+    
+    # Auto-detect record type if not provided
+    if [ -z "$record_type" ]; then
+        if echo "$ip" | grep -q ':'; then
+            record_type="AAAA"
+        else
+            record_type="A"
+        fi
+    fi
     
     # Build record name
     local record_name="$host.$domain"
     [ "$host" = "@" ] && record_name="$domain"
     
+    echo "[Cloudflare] Updating $record_type record for $record_name with IP: $ip"
+    
     # Get existing record ID
     local api_url="https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records"
-    local records=$(curl -s -X GET "$api_url?type=A&name=$record_name" \
+    local records=$(curl -s -X GET "$api_url?type=$record_type&name=$record_name" \
         -H "X-Auth-Email: $email" \
         -H "X-Auth-Key: $api_key" \
         -H "Content-Type: application/json" 2>/dev/null)
@@ -55,7 +67,7 @@ provider_update() {
             -H "X-Auth-Email: $email" \
             -H "X-Auth-Key: $api_key" \
             -H "Content-Type: application/json" \
-            -d "{\"type\":\"A\",\"name\":\"$record_name\",\"content\":\"$ip\",\"ttl\":1,\"proxied\":false}" \
+            -d "{\"type\":\"$record_type\",\"name\":\"$record_name\",\"content\":\"$ip\",\"ttl\":1,\"proxied\":false}" \
             2>/dev/null)
     else
         # Create new record
@@ -64,7 +76,7 @@ provider_update() {
             -H "X-Auth-Email: $email" \
             -H "X-Auth-Key: $api_key" \
             -H "Content-Type: application/json" \
-            -d "{\"type\":\"A\",\"name\":\"$record_name\",\"content\":\"$ip\",\"ttl\":1,\"proxied\":false}" \
+            -d "{\"type\":\"$record_type\",\"name\":\"$record_name\",\"content\":\"$ip\",\"ttl\":1,\"proxied\":false}" \
             2>/dev/null)
     fi
     

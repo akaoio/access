@@ -33,11 +33,23 @@ provider_update() {
     local domain="$1"
     local host="${2:-@}"
     local ip="$3"
+    local record_type="${4:-}"  # Optional 4th parameter
     local subscription_id="${AZURE_SUBSCRIPTION_ID}"
     local resource_group="${AZURE_RESOURCE_GROUP}"
     local tenant_id="${AZURE_TENANT_ID}"
     local client_id="${AZURE_CLIENT_ID}"
     local client_secret="${AZURE_CLIENT_SECRET}"
+    
+    # Auto-detect record type if not provided
+    if [ -z "$record_type" ]; then
+        if echo "$ip" | grep -q ':'; then
+            record_type="AAAA"
+        else
+            record_type="A"
+        fi
+    fi
+    
+    echo "[Azure] Updating $record_type record for $host.$domain with IP: $ip"
     
     # Get access token
     local token_response=$(curl -s -X POST \

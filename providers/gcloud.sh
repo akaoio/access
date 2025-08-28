@@ -80,10 +80,22 @@ provider_update() {
     local domain="$1"
     local host="${2:-@}"
     local ip="$3"
+    local record_type="${4:-}"  # Optional 4th parameter
     local project_id="${GCLOUD_PROJECT_ID}"
     local zone_name="${GCLOUD_ZONE_NAME}"
     local client_email="${GCLOUD_CLIENT_EMAIL}"
     local private_key="${GCLOUD_PRIVATE_KEY}"
+    
+    # Auto-detect record type if not provided
+    if [ -z "$record_type" ]; then
+        if echo "$ip" | grep -q ':'; then
+            record_type="AAAA"
+        else
+            record_type="A"
+        fi
+    fi
+    
+    echo "[Google Cloud] Updating $record_type record for $host.$domain with IP: $ip"
     
     # Get access token
     local jwt=$(create_jwt "$client_email" "$private_key")

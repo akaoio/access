@@ -88,7 +88,19 @@ provider_update() {
     local domain="$1"
     local host="${2:-@}"
     local ip="$3"
+    local record_type="${4:-}"  # Optional 4th parameter
     local zone_id="${ROUTE53_ZONE_ID}"
+    
+    # Auto-detect record type if not provided
+    if [ -z "$record_type" ]; then
+        if echo "$ip" | grep -q ':'; then
+            record_type="AAAA"
+        else
+            record_type="A"
+        fi
+    fi
+    
+    echo "[Route53] Updating $record_type record for $host.$domain with IP: $ip"
     
     # Build record name
     local record_name="$host.$domain."

@@ -28,13 +28,25 @@ provider_update() {
     local domain="$1"
     local host="${2:-@}"
     local ip="$3"
+    local record_type="${4:-}"  # Optional 4th parameter
     local token="${DIGITALOCEAN_TOKEN}"
+    
+    # Auto-detect record type if not provided
+    if [ -z "$record_type" ]; then
+        if echo "$ip" | grep -q ':'; then
+            record_type="AAAA"
+        else
+            record_type="A"
+        fi
+    fi
+    
+    echo "[DigitalOcean] Updating $record_type record for $host.$domain with IP: $ip"
     
     # API endpoint
     local api_url="https://api.digitalocean.com/v2/domains/$domain/records"
     
     # Get existing records
-    local records=$(curl -s -X GET "$api_url?type=A&name=$host" \
+    local records=$(curl -s -X GET "$api_url?type=$record_type&name=$host" \
         -H "Authorization: Bearer $token" \
         -H "Content-Type: application/json" 2>/dev/null)
     
