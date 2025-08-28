@@ -1,0 +1,156 @@
+project:
+  name: "@akaoio/access"
+  version: "0.0.1"
+  license: "MIT"
+  author: "AKAO Team"
+  repository: "https://github.com/akaoio/access"
+  description: "Pure POSIX shell implementation for automatic IP synchronization with multiple DNS providers"
+  philosophy: "While languages come and go, shell is eternal."
+  tagline: "Access is the eternal foundation - while applications come and go, Access ensures your DNS always points home."
+
+core_principles:
+  - title: "Pure Shell Promise"
+    description: "NEVER requires Node.js, Python, Go, Rust, NPM, pip, cargo, compilation, transpilation, or build steps. Only POSIX shell and provider CLIs."
+    critical: true
+  
+  - title: "Zero Dependencies Philosophy"
+    description: "Uses only standard POSIX utilities (sh, curl/wget, dig/nslookup, cron) and provider-specific CLIs"
+    critical: true
+  
+  - title: "Single Responsibility"
+    description: "Does ONE thing extremely well - IP synchronization with DNS providers. No feature creep allowed."
+    critical: true
+  
+  - title: "Eternal Infrastructure"
+    description: "Sits below all other infrastructure - when everything else fails, Access survives"
+    critical: true
+
+architecture:
+  overview: "Access is designed as eternal infrastructure with multiple layers providing automatic DNS IP synchronization that works forever."
+  
+  layers:
+    - name: "USER INTERFACE"
+      description: "Simple command interface for all operations"
+      commands: ["access ip", "access update", "access config"]
+    
+    - name: "PROVIDER SCANNING"
+      description: "Auto-agnostic runtime provider detection"
+      capability: "Discovers available providers without configuration"
+    
+    - name: "PROVIDER ABSTRACTION"
+      description: "Unified interface for all DNS providers"
+      capability: "Consistent API across different provider types"
+    
+    - name: "IP DETECTION"
+      description: "Multi-tier detection with DNS resolution and HTTP fallback chain"
+      capability: "Reliable IP detection even in degraded conditions"
+    
+    - name: "POSIX SHELL CORE"
+      description: "Pure /bin/sh with no external dependencies"
+      capability: "Runs on any Unix-like system forever"
+
+providers:
+  cloud:
+    - name: "AWS Route53"
+      description: "Amazon Web Services DNS"
+      requirement: "AWS CLI"
+      status: "✅ Supported"
+    
+    - name: "Google Cloud DNS"
+      description: "Google Cloud Platform DNS"
+      requirement: "gcloud CLI"
+      status: "✅ Supported"
+    
+    - name: "Azure DNS"
+      description: "Microsoft Azure DNS Service"
+      requirement: "Azure CLI"
+      status: "✅ Supported"
+  
+  traditional:
+    - name: "Cloudflare"
+      description: "Leading CDN and DNS provider"
+      requirement: "API credentials"
+      status: "✅ Supported"
+    
+    - name: "GoDaddy"
+      description: "Popular domain registrar"
+      requirement: "API credentials"
+      status: "✅ Supported"
+    
+    - name: "DigitalOcean"
+      description: "Developer-friendly cloud platform"
+      requirement: "API token"
+      status: "✅ Supported"
+
+features:
+  - name: "Multi-Provider Support"
+    description: "Works with major cloud providers and traditional DNS services"
+  
+  - name: "Automatic IP Detection"
+    description: "Reliable multi-tier IP detection with DNS and HTTP fallbacks"
+  
+  - name: "Provider Discovery"
+    description: "Auto-discover available providers at runtime"
+  
+  - name: "XDG Compliance"
+    description: "Follows XDG Base Directory specification for configuration"
+  
+  - name: "Service Integration"
+    description: "Native systemd service and cron job support"
+  
+  - name: "Auto-Update Capability"
+    description: "Self-updating mechanism for the Access tool itself"
+  
+  - name: "Private IP Filtering"
+    description: "Automatically filters RFC 1918 private IP ranges"
+  
+  - name: "Secure Configuration"
+    description: "Encrypted credential storage with proper file permissions"
+
+detection_methods:
+  tier1:
+    name: "DNS Resolution (Fastest)"
+    description: "OpenDNS resolver queries using dig or nslookup"
+    response_time: "Sub-second"
+  
+  tier2:
+    name: "HTTP Services (Fallback)"
+    services:
+      - "checkip.amazonaws.com (AWS infrastructure)"
+      - "ipv4.icanhazip.com (reliable service)"
+      - "ifconfig.me (fallback option)"
+  
+  validation:
+    description: "Filters private/reserved IP ranges (RFC 1918) and validates IP format"
+
+security:
+  credential_security:
+    - "All credentials stored locally in ~/.config/access/config.json"
+    - "File permissions set to 600 (user read/write only)"
+    - "No credentials transmitted in URLs or logs"
+    - "HTTPS required for all API communication"
+  
+  network_security:
+    - "Private IP ranges filtered (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)"
+    - "DNS queries use secure resolvers"
+    - "API rate limiting respected"
+    - "Timeout limits on all network calls"
+  
+  system_security:
+    - "No root privileges required for normal operation"
+    - "Systemd service runs as dedicated user"
+    - "Log rotation configured"
+    - "No temporary files in world-readable locations"
+
+why_access:
+  title: "Why Access Matters"
+  description: "Access represents the foundational layer of network infrastructure - it's the system that ensures your services remain accessible even when everything else fails. By keeping it pure POSIX shell, we guarantee it will work on any Unix-like system, forever."
+  
+  key_point: "One job. Done perfectly. Forever."
+  
+  benefits:
+    - "Zero dependencies means zero dependency hell"
+    - "POSIX compliance ensures universal compatibility"
+    - "Simple design ensures reliability"
+    - "Shell-based means it works when nothing else does"
+    - "Eternal infrastructure that outlasts technology trends"
