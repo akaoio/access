@@ -58,7 +58,7 @@ Access is designed as eternal infrastructure with multiple layers:
 │            USER INTERFACE               │
 │  access ip | access update | access config │
 ├─────────────────────────────────────────┤
-│         PROVIDER DISCOVERY              │
+│         PROVIDER SCANNING               │
 │  Auto-agnostic runtime provider detection │
 ├─────────────────────────────────────────┤
 │         PROVIDER ABSTRACTION            │
@@ -127,7 +127,7 @@ access version         # Show version
 access help            # Show help
 ```
 
-### Provider Discovery (v0.0.1+)
+### Provider Scanning (v0.0.1+)
 ```bash
 access discover        # Auto-discover all available providers
 access providers       # List providers with descriptions
