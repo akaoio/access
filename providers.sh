@@ -66,16 +66,51 @@ list_providers() {
     done
 }
 
-# Load provider dynamically
+# Load provider dynamically with security validation
 load_provider() {
     local provider_name="$1"
     
     [ -z "$provider_name" ] && return 1
     
-    # Find provider file (case-insensitive)
+    # SECURITY FIX 1: Input sanitization to prevent command injection
+    # Validate provider name contains only safe characters
+    case "$provider_name" in
+        *[^a-zA-Z0-9_-]*)
+            echo "Error: Invalid provider name: $provider_name (only alphanumeric, underscore, hyphen allowed)" >&2
+            return 1
+            ;;
+        ../*|*/../*|*/..|*/../*)
+            echo "Error: Path traversal attempt in provider name: $provider_name" >&2
+            return 1
+            ;;
+        /*|~/*|\$*)
+            echo "Error: Absolute path or variable expansion attempt in provider name: $provider_name" >&2
+            return 1
+            ;;
+    esac
+    
+    # Limit provider name length to prevent buffer attacks
+    if [ ${#provider_name} -gt 50 ]; then
+        echo "Error: Provider name too long: $provider_name (max 50 characters)" >&2
+        return 1
+    fi
+    
+    # Find provider file (case-insensitive) with additional security checks
     local provider_file=""
     for file in "$PROVIDER_DIR"/*.sh; do
         [ -f "$file" ] || continue
+        
+        # Verify file is actually in provider directory (no symlink attacks)
+        case "$(readlink -f "$file" 2>/dev/null || realpath "$file" 2>/dev/null || echo "$file")" in
+            "$(readlink -f "$PROVIDER_DIR" 2>/dev/null || realpath "$PROVIDER_DIR" 2>/dev/null || echo "$PROVIDER_DIR")"/*.sh)
+                # File is safely in provider directory
+                ;;
+            *)
+                echo "Warning: Skipping provider file outside provider directory: $file" >&2
+                continue
+                ;;
+        esac
+        
         base=$(basename "$file" .sh)
         if [ "$(echo "$base" | tr '[:upper:]' '[:lower:]')" = "$(echo "$provider_name" | tr '[:upper:]' '[:lower:]')" ]; then
             provider_file="$file"
@@ -92,7 +127,29 @@ load_provider() {
         return 1
     fi
     
-    # Source the provider
+    # SECURITY FIX 1: Validate provider file before sourcing
+    # Check file permissions (should not be world-writable)
+    if [ -w "$provider_file" ] && [ "$(stat -f "%p" "$provider_file" 2>/dev/null || stat -c "%a" "$provider_file" 2>/dev/null)" != "${provider_perms}" ]; then
+        if ls -la "$provider_file" | grep -q '.\{7\}w'; then
+            echo "Error: Provider file is world-writable (security risk): $provider_file" >&2
+            return 1
+        fi
+    fi
+    
+    # Check file size (prevent resource exhaustion)
+    file_size=$(wc -c < "$provider_file" 2>/dev/null || echo 0)
+    if [ "$file_size" -gt 100000 ]; then  # 100KB limit
+        echo "Error: Provider file too large (security risk): $provider_file" >&2
+        return 1
+    fi
+    
+    # Basic content validation - must start with shebang and contain required functions
+    if ! head -1 "$provider_file" | grep -q '^#!/bin/sh\|^#!/usr/bin/sh\|^#!/bin/dash'; then
+        echo "Error: Provider file missing valid shell shebang: $provider_file" >&2
+        return 1
+    fi
+    
+    # Source the provider in a controlled way
     . "$provider_file"
     
     # Verify required functions exist

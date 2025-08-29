@@ -1,6 +1,6 @@
-# @akaoio/access API Reference
+#  API Reference
 
-Pure POSIX shell implementation for automatic IP synchronization with multiple DNS providers - The eternal foundation layer for network infrastructure
+
 
 ## Core API
 
@@ -261,35 +261,6 @@ module_verify() {
 
 ### Core Variables
 
-#### ACCESS_PROVIDER
-DNS provider to use
-
-**Default**: ``
-
-#### ACCESS_DOMAIN
-Domain to update
-
-**Default**: ``
-
-#### ACCESS_HOST
-Host record (@ for root)
-
-**Default**: `@`
-
-#### ACCESS_INTERVAL
-Update interval in seconds
-
-**Default**: `300`
-
-#### AUTO_UPDATE
-Enable auto-updates
-
-**Default**: `false`
-
-#### ACCESS_DRY_RUN
-Test mode without making changes
-
-**Default**: `false`
 
 
 ### Module Variables
@@ -397,6 +368,6 @@ module_cleanup() {
 
 ---
 
-*@akaoio/access API Reference*
+* API Reference*
 
-*Version 0.0.3 | License: MIT*
+*Version  | License: *

@@ -33,6 +33,22 @@ provider_update() {
     local key="${GODADDY_KEY}"
     local secret="${GODADDY_SECRET}"
     
+    # SECURITY FIX 4: Input validation to prevent DNS provider injection
+    if ! validate_domain_name "$domain"; then
+        echo "Error: Invalid domain name: $domain" >&2
+        return 1
+    fi
+    
+    if ! validate_hostname "$host"; then
+        echo "Error: Invalid hostname: $host" >&2
+        return 1
+    fi
+    
+    if ! validate_ip_address "$ip"; then
+        echo "Error: Invalid IP address: $ip" >&2
+        return 1
+    fi
+    
     # Auto-detect record type if not provided (backwards compatibility)
     if [ -z "$record_type" ]; then
         if echo "$ip" | grep -q ':'; then
@@ -41,6 +57,17 @@ provider_update() {
             record_type="A"
         fi
     fi
+    
+    # Validate record type
+    case "$record_type" in
+        A|AAAA|CNAME|TXT|MX|NS|SRV|PTR)
+            # Valid DNS record types
+            ;;
+        *)
+            echo "Error: Invalid DNS record type: $record_type" >&2
+            return 1
+            ;;
+    esac
     
     # Validate inputs
     if [ -z "$domain" ] || [ -z "$ip" ] || [ -z "$record_type" ]; then

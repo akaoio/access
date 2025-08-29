@@ -1,91 +1,33 @@
-# CLAUDE.md - @akaoio/access
+# CLAUDE.md - 
 
-This file provides guidance to Claude Code (claude.ai/code) when working with the @akaoio/access codebase.
+This file provides guidance to Claude Code (claude.ai/code) when working with the  codebase.
 
 ## Project Overview
 
-**@akaoio/access** - Pure POSIX shell implementation for automatic IP synchronization with multiple DNS providers - The eternal foundation layer for network infrastructure
+**** - 
 
-**Version**: 0.0.3  
-**License**: MIT  
-**Author**: AKAO Team  
-**Repository**: https://github.com/akaoio/access  
-**Philosophy**: "While languages come and go, shell is eternal."
+**Version**:   
+**License**:   
+**Author**:   
+**Repository**:   
+**Philosophy**: ""
 
 ## Core Development Principles
 
-### Pure Shell Promise
-NEVER requires Node.js, Python, Go, Rust, NPM, pip, cargo, compilation, transpilation, or build steps. Only POSIX shell and provider CLIs.
-**Critical**: true
-
-### Zero Dependencies Philosophy
-Uses only standard POSIX utilities (sh, curl/wget, dig/nslookup, cron) and provider-specific CLIs
-**Critical**: true
-
-### Single Responsibility
-Does ONE thing extremely well - IP synchronization with DNS providers. No feature creep allowed.
-**Critical**: true
-
-### Eternal Infrastructure
-Sits below all other infrastructure - when everything else fails, Access survives
-**Critical**: true
 
 
 ## Architecture Overview
 
 ### System Design
 
-Access is designed as eternal infrastructure with multiple layers providing automatic DNS IP synchronization that works forever. Version 0.0.3 introduces modular provider system with color logging and enhanced module organization.
+
 
 ### Core Components
 
-**Core Engine (access.sh)**
-- Main orchestration engine with color logging and enhanced error handling
-- Responsibility: Command processing, provider coordination, and system integration
-
-**Provider Modules (providers/)**
-- Modular provider implementations for different DNS services
-- Responsibility: DNS provider-specific operations with standardized interfaces
-
-**Shared Modules (modules/)**
-- Common functionality shared across all providers
-- Responsibility: Utility functions, IP detection, and configuration management
 
 
 ## Features
 
-### Modular Provider Architecture
-Hot-swappable provider modules in providers/ directory with standardized interfaces
-
-### Color-Coded Logging
-Enhanced visual feedback with color-coded status messages and error reporting
-
-### Dynamic Module Loading
-Runtime loading of provider and utility modules without restart
-
-### Multi-Provider Support
-Works with major cloud providers and traditional DNS services
-
-### Automatic IP Detection
-Reliable multi-tier IP detection with DNS and HTTP fallbacks
-
-### Provider Discovery
-Auto-discover available providers at runtime from modular directory structure
-
-### XDG Compliance
-Follows XDG Base Directory specification for configuration
-
-### Service Integration
-Native systemd service and cron job support
-
-### Auto-Update Capability
-Self-updating mechanism for the Access tool itself
-
-### Private IP Filtering
-Automatically filters RFC 1918 private IP ranges
-
-### Secure Configuration
-Encrypted credential storage with proper file permissions
 
 
 ## Command Interface
@@ -93,164 +35,15 @@ Encrypted credential storage with proper file permissions
 ### Core Commands
 
 ```bash
-access ip  # Detect and display public IP
-access update  # Update DNS with current IP
-access daemon  # Run continuous updates (foreground)
-access config [provider] [options]  # Configure DNS provider
-access auto-update  # Check and install updates
-access discover  # Auto-discover available providers
-access providers  # List providers with descriptions
-access capabilities [provider]  # Show what a provider can do
-access suggest [domain]  # Suggest provider for your domain
-access health  # Check health of all providers
-access version  # Show version
-access help [command]  # Show help
+
 ```
 
 ### Detailed Command Reference
-
-#### `ip` Command
-**Purpose**: Detect and display public IP  
-**Usage**: `access ip`
-
-
-**Examples**:
-```bash
-access ip  # Show current public IP
-access ip --debug  # Show IP with debug information
-```
-
-#### `update` Command
-**Purpose**: Update DNS with current IP  
-**Usage**: `access update`
-
-
-**Examples**:
-```bash
-access update  # Update DNS records
-ACCESS_DRY_RUN&#x3D;true access update  # Test update without making changes
-```
-
-#### `daemon` Command
-**Purpose**: Run continuous updates (foreground)  
-**Usage**: `access daemon`
-
-
-**Examples**:
-```bash
-access daemon  # Run in foreground with default interval
-ACCESS_INTERVAL&#x3D;10 access daemon  # Run with 10 second interval
-```
-
-#### `config` Command
-**Purpose**: Configure DNS provider  
-**Usage**: `access config [provider] [options]`
-
-
-**Examples**:
-```bash
-access config godaddy --key&#x3D;KEY --secret&#x3D;SECRET  # Configure GoDaddy provider
-access config cloudflare --email&#x3D;EMAIL --api-key&#x3D;KEY  # Configure Cloudflare provider
-```
-
-#### `auto-update` Command
-**Purpose**: Check and install updates  
-**Usage**: `access auto-update`
-
-
-**Examples**:
-```bash
-access auto-update  # Check for and apply updates
-```
-
-#### `discover` Command
-**Purpose**: Auto-discover available providers  
-**Usage**: `access discover`
-
-
-**Examples**:
-```bash
-access discover  # Scan for available DNS providers
-```
-
-#### `providers` Command
-**Purpose**: List providers with descriptions  
-**Usage**: `access providers`
-
-
-**Examples**:
-```bash
-access providers  # Show all supported providers
-```
-
-#### `capabilities` Command
-**Purpose**: Show what a provider can do  
-**Usage**: `access capabilities [provider]`
-
-
-**Examples**:
-```bash
-access capabilities godaddy  # Show GoDaddy capabilities
-```
-
-#### `suggest` Command
-**Purpose**: Suggest provider for your domain  
-**Usage**: `access suggest [domain]`
-
-
-**Examples**:
-```bash
-access suggest example.com  # Get provider recommendation
-```
-
-#### `health` Command
-**Purpose**: Check health of all providers  
-**Usage**: `access health`
-
-
-**Examples**:
-```bash
-access health  # Check provider connectivity
-```
-
-#### `version` Command
-**Purpose**: Show version  
-**Usage**: `access version`
-
-
-
-#### `help` Command
-**Purpose**: Show help  
-**Usage**: `access help [command]`
-
 
 
 
 ## Environment Variables
 
-### ACCESS_PROVIDER
-- **Description**: DNS provider to use
-- **Default**: ``
-
-### ACCESS_DOMAIN
-- **Description**: Domain to update
-- **Default**: ``
-
-### ACCESS_HOST
-- **Description**: Host record (@ for root)
-- **Default**: `@`
-
-### ACCESS_INTERVAL
-- **Description**: Update interval in seconds
-- **Default**: `300`
-
-### AUTO_UPDATE
-- **Description**: Enable auto-updates
-- **Default**: `false`
-
-### ACCESS_DRY_RUN
-- **Description**: Test mode without making changes
-- **Default**: `false`
 
 
 ## Development Guidelines
@@ -276,7 +69,7 @@ access health  # Check provider connectivity
 ### Code Organization
 
 ```
-stacker.sh              # Main entry point
+manager.sh              # Main entry point
 ├── Core Functions
 │   ├── stacker_init()      # Framework initialization
 │   ├── stacker_config()    # Configuration management
@@ -383,6 +176,7 @@ load_module "module-name" || {
 ## Use Cases
 
 
+
 ## Security Considerations
 
 ### Framework Security
@@ -404,7 +198,7 @@ load_module "module-name" || {
 **Module Loading Failures**
 ```bash
 # Debug module loading
-STACKER_DEBUG=true stacker init
+STACKER_DEBUG=true manager init
 
 # Check module path
 echo $STACKER_MODULE_PATH
@@ -416,31 +210,31 @@ sh -n module-name.sh
 **Configuration Issues**
 ```bash
 # Check configuration
-stacker config list
+manager config list
 
 # Validate configuration file
-stacker config validate
+manager config validate
 
 # Reset configuration
-rm -rf ~/.config/stacker
-stacker init
+rm -rf ~/.config/manager
+manager init
 ```
 
 **Service Issues**
 ```bash
 # Check service status
-stacker service status
+manager service status
 
 # View service logs
-journalctl -u stacker -f
+journalctl -u manager -f
 
 # Restart service
-stacker service restart
+manager service restart
 ```
 
 ## Notes for AI Assistants
 
-When working with Stacker:
+When working with Manager:
 
 ### Critical Guidelines
 - **ALWAYS maintain POSIX compliance** - test with `/bin/sh`
@@ -477,8 +271,9 @@ When extending Stacker:
 
 ### Benefits
 
+
 ---
 
 *Stacker is the foundation - bringing order to chaos through universal shell patterns.*
 
-*Version: 0.0.3 | License: MIT | Author: AKAO Team*
+*Version:  | License:  | Author: *

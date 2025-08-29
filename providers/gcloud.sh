@@ -50,8 +50,9 @@ create_jwt() {
     local claims="{\"iss\":\"$client_email\",\"scope\":\"$scope\",\"aud\":\"https://oauth2.googleapis.com/token\",\"iat\":$iat,\"exp\":$exp}"
     local claims_base64=$(echo -n "$claims" | openssl base64 -A | tr '+/' '-_' | tr -d '=')
     
-    # Decode private key
-    local key_file=$(mktemp /tmp/gcloud_key.XXXXXX 2>/dev/null || echo "/tmp/gcloud_key_$$")
+    # Decode private key securely 
+    local key_file=$(mktemp -t "gcloud_key.XXXXXX" 2>/dev/null || echo "/tmp/gcloud_key.$$.$RANDOM")
+    chmod 600 "$key_file" 2>/dev/null  # Secure permissions
     echo "$private_key_base64" | base64 -d > "$key_file" 2>/dev/null
     
     # Sign JWT
