@@ -1958,8 +1958,8 @@ case "${1:-help}" in
                 echo "  🐕 Watchdog: ${GREEN}monitoring${NC} (PID: $daemon_pid)"
                 
                 # Show last watchdog run
-                if [ -f "$ACCESS_DATA_HOME/last_watchdog.log" ]; then
-                    last_watchdog=$(cat "$ACCESS_DATA_HOME/last_watchdog.log" 2>/dev/null)
+                if [ -f "$ACCESS_DATA_HOME/last_run" ]; then
+                    last_watchdog=$(cat "$ACCESS_DATA_HOME/last_run" 2>/dev/null)
                     if [ -n "$last_watchdog" ]; then
                         current_time=$(date +%s)
                         watchdog_age=$((current_time - last_watchdog))
