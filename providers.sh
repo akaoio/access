@@ -129,11 +129,11 @@ load_provider() {
     
     # SECURITY FIX 1: Validate provider file before sourcing
     # Check file permissions (should not be world-writable)
-    if [ -w "$provider_file" ] && [ "$(stat -f "%p" "$provider_file" 2>/dev/null || stat -c "%a" "$provider_file" 2>/dev/null)" != "${provider_perms}" ]; then
-        if ls -la "$provider_file" | grep -q '.\{7\}w'; then
-            echo "Error: Provider file is world-writable (security risk): $provider_file" >&2
-            return 1
-        fi
+    # Extract last character from permissions to check for world-write
+    file_perms=$(ls -la "$provider_file" | cut -c 10 2>/dev/null || echo "")
+    if [ "$file_perms" = "w" ]; then
+        echo "Error: Provider file is world-writable (security risk): $provider_file" >&2
+        return 1
     fi
     
     # Check file size (prevent resource exhaustion)

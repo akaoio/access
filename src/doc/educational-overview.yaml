@@ -1,0 +1,256 @@
+project:
+  name: "@akaoio/access"
+  version: "0.0.3"
+  license: "MIT"
+  author: "AKAO Team"
+  repository: "https://github.com/akaoio/access"
+  description: "Pure POSIX shell implementation for automatic IP synchronization with multiple DNS providers - The eternal foundation layer for network infrastructure"
+  philosophy: "While languages come and go, shell is eternal."
+  tagline: "Access is the eternal foundation - while applications come and go, Access ensures your DNS always points home."
+  educational_focus: "Learn DNS synchronization patterns, POSIX shell mastery, and eternal infrastructure design"
+
+  # DEEP TECHNICAL KNOWLEDGE FOR LEARNING
+  core_principles:
+    - title: "Pure Shell Promise"
+      description: "NEVER requires Node.js, Python, Go, Rust, NPM, pip, cargo, compilation, transpilation, or build steps. Only POSIX shell and provider CLIs."
+      learning_goal: "Master pure POSIX shell programming without modern dependencies"
+      critical: true
+    
+    - title: "Zero Dependencies Philosophy"
+      description: "Uses only standard POSIX utilities (sh, curl/wget, dig/nslookup, cron) and provider-specific CLIs"
+      learning_goal: "Understand how to build robust systems with minimal dependencies"
+      critical: true
+    
+    - title: "Single Responsibility"
+      description: "Does ONE thing extremely well - IP synchronization with DNS providers. No feature creep allowed."
+      learning_goal: "Learn Unix philosophy of single-purpose tools done perfectly"
+      critical: true
+    
+    - title: "Eternal Infrastructure"
+      description: "Sits below all other infrastructure - when everything fails, Access survives"
+      learning_goal: "Design systems that outlast technology trends and framework churn"
+      critical: true
+
+  # PRACTICAL ARCHITECTURE EDUCATION
+  architecture_layers:
+    - name: "USER INTERFACE"
+      description: "Simple command interface with color-coded output for all operations"
+      commands: ["access ip", "access update", "access config", "access providers"]
+      learning_concept: "Design intuitive CLI interfaces that users can remember"
+      
+    - name: "PROVIDER SCANNING"
+      description: "Auto-agnostic runtime provider detection with modular loading"
+      capability: "Discovers available providers dynamically from providers/ directory"
+      learning_concept: "Implement plugin architectures in pure shell"
+      
+    - name: "PROVIDER ABSTRACTION"
+      description: "Unified interface for all DNS providers with modular architecture"
+      capability: "Consistent API across different provider types with hot-swappable modules"
+      learning_concept: "Abstract different APIs behind common interfaces"
+      
+    - name: "IP DETECTION"
+      description: "Multi-tier detection with DNS resolution and HTTP fallback chain"
+      capability: "Reliable IP detection even in degraded conditions with color status feedback"
+      learning_concept: "Build resilient systems with multiple fallback strategies"
+      
+    - name: "POSIX SHELL CORE"
+      description: "Pure /bin/sh with no external dependencies and enhanced modularity"
+      capability: "Runs on any Unix-like system forever with hot-loadable modules"
+      learning_concept: "Write code that works everywhere and lasts forever"
+
+  # REAL-WORLD IMPLEMENTATION EXAMPLES
+  supported_providers:
+    cloud:
+      - name: "AWS Route53"
+        description: "Enterprise DNS with global infrastructure"
+        requirement: "AWS CLI (aws route53 commands)"
+        implementation_pattern: "JSON API calls via AWS CLI"
+        learning_value: "See how to integrate with enterprise cloud APIs"
+        
+      - name: "Google Cloud DNS"
+        description: "Google's global DNS infrastructure"
+        requirement: "gcloud CLI (gcloud dns commands)"
+        implementation_pattern: "YAML configuration via gcloud"
+        learning_value: "Learn different CLI integration patterns"
+        
+      - name: "Azure DNS"
+        description: "Microsoft's cloud DNS service"
+        requirement: "Azure CLI (az network dns commands)"
+        implementation_pattern: "Azure resource management"
+        learning_value: "Understand Azure resource model through DNS"
+    
+    traditional:
+      - name: "Cloudflare"
+        description: "Leading CDN and DNS provider with developer-friendly API"
+        requirement: "API credentials"
+        implementation_pattern: "RESTful API with curl"
+        learning_value: "Master RESTful API integration in shell"
+        
+      - name: "GoDaddy"
+        description: "Popular domain registrar with comprehensive API"
+        requirement: "API key and secret"
+        implementation_pattern: "Authenticated REST API calls"
+        learning_value: "Handle API authentication and rate limiting"
+
+  # PRACTICAL SECURITY EDUCATION
+  security_implementation:
+    credential_security:
+      - pattern: "All credentials stored locally in ~/.config/access/config.json"
+        learning: "Implement secure local credential storage"
+      - pattern: "File permissions set to 600 (user read/write only)"
+        learning: "Use Unix permissions for access control"
+      - pattern: "No credentials transmitted in URLs or logs"
+        learning: "Prevent credential leakage in logs and URLs"
+      - pattern: "HTTPS required for all API communication"
+        learning: "Enforce secure communication protocols"
+    
+    network_security:
+      - pattern: "Private IP ranges filtered (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)"
+        learning: "Understand and implement RFC 1918 IP filtering"
+      - pattern: "DNS queries use secure resolvers (OpenDNS: 208.67.222.222)"
+        learning: "Choose and implement secure DNS resolution"
+      - pattern: "API rate limiting respected with exponential backoff"
+        learning: "Implement proper API rate limiting and retry logic"
+
+  # EDUCATIONAL IMPLEMENTATION EXAMPLES
+  implementation_examples:
+    ip_detection_flow: |
+      # Educational example: Multi-tier IP detection
+      detect_ip() {
+        # Tier 1: DNS resolution (fastest)
+        ip=$(dig +short myip.opendns.com @resolver1.opendns.com 2>/dev/null)
+        
+        # Tier 2: HTTP services (fallback)
+        if [ -z "$ip" ]; then
+          ip=$(curl -s --max-time 10 https://checkip.amazonaws.com/)
+        fi
+        
+        # Tier 3: Alternative HTTP services
+        if [ -z "$ip" ]; then
+          ip=$(curl -s --max-time 10 https://ipv4.icanhazip.com/)
+        fi
+        
+        # Validation: Filter private IP ranges
+        if echo "$ip" | grep -E "^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)" >/dev/null; then
+          return 1  # Private IP detected
+        fi
+        
+        echo "$ip"
+      }
+
+    provider_abstraction_example: |
+      # Educational example: Provider abstraction pattern
+      update_dns() {
+        provider="$1"
+        domain="$2"
+        ip="$3"
+        
+        # Load provider-specific module
+        . "providers/${provider}.sh"
+        
+        # Call standardized interface
+        provider_update_record "$domain" "$ip"
+      }
+
+    modular_loading_example: |
+      # Educational example: Dynamic module loading
+      load_providers() {
+        for provider_file in providers/*.sh; do
+          if [ -f "$provider_file" ]; then
+            provider_name=$(basename "$provider_file" .sh)
+            . "$provider_file"
+            echo "✅ Loaded provider: $provider_name"
+          fi
+        done
+      }
+
+  # LEARNING OUTCOMES
+  educational_value:
+    shell_mastery:
+      - "Write portable POSIX shell scripts that work everywhere"
+      - "Implement complex logic without external dependencies"
+      - "Handle errors gracefully with proper exit codes"
+      - "Create modular, maintainable shell architectures"
+    
+    systems_design:
+      - "Design eternal infrastructure that outlasts technology trends"
+      - "Implement plugin architectures in shell"
+      - "Create resilient systems with multiple fallback strategies"
+      - "Abstract different APIs behind unified interfaces"
+    
+    network_programming:
+      - "Integrate with RESTful APIs using curl"
+      - "Implement secure credential management"
+      - "Handle DNS operations programmatically"
+      - "Build network-resilient applications"
+    
+    devops_patterns:
+      - "Create self-updating systems with rollback capability"
+      - "Implement proper logging and monitoring"
+      - "Build systemd services and cron jobs"
+      - "Design XDG-compliant configuration systems"
+
+  # WHY THIS MATTERS EDUCATIONALLY
+  why_learn_access:
+    title: "Why Access is the Perfect Learning Platform"
+    description: "Access demonstrates how to build production-grade infrastructure using only fundamental Unix tools. It's a masterclass in systems programming that teaches eternal skills."
+    
+    key_learning_point: "One tool. Maximum education. Applicable forever."
+    
+    career_benefits:
+      - "Shell skills work on every Unix system - from embedded devices to supercomputers"
+      - "Understanding DNS is fundamental to all network programming"
+      - "Learning to build without dependencies creates truly portable solutions"
+      - "Mastering Unix philosophy improves all your system design"
+      - "These patterns apply to any infrastructure programming challenge"
+
+  # Features with educational context
+  features:
+    - name: "Modular Provider Architecture"
+      description: "Hot-swappable provider modules in providers/ directory with standardized interfaces - Learn plugin patterns in shell"
+    
+    - name: "Color-Coded Logging"
+      description: "Enhanced visual feedback with color-coded status messages and error reporting - Master user-friendly CLI design"
+    
+    - name: "Dynamic Module Loading"
+      description: "Runtime loading of provider and utility modules without restart - Understand dynamic system architecture"
+    
+    - name: "Multi-Provider Support"
+      description: "Works with major cloud providers and traditional DNS services - Learn API abstraction patterns"
+    
+    - name: "Automatic IP Detection"
+      description: "Reliable multi-tier IP detection with DNS and HTTP fallbacks - Build resilient network detection"
+    
+    - name: "Provider Discovery"
+      description: "Auto-discover available providers at runtime from modular directory structure - Implement plugin discovery"
+    
+    - name: "XDG Compliance"
+      description: "Follows XDG Base Directory specification for configuration - Master proper configuration management"
+    
+    - name: "Service Integration"
+      description: "Native systemd service and cron job support - Learn service automation patterns"
+    
+    - name: "Auto-Update Capability"
+      description: "Self-updating mechanism for the Access tool itself - Build self-maintaining systems"
+    
+    - name: "Private IP Filtering"
+      description: "Automatically filters RFC 1918 private IP ranges - Implement network validation logic"
+    
+    - name: "Secure Configuration"
+      description: "Encrypted credential storage with proper file permissions - Master security best practices"
+
+architecture:
+  overview: "Access is designed as eternal infrastructure with multiple layers providing automatic DNS IP synchronization that works forever. Version 0.0.3 introduces modular provider system with color logging and enhanced module organization."
+  
+  components:
+    - name: "Core Engine (access.sh)"
+      description: "Main orchestration engine with color logging and enhanced error handling"
+      responsibility: "Command processing, provider coordination, and system integration"
+    
+    - name: "Provider Modules (providers/)"
+      description: "Modular provider implementations for different DNS services"
+      responsibility: "DNS provider-specific operations with standardized interfaces"
+    
+    - name: "Shared Modules (modules/)"
+      description: "Common functionality shared across all providers"
+      responsibility: "Utility functions, IP detection, and configuration management"

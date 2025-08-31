@@ -5,6 +5,58 @@
 
 set -e
 
+# Source required modules for integration
+SCRIPT_DIR="$(dirname "$0")"
+if [ -f "$SCRIPT_DIR/providers.sh" ]; then
+    . "$SCRIPT_DIR/providers.sh"
+fi
+
+# Load validation functions needed by providers
+# Fallback implementations if access.sh not available
+validate_domain_name() {
+    local domain="$1"
+    [ -z "$domain" ] && return 1
+    [ ${#domain} -gt 253 ] && return 1
+    [ ${#domain} -lt 1 ] && return 1
+    case "$domain" in
+        *[^a-zA-Z0-9.-]*) return 1 ;;
+        .*|*.|*-|-*|*..*|*-.*|*.-*) return 1 ;;
+    esac
+    return 0
+}
+
+validate_hostname() {
+    local hostname="$1"
+    [ -z "$hostname" ] && return 1
+    [ "$hostname" = "@" ] && return 0
+    [ ${#hostname} -gt 63 ] && return 1
+    case "$hostname" in
+        *[^a-zA-Z0-9-]*) return 1 ;;
+        -*|*-) return 1 ;;
+    esac
+    return 0
+}
+
+validate_ip_address() {
+    local ip="$1"
+    [ -z "$ip" ] && return 1
+    if echo "$ip" | grep -q '^[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*$'; then
+        local IFS='.'
+        set -- $ip
+        [ $# -eq 4 ] || return 1
+        for octet in "$@"; do
+            case "$octet" in
+                ''|*[!0-9]*) return 1 ;;
+            esac
+            [ "$octet" -gt 255 ] && return 1
+        done
+        return 0
+    fi
+    # Basic IPv6 check
+    echo "$ip" | grep -q ':' && return 0
+    return 1
+}
+
 # Configuration
 SCAN_CONFIG="${SCAN_CONFIG:-$HOME/.config/access/scan.json}"
 SCAN_LOG="${SCAN_LOG:-$HOME/.config/access/scan.log}"
@@ -300,22 +352,79 @@ register_peer() {
     
     info "Public IP: $public_ip"
     
-    # Update DNS based on provider
-    case "$DNS_PROVIDER" in
-        godaddy)
-            update_godaddy_dns "$peer_host" "$public_ip"
-            ;;
-        cloudflare)
-            update_cloudflare_dns "$peer_host" "$public_ip"
-            ;;
-        digitalocean)
-            update_digitalocean_dns "$peer_host" "$public_ip"
-            ;;
-        *)
-            error "DNS provider '$DNS_PROVIDER' not supported for auto-scan"
+    # Update DNS using provider abstraction layer
+    if [ -n "$DNS_PROVIDER" ]; then
+        log "Using provider abstraction layer for $DNS_PROVIDER"
+        
+        # Validate inputs before calling provider
+        if ! validate_domain_name "$DOMAIN"; then
+            error "Invalid domain name: $DOMAIN"
             return 1
-            ;;
-    esac
+        fi
+        
+        if ! validate_hostname "$peer_host"; then
+            error "Invalid hostname: $peer_host"
+            return 1
+        fi
+        
+        if ! validate_ip_address "$public_ip"; then
+            error "Invalid IP address: $public_ip"
+            return 1
+        fi
+        
+        # Set provider credentials from scan configuration
+        case "$DNS_PROVIDER" in
+            godaddy)
+                GODADDY_KEY="$DNS_KEY"
+                GODADDY_SECRET="$DNS_SECRET"
+                GODADDY_DOMAIN="$DOMAIN"
+                export GODADDY_KEY GODADDY_SECRET GODADDY_DOMAIN
+                ;;
+            cloudflare)
+                CLOUDFLARE_EMAIL="$CLOUDFLARE_EMAIL"
+                CLOUDFLARE_API_KEY="$DNS_KEY"
+                CLOUDFLARE_ZONE_ID="$CLOUDFLARE_ZONE_ID"
+                CLOUDFLARE_DOMAIN="$DOMAIN"
+                export CLOUDFLARE_EMAIL CLOUDFLARE_API_KEY CLOUDFLARE_ZONE_ID CLOUDFLARE_DOMAIN
+                ;;
+            digitalocean)
+                DIGITALOCEAN_TOKEN="$DNS_KEY"
+                DIGITALOCEAN_DOMAIN="$DOMAIN"
+                export DIGITALOCEAN_TOKEN DIGITALOCEAN_DOMAIN
+                ;;
+        esac
+        
+        # Use provider abstraction layer if available
+        if command -v update_with_provider >/dev/null 2>&1; then
+            if update_with_provider "$DNS_PROVIDER" "$DOMAIN" "$peer_host" "$public_ip"; then
+                log "DNS update successful via provider abstraction layer"
+            else
+                error "DNS update failed via provider abstraction layer"
+                return 1
+            fi
+        else
+            # Fallback to direct provider methods (backward compatibility)
+            log "Provider abstraction layer not available, using direct methods"
+            case "$DNS_PROVIDER" in
+                godaddy)
+                    update_godaddy_dns "$peer_host" "$public_ip"
+                    ;;
+                cloudflare)
+                    update_cloudflare_dns "$peer_host" "$public_ip"
+                    ;;
+                digitalocean)
+                    update_digitalocean_dns "$peer_host" "$public_ip"
+                    ;;
+                *)
+                    error "DNS provider '$DNS_PROVIDER' not supported for auto-scan"
+                    return 1
+                    ;;
+            esac
+        fi
+    else
+        error "No DNS provider configured for auto-scan"
+        return 1
+    fi
     
     # Save our peer state (POSIX compliant)
     {
@@ -333,38 +442,7 @@ register_peer() {
     return 0
 }
 
-# Update GoDaddy DNS (POSIX compliant using wget/curl)
-update_godaddy_dns() {
-    host="$1"
-    ip="$2"
-    
-    api_url="https://api.godaddy.com/v1/domains/${DOMAIN}/records/A/${host}"
-    
-    # Prefer curl, fallback to wget
-    if command -v curl >/dev/null 2>&1; then
-        response=$(curl -s -X PUT "$api_url" \
-            -H "Authorization: sso-key ${DNS_KEY}:${DNS_SECRET}" \
-            -H "Content-Type: application/json" \
-            -d "[{\"data\":\"${ip}\",\"ttl\":${ACCESS_DNS_TTL:-600}}]" 2>&1)
-    elif command -v wget >/dev/null 2>&1; then
-        response=$(wget -q -O - --method=PUT \
-            --header="Authorization: sso-key ${DNS_KEY}:${DNS_SECRET}" \
-            --header="Content-Type: application/json" \
-            --body-data="[{\"data\":\"${ip}\",\"ttl\":${ACCESS_DNS_TTL:-600}}]" \
-            "$api_url" 2>&1)
-    else
-        error "Neither curl nor wget available for API calls"
-        return 1
-    fi
-    
-    # Check for error in response
-    if printf "%s" "$response" | grep -q "error"; then
-        error "GoDaddy update failed: $response"
-        return 1
-    fi
-    
-    return 0
-}
+# Removed hardcoded update_godaddy_dns - now using provider abstraction layer
 
 # Monitor and heal the swarm (POSIX compliant)
 monitor_and_heal() {
@@ -411,11 +489,35 @@ monitor_and_heal() {
 # Interactive setup mode (POSIX compliant input)
 interactive_setup() {
     printf "\n"
-    printf "ACCESS NETWORK SCAN SETUP\n"
-    printf "==================================\n"
+    printf "ACCESS NETWORK SCAN SETUP (OPTIONAL FEATURE)\n"
+    printf "===============================================\n"
     printf "\n"
-    printf "This will configure automatic peer scan and self-healing\n"
-    printf "for the Access distributed network.\n"
+    printf "⚠️  IMPORTANT: This is an OPTIONAL advanced feature\n"
+    printf "\n"
+    printf "The scan/peer discovery feature enables:\n"
+    printf "  • Automatic coordination between multiple Access instances\n"
+    printf "  • Load balancing across multiple IP addresses\n"
+    printf "  • Self-healing peer network management\n"
+    printf "\n"
+    printf "❓ Do you need this feature?\n"
+    printf "  ✓ YES: If you have multiple systems running Access\n"
+    printf "  ✓ YES: If you want automatic load distribution\n"
+    printf "  ✗ NO:  If you have a single system (most common)\n"
+    printf "  ✗ NO:  If you only need basic dynamic DNS\n"
+    printf "\n"
+    printf "Continue with scan setup? (y/N): "
+    read -r continue_setup
+    
+    case "$continue_setup" in
+        [yY]|[yY][eE][sS])
+            printf "✓ Continuing with scan setup...\n"
+            ;;
+        *)
+            printf "Setup cancelled. Access will work perfectly without scan.\n"
+            printf "You can enable this later with: access scan setup\n"
+            exit 0
+            ;;
+    esac
     printf "\n"
     
     # Domain configuration
@@ -639,16 +741,29 @@ if [ "${0##*/}" = "scan.sh" ] || [ "${0##*/}" = "access-scan" ]; then
         fi
         ;;
     *)
-        printf "Access Network Scan Module (POSIX Compliant)\n"
+        printf "Access Network Scan Module - OPTIONAL FEATURE (POSIX Compliant)\n"
+        printf "\n"
+        printf "⚠️  IMPORTANT: This is an OPTIONAL advanced feature for multi-system deployments\n"
+        printf "   Access works perfectly for basic dynamic DNS without this feature\n"
         printf "\n"
         printf "Usage: %s {setup|discover|monitor|daemon|status}\n" "$0"
         printf "\n"
         printf "Commands:\n"
-        printf "  setup    - Interactive setup wizard\n"
+        printf "  setup    - Interactive setup wizard (explains when to use)\n"
         printf "  discover - Find and claim lowest available peer slot\n"
         printf "  monitor  - Check swarm health and self-heal if needed\n"
         printf "  daemon   - Run continuous monitoring and self-healing\n"
         printf "  status   - Show current peer registration status\n"
+        printf "\n"
+        printf "When to use scan/peer discovery:\n"
+        printf "  ✓ Multiple systems running Access that need coordination\n"
+        printf "  ✓ Load balancing across multiple IP addresses\n"
+        printf "  ✓ Advanced network topologies with peer management\n"
+        printf "\n"
+        printf "When NOT to use scan/peer discovery:\n"
+        printf "  ✗ Single system setup (most common case)\n"
+        printf "  ✗ Basic home dynamic DNS needs\n"
+        printf "  ✗ Simple network configurations\n"
         printf "\n"
         printf "Environment variables for non-interactive mode:\n"
         printf "  ACCESS_SCAN_DOMAIN   - Main domain (from Access config)\n"
@@ -656,6 +771,8 @@ if [ "${0##*/}" = "scan.sh" ] || [ "${0##*/}" = "access-scan" ]; then
         printf "  ACCESS_DNS_PROVIDER      - DNS provider (godaddy|cloudflare|digitalocean)\n"
         printf "  ACCESS_DNS_KEY           - API key for DNS provider\n"
         printf "  ACCESS_DNS_SECRET        - API secret (if required)\n"
+        printf "\n"
+        printf "Alternative: Use ./access-wizard scan for user-friendly configuration\n"
         printf "\n"
         exit 1
         ;;
