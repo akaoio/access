@@ -25,7 +25,8 @@ fi
 case "${1:-help}" in
     daemon)
         # PID file for single instance enforcement
-        PID_FILE="${XDG_RUNTIME_DIR:-$HOME/.local/state}/access.pid"
+        PID_FILE="${XDG_RUNTIME_DIR:-$HOME/.local/state/access}/access.pid"
+        mkdir -p "$(dirname "$PID_FILE")"
         
         # Check if daemon is already running
         if [ -f "$PID_FILE" ]; then
