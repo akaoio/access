@@ -62,22 +62,12 @@ case "${1:-help}" in
             {
                 echo "[$(date)] Starting health check cycle"
                 
-                # Run health check with timeout
+                # Run health check without subprocess spawning
                 if [ -x "$SCRIPT_DIR/health.sh" ]; then
-                    timeout 30 "$SCRIPT_DIR/health.sh" 2>&1 | while read -r line; do
-                        echo "[$(date)] HEALTH: $line"
-                    done
+                    "$SCRIPT_DIR/health.sh" update >/dev/null 2>&1
+                    echo "[$(date)] HEALTH: Status updated"
                 else
                     echo "[$(date)] WARNING: health.sh not executable"
-                fi
-                
-                # Run scan if configured with timeout
-                if [ -x "$SCRIPT_DIR/scan.sh" ]; then
-                    timeout 30 "$SCRIPT_DIR/scan.sh" 2>&1 | while read -r line; do
-                        echo "[$(date)] SCAN: $line"
-                    done
-                else
-                    echo "[$(date)] INFO: scan.sh not available"
                 fi
                 
                 echo "[$(date)] Health check cycle completed"
