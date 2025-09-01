@@ -30,6 +30,20 @@ validate_hostname() {
     [ -z "$hostname" ] && return 1
     [ "$hostname" = "@" ] && return 0
     [ ${#hostname} -gt 63 ] && return 1
+    
+    # Security: Prevent command injection - only allow alphanumeric, hyphens, dots
+    case "$hostname" in
+        *[^a-zA-Z0-9.-]*)
+            return 1
+            ;;
+    esac
+    
+    # Prevent path traversal
+    case "$hostname" in
+        *..*)
+            return 1
+            ;;
+    esac
     case "$hostname" in
         *[^a-zA-Z0-9-]*) return 1 ;;
         -*|*-) return 1 ;;
@@ -151,6 +165,13 @@ save_scan_config() {
 # POSIX compliant peer checking (no bash TCP, no nc dependency)
 check_peer_alive() {
     peer_host="$1"
+    
+    # Security: Validate hostname before using in commands
+    if ! validate_hostname "$peer_host"; then
+        error "Invalid hostname for security: $peer_host"
+        return 1
+    fi
+    
     full_domain="${peer_host}.${DOMAIN}"
     
     # Get our current IPs (both IPv4 and IPv6)

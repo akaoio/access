@@ -54,23 +54,26 @@ case "${1:-help}" in
         # Log daemon startup
         echo "[$(date)] Access daemon started (PID: $$)" >> "$ACCESS_LOG_FILE"
         
-        # Main daemon loop with proper logging and error handling
-        while true; do
+        # Non-blocking daemon with signal handling
+        trap 'echo "[$(date)] Daemon shutting down gracefully..." >> "$ACCESS_LOG_FILE"; exit 0' TERM INT
+        
+        # Background monitoring function
+        run_monitoring_cycle() {
             {
                 echo "[$(date)] Starting health check cycle"
                 
-                # Run health check
+                # Run health check with timeout
                 if [ -x "$SCRIPT_DIR/health.sh" ]; then
-                    "$SCRIPT_DIR/health.sh" 2>&1 | while read -r line; do
+                    timeout 30 "$SCRIPT_DIR/health.sh" 2>&1 | while read -r line; do
                         echo "[$(date)] HEALTH: $line"
                     done
                 else
                     echo "[$(date)] WARNING: health.sh not executable"
                 fi
                 
-                # Run scan if configured
+                # Run scan if configured with timeout
                 if [ -x "$SCRIPT_DIR/scan.sh" ]; then
-                    "$SCRIPT_DIR/scan.sh" 2>&1 | while read -r line; do
+                    timeout 30 "$SCRIPT_DIR/scan.sh" 2>&1 | while read -r line; do
                         echo "[$(date)] SCAN: $line"
                     done
                 else
@@ -80,9 +83,21 @@ case "${1:-help}" in
                 echo "[$(date)] Health check cycle completed"
                 
             } >> "$ACCESS_LOG_FILE" 2>&1
+        }
+        
+        # Main daemon loop with proper signal handling
+        while true; do
+            # Run monitoring in background to avoid blocking
+            run_monitoring_cycle &
+            MONITOR_PID=$!
             
-            # Sleep for 5 minutes (configurable via environment)
-            sleep "${ACCESS_DAEMON_INTERVAL:-300}"
+            # Wait for monitoring to complete or timeout
+            wait $MONITOR_PID 2>/dev/null || true
+            
+            # Configurable sleep with signal awareness
+            sleep "${ACCESS_DAEMON_INTERVAL:-300}" &
+            SLEEP_PID=$!
+            wait $SLEEP_PID 2>/dev/null || true
         done
         ;;
     
