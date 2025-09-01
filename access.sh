@@ -75,19 +75,13 @@ case "${1:-help}" in
             } >> "$ACCESS_LOG_FILE" 2>&1
         }
         
-        # Main daemon loop with proper signal handling
+        # Main daemon loop - single process
         while true; do
-            # Run monitoring in background to avoid blocking
-            run_monitoring_cycle &
-            MONITOR_PID=$!
+            # Run monitoring synchronously
+            run_monitoring_cycle
             
-            # Wait for monitoring to complete or timeout
-            wait $MONITOR_PID 2>/dev/null || true
-            
-            # Configurable sleep with signal awareness
-            sleep "${ACCESS_DAEMON_INTERVAL:-300}" &
-            SLEEP_PID=$!
-            wait $SLEEP_PID 2>/dev/null || true
+            # Sleep directly without background process
+            sleep "${ACCESS_DAEMON_INTERVAL:-300}"
         done
         ;;
     
