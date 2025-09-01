@@ -160,7 +160,7 @@ case "${1:-help}" in
     
     help|--help|-h)
         cat << EOF
-Access - Pure Shell Network Access Layer v0.0.3
+Access - Pure Shell Network Access Layer v0.0.1
 
 Usage: access <command> [options]
 

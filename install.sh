@@ -18,9 +18,9 @@ echo "Installing @akaoio/access via Stacker..."
 
 # Ensure main executable is accessible
 chmod +x access.sh
-chmod +x access
-chmod +x service.sh
 chmod +x health.sh
+[ -f scan.sh ] && chmod +x scan.sh
+[ -f providers.sh ] && chmod +x providers.sh
 
 # Create symlinks for easy access
 ln -sf access.sh access 2>/dev/null || true
