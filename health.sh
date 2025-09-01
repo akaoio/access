@@ -36,13 +36,39 @@ init_health() {
 
 # Get peer information (POSIX compliant)
 get_peer_info() {
-    if [ -f "$SCAN_STATE" ]; then
-        peer_host=$(sed -n 's/.*"peer_host"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$SCAN_STATE")
-        peer_slot=$(sed -n 's/.*"peer_slot"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' "$SCAN_STATE")
-        full_domain=$(sed -n 's/.*"full_domain"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$SCAN_STATE")
+    # Check if Access is configured properly by looking at the config file
+    ACCESS_CONFIG="${ACCESS_CONFIG:-$HOME/.config/access/config.json}"
+    
+    if [ -f "$ACCESS_CONFIG" ]; then
+        # Try to extract provider and domain from config
+        provider=""
+        domain=""
+        host=""
         
-        printf '{"peer":"%s","slot":%s,"domain":"%s","status":"alive","timestamp":"%s"}' \
-            "$peer_host" "${peer_slot:-0}" "$full_domain" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+        if command -v sed >/dev/null 2>&1; then
+            provider=$(sed -n 's/.*"provider"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$ACCESS_CONFIG")
+            domain=$(sed -n 's/.*"domain"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$ACCESS_CONFIG")
+            host=$(sed -n 's/.*"host"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$ACCESS_CONFIG")
+        fi
+        
+        # If we have provider and domain, Access is configured
+        if [ -n "$provider" ] && [ -n "$domain" ]; then
+            # Check if scan.state exists (scan enabled case)
+            if [ -f "$SCAN_STATE" ]; then
+                peer_host=$(sed -n 's/.*"peer_host"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$SCAN_STATE")
+                peer_slot=$(sed -n 's/.*"peer_slot"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' "$SCAN_STATE")
+                full_domain=$(sed -n 's/.*"full_domain"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$SCAN_STATE")
+                
+                printf '{"peer":"%s","slot":%s,"domain":"%s","status":"alive","timestamp":"%s"}' \
+                    "$peer_host" "${peer_slot:-0}" "$full_domain" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+            else
+                # Access configured but scan disabled - use config values
+                printf '{"peer":"%s","provider":"%s","domain":"%s","status":"configured","timestamp":"%s"}' \
+                    "${host:-@}" "$provider" "$domain" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+            fi
+        else
+            printf '{"status":"unconfigured","timestamp":"%s"}' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+        fi
     else
         printf '{"status":"unconfigured","timestamp":"%s"}' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
     fi
