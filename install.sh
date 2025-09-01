@@ -1,30 +1,19 @@
 #!/bin/sh
-# Access Installation - Stacker Framework Integration  
-# Clean single-word naming, unified architecture
+# Access installation script for Stacker framework
 
-set -e
+echo "Installing @akaoio/access..."
 
-# Ensure Stacker is available
-if ! command -v stacker >/dev/null 2>&1; then
-    echo "ERROR: Stacker framework required but not found"
-    echo "Install: stacker self-install"
-    exit 1
-fi
+# Ensure main executable is accessible
+chmod +x access.sh
+chmod +x access
+chmod +x service.sh
+chmod +x health.sh
 
-# Configure Access for Stacker installation
-export STACKER_SERVICE_TYPE="simple"
-export STACKER_TECH_NAME="access"
-export STACKER_REPO_URL="https://github.com/akaoio/access.git"
-export STACKER_MAIN_SCRIPT="access.sh"
-export STACKER_SERVICE_DESCRIPTION="Foundational Network Access Layer - Eternal Infrastructure"
+# Create symlinks for easy access
+ln -sf access.sh access 2>/dev/null || true
 
-# Access is eternal infrastructure - critical service
-export STACKER_RESTART_POLICY="always"
-export STACKER_AUTO_UPDATE="true"
-
-# Initialize Stacker for Access
-stacker init --template=service --name=access --repo="$STACKER_REPO_URL"
-
-echo "✅ Access installation configured via Stacker framework"
-echo "⚡ Eternal infrastructure ready for deployment"
-echo "Run: stacker install --systemd --auto-update"
+echo "✅ Access installed successfully"
+echo "Available commands:"
+echo "  ./access.sh help     # Show help"
+echo "  ./access.sh init     # Initialize access"
+echo "  ./access.sh status   # Check status"
