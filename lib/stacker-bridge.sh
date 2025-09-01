@@ -86,6 +86,11 @@ load_stacker_optional() {
                 STACKER_FEATURES="commands"
                 ;;
         esac
+    else
+        # Load standalone Access logging functions when Stacker is not available
+        local bridge_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+        local access_logging_path="$bridge_dir/access-logging.sh"
+        [ -f "$access_logging_path" ] && . "$access_logging_path" 2>/dev/null || true
     fi
 }
 
@@ -103,7 +108,7 @@ unified_log() {
         case "$level" in
             error) stacker_error "$message" ;;
             warn) stacker_warn "$message" ;;
-            success) stacker_success "$message" ;;
+            success) stacker_info "$message" ;;
             *) stacker_log "$message" ;;
         esac
     else
@@ -121,9 +126,9 @@ unified_log() {
 unified_config_get() {
     local key="$1"
     
-    if [ "$STACKER_AVAILABLE" = true ] && command -v stacker_get_config >/dev/null 2>&1; then
-        # Use Stacker's config system
-        stacker_get_config "$key"
+    if [ "$STACKER_AVAILABLE" = true ] && command -v stacker_require >/dev/null 2>&1; then
+        # Use Stacker's config system (requires config module)
+        stacker_require "config" >/dev/null 2>&1 && stacker_get_config "$key" 2>/dev/null
     else
         # Use Access's existing config functions (no duplication)
         load_config
@@ -145,9 +150,9 @@ unified_config_set() {
     local key="$1"
     local value="$2"
     
-    if [ "$STACKER_AVAILABLE" = true ] && command -v stacker_set_config >/dev/null 2>&1; then
-        # Use Stacker's config system
-        stacker_set_config "$key" "$value"
+    if [ "$STACKER_AVAILABLE" = true ] && command -v stacker_require >/dev/null 2>&1; then
+        # Use Stacker's config system (requires config module)
+        stacker_require "config" >/dev/null 2>&1 && stacker_save_config "$key" "$value" 2>/dev/null
     else
         # Use Access's existing save_config function (no duplication)
         save_config_value "$key" "$value"

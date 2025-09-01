@@ -6,17 +6,12 @@ set -e
 
 SCRIPT_DIR="$(dirname "$0")"
 
-# Load wizard module if available
-if [ -f "$SCRIPT_DIR/modules/wizard.sh" ]; then
-    . "$SCRIPT_DIR/modules/wizard.sh"
-elif [ -f "$SCRIPT_DIR/lib/stacker-bridge.sh" ]; then
-    . "$SCRIPT_DIR/lib/stacker-bridge.sh"
-    stacker_load_module "wizard" || {
-        echo "Error: Wizard module not available"
-        exit 1
-    }
+# Load wizard functionality
+if [ -f "$SCRIPT_DIR/lib/access-wizard.sh" ]; then
+    . "$SCRIPT_DIR/lib/access-wizard.sh"
 else
-    echo "Error: Required modules not found"
+    echo "Error: Wizard functionality not found"
+    echo "Please ensure lib/access-wizard.sh exists"
     exit 1
 fi
 
