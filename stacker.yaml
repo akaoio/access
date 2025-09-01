@@ -1,5 +1,5 @@
 name: "access"
-version: "0.0.3"
+version: "0.0.1"
 description: "Pure POSIX shell implementation for automatic IP synchronization with multiple DNS providers"
 author: "AKAO Team"
 license: "MIT"

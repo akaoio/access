@@ -265,7 +265,7 @@ test_installation_guide() {
 # Run all tests
 run_all_tests() {
     test_log "Starting Access Optional Scan Feature Tests"
-    echo "=============================================="
+    echo ""
     echo ""
     
     setup_test_environment
@@ -282,7 +282,7 @@ run_all_tests() {
     cleanup_test_environment
     
     echo ""
-    echo "=============================================="
+    echo ""
     echo "Test Results:"
     printf "  ${GREEN}Passed: %d${RESET}\n" "$TESTS_PASSED"
     printf "  ${RED}Failed: %d${RESET}\n" "$TESTS_FAILED"

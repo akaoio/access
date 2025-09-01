@@ -120,7 +120,6 @@ EOF
 # Quick reconfiguration for existing installations
 wizard_reconfigure() {
     wizard_log "Access Configuration Manager"
-    echo "===================================="
     echo ""
     
     # Load existing configuration
@@ -564,7 +563,6 @@ wizard_apply_changes() {
 # Show wizard status
 wizard_status() {
     echo "Access Configuration Status:"
-    echo "============================"
     echo ""
     
     if wizard_load_config "$WIZARD_CONFIG"; then

@@ -68,25 +68,20 @@ DEFAULT_HOST_PREFIX="peer"
 DEFAULT_CHECK_INTERVAL=300  # 5 minutes
 DEFAULT_HEAL_INTERVAL=60    # 1 minute when healing
 
-# POSIX compliant output (no colors in strict POSIX mode)
-log() {
-    printf "[Scan] %s\n" "$*" >&2
-    printf "[%s] %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$SCAN_LOG" 2>/dev/null || true
-}
+# Load logging functions from access-logging
+if [ -f "$(dirname "$0")/lib/access-logging.sh" ]; then
+    . "$(dirname "$0")/lib/access-logging.sh"
+else
+    # Fallback minimal logging if access-logging not available
+    log() { printf "[Scan] %s\n" "$*" >&2; }
+    log_error() { printf "[Scan ERROR] %s\n" "$*" >&2; }
+    log_warn() { printf "[Scan WARN] %s\n" "$*" >&2; }
+fi
 
-warn() {
-    printf "[Warning] %s\n" "$*" >&2
-    printf "[%s] WARNING: %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$SCAN_LOG" 2>/dev/null || true
-}
-
-error() {
-    printf "[Error] %s\n" "$*" >&2
-    printf "[%s] ERROR: %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$SCAN_LOG" 2>/dev/null || true
-}
-
-info() {
-    printf "[Info] %s\n" "$*" >&2
-}
+# Legacy aliases for backward compatibility  
+warn() { log_warn "$@"; }
+error() { log_error "$@"; }
+info() { log "$@"; }
 
 # Create necessary directories (POSIX compliant)
 init_scan() {
@@ -490,7 +485,6 @@ monitor_and_heal() {
 interactive_setup() {
     printf "\n"
     printf "ACCESS NETWORK SCAN SETUP (OPTIONAL FEATURE)\n"
-    printf "===============================================\n"
     printf "\n"
     printf "⚠️  IMPORTANT: This is an OPTIONAL advanced feature\n"
     printf "\n"
@@ -593,12 +587,9 @@ interactive_setup() {
         if [ -n "$slot" ]; then
             full_domain="${HOST_PREFIX}${slot}.${DOMAIN}"
             printf "\n"
-            printf "======================================\n"
-            printf "  SCAN RESULT\n"
-            printf "======================================\n"
+            printf "SCAN RESULT\n"
             printf "  Available slot: %d\n" "$slot"
             printf "  Full domain: %s\n" "$full_domain"
-            printf "======================================\n"
             printf "\n"
             printf "Register as %s? [Y/n]: " "$full_domain"
             read -r confirm_register

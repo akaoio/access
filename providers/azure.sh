@@ -51,14 +51,18 @@ provider_update() {
     
     echo "[Azure] Updating $record_type record for $host.$domain with IP: $ip"
     
-    # Get access token
+    # Get access token (secure handling of client secret)
+    local temp_data=$(mktemp -t "azure_auth.XXXXXX" 2>/dev/null || echo "/tmp/azure_auth.$$.$RANDOM")
+    echo "grant_type=client_credentials&client_id=$client_id&client_secret=$client_secret&scope=https://management.azure.com/.default" > "$temp_data"
+    chmod 600 "$temp_data"  # Restrict access to owner only
+    
     local token_response=$(curl -s -X POST \
         "https://login.microsoftonline.com/$tenant_id/oauth2/v2.0/token" \
         -H "Content-Type: application/x-www-form-urlencoded" \
-        -d "grant_type=client_credentials" \
-        -d "client_id=$client_id" \
-        -d "client_secret=$client_secret" \
-        -d "scope=https://management.azure.com/.default" 2>/dev/null)
+        -d "@$temp_data" 2>/dev/null)
+    
+    # Securely cleanup temporary file
+    rm -f "$temp_data"
     
     local access_token=$(echo "$token_response" | grep -oE '"access_token":"[^"]*"' | cut -d'"' -f4)
     
@@ -114,14 +118,18 @@ provider_test() {
         return 1
     fi
     
-    # Test authentication
+    # Test authentication (secure handling of client secret)
+    local temp_data=$(mktemp -t "azure_test.XXXXXX" 2>/dev/null || echo "/tmp/azure_test.$$.$RANDOM")
+    echo "grant_type=client_credentials&client_id=$client_id&client_secret=$client_secret&scope=https://management.azure.com/.default" > "$temp_data"
+    chmod 600 "$temp_data"  # Restrict access to owner only
+    
     local token_response=$(curl -s -X POST \
         "https://login.microsoftonline.com/$tenant_id/oauth2/v2.0/token" \
         -H "Content-Type: application/x-www-form-urlencoded" \
-        -d "grant_type=client_credentials" \
-        -d "client_id=$client_id" \
-        -d "client_secret=$client_secret" \
-        -d "scope=https://management.azure.com/.default" 2>/dev/null)
+        -d "@$temp_data" 2>/dev/null)
+    
+    # Securely cleanup temporary file
+    rm -f "$temp_data"
     
     if echo "$token_response" | grep -q "access_token"; then
         echo "[Azure] Authentication successful"

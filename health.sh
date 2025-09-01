@@ -11,19 +11,19 @@ HEALTH_FILE="${HEALTH_FILE:-$HOME/.local/share/access/health.status}"
 SCAN_STATE="${SCAN_STATE:-$HOME/.local/share/access/scan.state}"
 HEALTH_LOG="${HEALTH_LOG:-$HOME/.local/share/access/health.log}"
 
-# POSIX compliant logging
-log() {
-    printf "[Health] %s\n" "$*"
-    printf "[%s] %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$HEALTH_LOG" 2>/dev/null || true
-}
+# Load logging functions from access-logging
+if [ -f "$(dirname "$0")/lib/access-logging.sh" ]; then
+    . "$(dirname "$0")/lib/access-logging.sh"
+else
+    # Fallback minimal logging if access-logging not available
+    log() { printf "[Health] %s\n" "$*"; }
+    log_error() { printf "[Health ERROR] %s\n" "$*" >&2; }
+    log_warn() { printf "[Health WARN] %s\n" "$*" >&2; }
+fi
 
-warn() {
-    printf "[Warning] %s\n" "$*" >&2
-}
-
-error() {
-    printf "[Error] %s\n" "$*" >&2
-}
+# Legacy aliases for backward compatibility
+warn() { log_warn "$@"; }
+error() { log_error "$@"; }
 
 # Initialize health system
 init_health() {

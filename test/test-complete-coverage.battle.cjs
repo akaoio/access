@@ -155,9 +155,9 @@ class CompleteCoverageTest {
 
 const suite = new CompleteCoverageTest();
 
-// ============================================================================
+// ---------------------------------------------------------------------------
 // CORE COMMANDS - COMPLETE COVERAGE
-// ============================================================================
+// ---------------------------------------------------------------------------
 
 suite.test('Core Commands', 'access ip - detect public IP', async () => {
     const { stdout, code } = await runCommand(`${TEST_CONFIG.accessPath} ip`);
@@ -210,9 +210,9 @@ suite.test('Core Commands', 'access daemon - daemon mode', async () => {
     if (!child.pid) throw new Error('Daemon did not start');
 });
 
-// ============================================================================
+// ---------------------------------------------------------------------------
 // PROVIDER COMMANDS
-// ============================================================================
+// ---------------------------------------------------------------------------
 
 suite.test('Provider Commands', 'access providers - list all', async () => {
     const { stdout } = await runCommand(`${TEST_CONFIG.accessPath} providers`);
@@ -266,9 +266,9 @@ suite.test('Provider Commands', 'access test - test provider', async () => {
     }
 });
 
-// ============================================================================
+// ---------------------------------------------------------------------------
 // CONFIGURATION SYSTEM
-// ============================================================================
+// ---------------------------------------------------------------------------
 
 suite.test('Configuration', 'access config - show help', async () => {
     const { stdout, stderr } = await runCommand(`${TEST_CONFIG.accessPath} config`, { NO_COLOR: '1' });
@@ -303,9 +303,9 @@ suite.test('Configuration', 'save and load config', async () => {
     if (config.domain !== 'test.com') throw new Error('Domain not saved');
 });
 
-// ============================================================================
+// ---------------------------------------------------------------------------
 // CORE FUNCTIONS
-// ============================================================================
+// ---------------------------------------------------------------------------
 
 suite.test('Core Functions', 'validate_ip - IP validation', async () => {
     // Test validate_ip function by extracting it directly
@@ -419,9 +419,9 @@ suite.test('Core Functions', 'cleanup trap handler', async () => {
     }
 });
 
-// ============================================================================
+// ---------------------------------------------------------------------------
 // AUTO-UPDATE MECHANISM
-// ============================================================================
+// ---------------------------------------------------------------------------
 
 suite.test('Auto-Update', 'auto-update command exists', async () => {
     const { stdout } = await runCommand(`${TEST_CONFIG.accessPath} help`);
@@ -446,9 +446,9 @@ suite.test('Auto-Update', 'auto-update function', async () => {
     }
 });
 
-// ============================================================================
+// ---------------------------------------------------------------------------
 // PROVIDER IMPLEMENTATIONS
-// ============================================================================
+// ---------------------------------------------------------------------------
 
 suite.test('Provider Implementation', 'All providers have required functions', async () => {
     const providers = await fs.readdir(TEST_CONFIG.providersDir);
@@ -517,9 +517,9 @@ suite.test('Provider Implementation', 'GCloud pure shell implementation', async 
     }
 });
 
-// ============================================================================
+// ---------------------------------------------------------------------------
 // PROVIDER-AGNOSTIC SYSTEM
-// ============================================================================
+// ---------------------------------------------------------------------------
 
 suite.test('Provider-Agnostic', 'Auto-scan works', async () => {
     const content = await fs.readFile(TEST_CONFIG.providerPath, 'utf8');
@@ -566,9 +566,9 @@ suite.test('Provider-Agnostic', 'No hardcoded provider names', async () => {
     // Some hardcoding is OK in examples, but should be minimal
 });
 
-// ============================================================================
+// ---------------------------------------------------------------------------
 // SECURITY & ERROR HANDLING
-// ============================================================================
+// ---------------------------------------------------------------------------
 
 suite.test('Security', 'Secure temp files with mktemp', async () => {
     const content = await fs.readFile(TEST_CONFIG.accessPath, 'utf8');
@@ -615,9 +615,9 @@ suite.test('Error Handling', 'All functions have error handling', async () => {
     }
 });
 
-// ============================================================================
+// ---------------------------------------------------------------------------
 // INSTALLER & UNINSTALLER
-// ============================================================================
+// ---------------------------------------------------------------------------
 
 suite.test('Installer', 'Installer script exists', async () => {
     const exists = await fs.access(TEST_CONFIG.installPath)
@@ -635,9 +635,9 @@ suite.test('Installer', 'Uninstaller script exists', async () => {
     if (!exists) throw new Error('uninstall.sh missing');
 });
 
-// ============================================================================
+// ---------------------------------------------------------------------------
 // POSIX COMPLIANCE
-// ============================================================================
+// ---------------------------------------------------------------------------
 
 suite.test('POSIX Compliance', 'No bashisms in main script', async () => {
     const content = await fs.readFile(TEST_CONFIG.accessPath, 'utf8');
@@ -662,9 +662,9 @@ suite.test('POSIX Compliance', 'No bashisms in main script', async () => {
     }
 });
 
-// ============================================================================
+// ---------------------------------------------------------------------------
 // MAIN
-// ============================================================================
+// ---------------------------------------------------------------------------
 
 async function main() {
     console.log('🔬 Complete Coverage Test for Access');

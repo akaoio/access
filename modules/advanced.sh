@@ -53,7 +53,6 @@ access_simulate_dns_update() {
     
     echo ""
     echo "${BOLD}DRY-RUN: DNS Update Simulation${NC}"
-    echo "========================================="
     echo "Provider:    ${YELLOW}$provider${NC}"
     echo "Domain:      ${YELLOW}$domain${NC}" 
     echo "Host:        ${YELLOW}$host${NC}"
@@ -121,7 +120,7 @@ access_run_diagnostics() {
 access_diagnostics_human() {
     echo ""
     echo "${BOLD}Access System Diagnostics${NC}"
-    echo "=========================="
+    echo ""
     echo ""
     
     # Network connectivity tests
@@ -432,7 +431,7 @@ access_list_backups() {
     fi
     
     echo "${BOLD}Available Configuration Backups:${NC}"
-    echo "================================"
+    echo ""
     echo ""
     
     for backup_file in "$backup_dir"/config_*.json; do
@@ -472,7 +471,7 @@ access_status_detailed() {
 access_status_human_detailed() {
     echo ""
     echo "${BOLD}Access Detailed Status Report${NC}"
-    echo "============================="
+    echo ""
     echo ""
     
     # Basic configuration (reuse existing logic but enhance)

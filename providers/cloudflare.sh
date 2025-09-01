@@ -2,6 +2,11 @@
 # Cloudflare DNS Provider
 # API Documentation: https://api.cloudflare.com/
 
+# Load provider base library for common functions
+if [ -f "$(dirname "$0")/../lib/provider-base.sh" ]; then
+    . "$(dirname "$0")/../lib/provider-base.sh"
+fi
+
 provider_info() {
     echo "name: Cloudflare"
     echo "version: 1.0.0"
@@ -19,10 +24,11 @@ provider_config() {
 }
 
 provider_validate() {
-    if [ -z "${CLOUDFLARE_EMAIL}" ] || [ -z "${CLOUDFLARE_API_KEY}" ] || [ -z "${CLOUDFLARE_ZONE_ID}" ]; then
-        echo "Error: Cloudflare credentials not configured"
-        return 1
-    fi
+    # Use base library validation helpers
+    validate_required_field "email" "$CLOUDFLARE_EMAIL" "Cloudflare" || return 1
+    validate_required_field "api_key" "$CLOUDFLARE_API_KEY" "Cloudflare" || return 1
+    validate_required_field "zone_id" "$CLOUDFLARE_ZONE_ID" "Cloudflare" || return 1
+    validate_api_key "$CLOUDFLARE_API_KEY" 37 || return 1  # Cloudflare keys are typically 37+ chars
     return 0
 }
 

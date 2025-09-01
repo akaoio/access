@@ -237,7 +237,6 @@ suggest_provider() {
 # Provider health check
 check_provider_health() {
     echo "Provider Health Check"
-    echo "===================="
     
     local total=0
     local healthy=0
