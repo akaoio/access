@@ -5,14 +5,38 @@
 
 set -e
 
-# Self-install capability
+# Self-install capability with robust error handling
 if [ "$1" = "install" ]; then
     echo "🌟 Installing Access Eternal..."
-    mkdir -p ~/.local/bin
-    cp "$0" ~/.local/bin/access
-    chmod +x ~/.local/bin/access
-    echo "✅ Installed to ~/.local/bin/access"
-    [ ! -d ~/.config/access ] && echo "Run: access setup"
+    
+    # Clean any existing installations
+    [ -L ~/.local/bin/access ] && rm -f ~/.local/bin/access 2>/dev/null
+    [ -f ~/.local/bin/access ] && rm -f ~/.local/bin/access 2>/dev/null
+    
+    # Create directory safely
+    mkdir -p ~/.local/bin || { echo "❌ Cannot create ~/.local/bin"; exit 1; }
+    
+    # Install binary
+    if cp "$0" ~/.local/bin/access && chmod +x ~/.local/bin/access; then
+        echo "✅ Installed to ~/.local/bin/access"
+        
+        # Check PATH automatically
+        if command -v access >/dev/null 2>&1; then
+            echo "✅ Command available: access"
+        else
+            echo "⚠️  Run: export PATH=\"\$HOME/.local/bin:\$PATH\""
+        fi
+        
+        # Check config
+        if [ -f ~/.config/access/config.env ]; then
+            echo "✅ Config found - ready to use"
+        else
+            echo "💡 Next: access setup"
+        fi
+    else
+        echo "❌ Installation failed"
+        exit 1
+    fi
     exit 0
 fi
 
@@ -73,62 +97,52 @@ EOF
     fi
 }
 
-# Runtime detection of actual network service
+# Smart hook installation with fallback options
 install_hook() {
-    echo "🔍 Runtime network service detection..."
+    echo "🔍 Auto-configuring real-time monitoring..."
     
-    # Test what's actually running and usable
-    if systemctl is-active systemd-networkd >/dev/null 2>&1; then
-        echo "✅ systemd-networkd detected - using systemd timer instead of hooks"
+    # Try user-space solutions first (no sudo needed)
+    if command -v systemctl >/dev/null 2>&1 && [ -w ~/.config ]; then
+        echo "✅ Using user systemd timer (no sudo required)"
         
-        # Create systemd timer for IP monitoring (better than hooks for systemd-networkd)
-        cat << 'TIMER' | sudo tee /etc/systemd/system/access-monitor.timer > /dev/null
+        mkdir -p ~/.config/systemd/user
+        
+        cat > ~/.config/systemd/user/access-monitor.timer << 'EOF'
 [Unit]
 Description=Access IP Monitor Timer
 [Timer]
 OnCalendar=*:0/2
 Persistent=true
 [Install]
-WantedBy=timers.target
-TIMER
+WantedBy=default.target
+EOF
 
-        cat << 'SERVICE' | sudo tee /etc/systemd/system/access-monitor.service > /dev/null  
+        cat > ~/.config/systemd/user/access-monitor.service << 'EOF'
 [Unit]
 Description=Access IP Monitor
 [Service]
 Type=oneshot
-ExecStart=/home/x/.local/bin/access update
-SERVICE
+ExecStart=%h/.local/bin/access update
+EOF
 
-        sudo systemctl enable access-monitor.timer
-        sudo systemctl start access-monitor.timer
-        echo "✅ Real-time monitoring via systemd timer (2min interval)"
-        
-    elif pgrep dhclient >/dev/null && [ -d /etc/dhcp/dhclient-exit-hooks.d ]; then
-        echo "✅ dhclient detected - installing exit hook"
-        cat << 'HOOK' | sudo tee /etc/dhcp/dhclient-exit-hooks.d/access > /dev/null
-#!/bin/sh
-case "$reason" in BOUND6|RENEW6|REBOOT6)
-    /home/x/.local/bin/access update >> /var/log/access.log 2>&1
-;; esac
-HOOK
-        sudo chmod +x /etc/dhcp/dhclient-exit-hooks.d/access
-        echo "✅ DHCP hook installed"
-        
-    elif pgrep NetworkManager >/dev/null && [ -d /etc/NetworkManager/dispatcher.d ]; then
-        echo "✅ NetworkManager detected - installing dispatcher"
-        cat << 'DISPATCHER' | sudo tee /etc/NetworkManager/dispatcher.d/access > /dev/null
-#!/bin/sh
-case "$2" in up|dhcp6-change) /home/x/.local/bin/access update; esac
-DISPATCHER
-        sudo chmod +x /etc/NetworkManager/dispatcher.d/access
-        echo "✅ NetworkManager dispatcher installed"
+        systemctl --user daemon-reload
+        systemctl --user enable access-monitor.timer 2>/dev/null || true
+        systemctl --user start access-monitor.timer 2>/dev/null || true
+        echo "✅ User timer installed (2min intervals)"
         
     else
-        echo "❌ No supported network service found"
-        echo "💡 Installing cron fallback: */5 * * * * access update"
-        (crontab -l 2>/dev/null; echo "*/5 * * * * access update") | crontab -
-        echo "✅ Cron fallback installed"
+        echo "💡 Using cron fallback (universal compatibility)"
+        
+        # Check if cron job already exists
+        if ! crontab -l 2>/dev/null | grep -q "access update"; then
+            (crontab -l 2>/dev/null; echo "*/5 * * * * ~/.local/bin/access update >/dev/null 2>&1") | crontab - 2>/dev/null || {
+                echo "⚠️  Manual cron setup needed:"
+                echo "   */5 * * * * ~/.local/bin/access update"
+            }
+            echo "✅ Cron monitoring installed (5min intervals)"
+        else
+            echo "✅ Cron monitoring already configured"
+        fi
     fi
 }
 
