@@ -1,5 +1,5 @@
 #!/bin/sh
-# Access Eternal - Minimal 100-line version
+# Access Eternal - Minimal POSIX dynamic DNS
 # "When everything fails, Access survives"
 
 set -e
@@ -9,6 +9,10 @@ XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 XDG_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
 XDG_BIN_HOME="${XDG_BIN_HOME:-$HOME/.local/bin}"
 ACCESS_BIN="$XDG_BIN_HOME/access"
+
+# Defaults
+DEFAULT_DOMAIN="akao.io"
+DEFAULT_HOST="peer0"
 
 # Load config
 CONFIG_FILE="$XDG_CONFIG_HOME/access/config.env"
@@ -27,9 +31,9 @@ update_dns() {
     ip=$(get_ip)
     type="A"; case "$ip" in *:*) type="AAAA";; esac
     
-    echo "Updating ${HOST:-peer0}.${DOMAIN:-akao.io} ($type) to $ip"
+    echo "Updating ${HOST:-$DEFAULT_HOST}.${DOMAIN:-$DEFAULT_DOMAIN} ($type) to $ip"
     
-    curl -s -X PUT "https://api.godaddy.com/v1/domains/${DOMAIN:-akao.io}/records/$type/${HOST:-peer0}" \
+    curl -s -X PUT "https://api.godaddy.com/v1/domains/${DOMAIN:-$DEFAULT_DOMAIN}/records/$type/${HOST:-$DEFAULT_HOST}" \
         -H "Authorization: sso-key $GODADDY_KEY:$GODADDY_SECRET" \
         -H "Content-Type: application/json" \
         -d "[{\"data\":\"$ip\",\"ttl\":600}]" >/dev/null &&
@@ -41,8 +45,8 @@ setup() {
     echo "🌟 Setup"
     mkdir -p "$XDG_CONFIG_HOME/access"
     
-    printf "Domain [akao.io]: "; read domain; domain=${domain:-akao.io}
-    printf "Host [peer0]: "; read host; host=${host:-peer0}
+    printf "Domain [$DEFAULT_DOMAIN]: "; read domain; domain=${domain:-$DEFAULT_DOMAIN}
+    printf "Host [$DEFAULT_HOST]: "; read host; host=${host:-$DEFAULT_HOST}
     printf "GoDaddy Key: "; read key
     printf "Secret: "; read secret
     
@@ -84,7 +88,6 @@ monitor() {
         echo "Use systemd service: systemctl --user start access.service"
     fi
 }
-
 
 # Auto-upgrade
 upgrade() {
@@ -139,7 +142,7 @@ case "${1:-install}" in
         [ -f "$ACCESS_BIN" ] && rm "$ACCESS_BIN"
         mkdir -p "$XDG_BIN_HOME"
         cp "$0" "$ACCESS_BIN" && chmod +x "$ACCESS_BIN"
-        echo "✅ Installed. Run: access setup"
+        echo "✅ Installed and configured"
         
         # Auto-setup if no config
         if [ ! -f "$CONFIG_FILE" ]; then
@@ -152,7 +155,5 @@ case "${1:-install}" in
     update) update_dns ;;
     upgrade) upgrade ;;
     uninstall) uninstall ;;
-    setup) setup ;;
-    hook) hook ;;
     *) echo "Access: install|update|upgrade|uninstall" ;;
 esac
