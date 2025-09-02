@@ -78,6 +78,9 @@ load_provider() {
         echo "Error: Invalid provider name: $provider_name (only alphanumeric, underscore, hyphen allowed)" >&2
         return 1
     fi
+    
+    # Check for path traversal
+    case "$provider_name" in
         ../*|*/../*|*/..|*/../*)
             echo "Error: Path traversal attempt in provider name: $provider_name" >&2
             return 1
