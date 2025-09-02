@@ -1,148 +1,97 @@
 #!/bin/sh
-# Access - Eternal Foundation Layer
-# Pure POSIX shell implementation - zero dependencies
+# Access - Eternal Foundation Layer (Ultimate Single File)
+# Pure POSIX implementation - 100 lines max - zero dependencies
 # "When everything fails, Access survives"
 
 set -e
 
-# Configuration from environment
-CONFIG_FILE="${ACCESS_CONFIG:-$HOME/.config/access/config.env}"
-
-# Load config if exists
-if [ -f "$CONFIG_FILE" ]; then
-    . "$CONFIG_FILE"
+# Self-install capability
+if [ "$1" = "install" ]; then
+    echo "🌟 Installing Access Eternal..."
+    mkdir -p ~/.local/bin
+    cp "$0" ~/.local/bin/access
+    chmod +x ~/.local/bin/access
+    echo "✅ Installed to ~/.local/bin/access"
+    [ ! -d ~/.config/access ] && echo "Run: access setup"
+    exit 0
 fi
 
-# Required variables with defaults
+# Configuration
+CONFIG_FILE="${ACCESS_CONFIG:-$HOME/.config/access/config.env}"
+[ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
+
+# Required variables
 PROVIDER="${PROVIDER:-godaddy}"
-DOMAIN="${DOMAIN:-akao.io}"
+DOMAIN="${DOMAIN:-akao.io}"  
 HOST="${HOST:-peer0}"
 
-# Validate essential config
-if [ -z "$GODADDY_KEY" ] || [ -z "$GODADDY_SECRET" ]; then
-    echo "ERROR: Missing GODADDY_KEY or GODADDY_SECRET in $CONFIG_FILE"
-    exit 1
-fi
+# Core functions
+get_ip() { curl -s ifconfig.me || curl -s ipinfo.io/ip; }
 
-# Get current IP
-get_ip() {
-    curl -s ifconfig.me || curl -s ipinfo.io/ip || {
-        echo "ERROR: Cannot detect IP"
-        exit 1
-    }
-}
-
-# Update GoDaddy DNS record
 update_dns() {
-    local ip="$(get_ip)"
-    local record_type="A"
+    [ -z "$GODADDY_KEY" ] || [ -z "$GODADDY_SECRET" ] && { echo "ERROR: Missing API keys"; exit 1; }
     
-    # Detect IPv6
-    case "$ip" in
-        *:*) record_type="AAAA" ;;
-    esac
+    ip="$(get_ip)"
+    record_type="A"; case "$ip" in *:*) record_type="AAAA";; esac
     
     echo "Updating $HOST.$DOMAIN ($record_type) to $ip"
     
-    # GoDaddy API call
     response=$(curl -s -w "\n%{http_code}" -X PUT \
         "https://api.godaddy.com/v1/domains/$DOMAIN/records/$record_type/$HOST" \
         -H "Authorization: sso-key $GODADDY_KEY:$GODADDY_SECRET" \
         -H "Content-Type: application/json" \
         -d "[{\"data\": \"$ip\", \"ttl\": 600}]")
     
-    http_code=$(echo "$response" | tail -n1)
-    
-    if [ "$http_code" = "200" ]; then
-        echo "✅ DNS updated successfully"
-    else
-        echo "❌ DNS update failed (HTTP $http_code)"
-        exit 1
-    fi
+    [ "$(echo "$response" | tail -n1)" = "200" ] && echo "✅ DNS updated" || { echo "❌ Failed"; exit 1; }
 }
 
-# Install DHCP hook for true real-time response
-install_dhcp_hook() {
-    echo "Installing DHCP hook for real-time DNS updates..."
+# Setup wizard
+setup() {
+    echo "🌟 Access Setup"
+    mkdir -p ~/.config/access
     
-    # Create DHCP exit hook
-    HOOK_FILE="/etc/dhcp/dhclient-exit-hooks.d/access"
+    printf "Domain [akao.io]: "; read domain; domain="${domain:-akao.io}"
+    printf "Host [peer0]: "; read host; host="${host:-peer0}" 
+    printf "GoDaddy Key: "; read key
+    printf "GoDaddy Secret: "; read secret
     
-    cat << 'EOF' | sudo tee "$HOOK_FILE" > /dev/null
-#!/bin/sh
-# Access DHCP Hook - True real-time DNS updates
-# Triggered instantly when DHCP assigns new IPv6
-
-# Only process IPv6 events
-case "$reason" in
-    BOUND6|RENEW6|REBOOT6)
-        # Log event
-        echo "$(date): DHCP IPv6 event ($reason) - new IP: ${new_ip6_address:-unknown}" >> /var/log/access-dhcp.log
-        
-        # Trigger DNS update
-        if [ -x /home/x/.local/bin/access ]; then
-            /home/x/.local/bin/access update >> /var/log/access-dhcp.log 2>&1
-        fi
-        ;;
-esac
-EOF
-    
-    sudo chmod +x "$HOOK_FILE"
-    echo "✅ DHCP hook installed: $HOOK_FILE"
-    echo "DNS updates will now trigger instantly on IPv6 changes"
-}
-
-# Main command handling
-case "${1:-update}" in
-    update) update_dns ;;
-    install-hook) install_dhcp_hook ;;
-    ip) get_ip ;;
-    setup)
-        echo "🌟 Access Eternal Setup Wizard"
-        echo ""
-        
-        # Create config directory
-        mkdir -p ~/.config/access
-        
-        # Interactive setup
-        echo "📝 Enter your configuration:"
-        printf "Domain (default: akao.io): "; read domain
-        domain="${domain:-akao.io}"
-        
-        printf "Host (default: peer0): "; read host  
-        host="${host:-peer0}"
-        
-        printf "GoDaddy API Key: "; read key
-        printf "GoDaddy API Secret: "; read secret
-        
-        # Create config
-        cat > ~/.config/access/config.env << EOF
+    cat > ~/.config/access/config.env << EOF
 PROVIDER=godaddy
-DOMAIN=$domain
+DOMAIN=$domain  
 HOST=$host
 GODADDY_KEY=$key
 GODADDY_SECRET=$secret
 EOF
-        
-        chmod 600 ~/.config/access/config.env
-        echo "✅ Config created: ~/.config/access/config.env"
-        
-        # Test configuration
-        echo "🧪 Testing DNS update..."
-        if access update; then
-            echo "✅ Setup complete!"
-            echo ""
-            echo "🚀 For real-time updates: access install-hook"
-        else
-            echo "❌ Setup failed - check your API keys"
-        fi
-        ;;
+    chmod 600 ~/.config/access/config.env
+    echo "✅ Config saved"
     
-    *) 
-        echo "Access - Eternal Foundation Layer"
-        echo "Commands: update, setup, install-hook, ip"
-        echo ""
-        echo "First time? Run: access setup"
-        ;;
-esac
+    if update_dns 2>/dev/null; then
+        echo "✅ Test successful!"
+        echo "🚀 For real-time: access hook"
+    else
+        echo "❌ Check API keys"
+    fi
+}
+
+# DHCP hook for real-time
+install_hook() {
+    echo "Installing DHCP hook..."
+    cat << 'HOOK' | sudo tee /etc/dhcp/dhclient-exit-hooks.d/access > /dev/null
+#!/bin/sh
+case "$reason" in BOUND6|RENEW6|REBOOT6)
+    [ -x ~/.local/bin/access ] && ~/.local/bin/access update >> /var/log/access.log 2>&1
+;; esac
+HOOK
+    sudo chmod +x /etc/dhcp/dhclient-exit-hooks.d/access
+    echo "✅ Real-time updates enabled"
+}
+
+# Commands  
+case "${1:-update}" in
+    update) update_dns ;;
+    setup) setup ;;
+    hook) install_hook ;;
+    ip) get_ip ;;
+    install) ;; # Handled above
+    *) echo "Access Eternal: update|setup|hook|ip|install" ;;
 esac
