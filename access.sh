@@ -24,84 +24,10 @@ fi
 # Main command handling
 case "${1:-help}" in
     daemon)
-        # Set up logging environment first
-        if command -v stacker_log >/dev/null 2>&1; then
-            stacker_log "Access daemon starting with Stacker integration"
-            
-            # Set up Stacker service context
-            export STACKER_TECH_NAME="${STACKER_TECH_NAME:-access}"
-            export STACKER_SERVICE_DESCRIPTION="${STACKER_SERVICE_DESCRIPTION:-Access DNS synchronization service}"
-            export STACKER_SERVICE_TYPE="${STACKER_SERVICE_TYPE:-simple}"
-            
-            # Create XDG directories if not exists
-            if command -v stacker_create_xdg_dirs >/dev/null 2>&1; then
-                stacker_create_xdg_dirs
-            fi
-            
-            # Set up logging directory
-            ACCESS_LOG_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/access"
-            mkdir -p "$ACCESS_LOG_DIR"
-            ACCESS_LOG_FILE="$ACCESS_LOG_DIR/daemon.log"
-        else
-            ACCESS_LOG_DIR="$HOME/.local/share/access"
-            mkdir -p "$ACCESS_LOG_DIR"
-            ACCESS_LOG_FILE="$ACCESS_LOG_DIR/daemon.log"
-        fi
-        
-        # PID file for single instance enforcement
-        PID_FILE="${XDG_RUNTIME_DIR:-$HOME/.local/state/access}/access.pid"
-        mkdir -p "$(dirname "$PID_FILE")"
-        
-        # Check if daemon is already running
-        if [ -f "$PID_FILE" ]; then
-            if kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
-                echo "Access daemon already running (PID: $(cat "$PID_FILE"))"
-                exit 0
-            else
-                rm -f "$PID_FILE"
-            fi
-        fi
-        
-        # Create PID file
-        echo $$ > "$PID_FILE"
-        echo "[$(date)] Created PID file: $PID_FILE (PID: $$)" >> "$ACCESS_LOG_FILE"
-        trap 'rm -f "$PID_FILE"; exit' EXIT TERM INT
-        
-        echo "Starting Access monitoring daemon (PID: $$)..."
-        echo "Monitoring DNS sync and system health..."
-        
-        # Log daemon startup
-        echo "[$(date)] Access daemon started (PID: $$)" >> "$ACCESS_LOG_FILE"
-        
-        # Non-blocking daemon with signal handling
-        trap 'echo "[$(date)] Daemon shutting down gracefully..." >> "$ACCESS_LOG_FILE"; exit 0' TERM INT
-        
-        # Background monitoring function
-        run_monitoring_cycle() {
-            {
-                echo "[$(date)] Starting health check cycle"
-                
-                # Run health check without subprocess spawning
-                if [ -x "$SCRIPT_DIR/health.sh" ]; then
-                    "$SCRIPT_DIR/health.sh" update >/dev/null 2>&1
-                    echo "[$(date)] HEALTH: Status updated"
-                else
-                    echo "[$(date)] WARNING: health.sh not executable"
-                fi
-                
-                echo "[$(date)] Health check cycle completed"
-                
-            } >> "$ACCESS_LOG_FILE" 2>&1
-        }
-        
-        # Main daemon loop - single process
-        while true; do
-            # Run monitoring synchronously
-            run_monitoring_cycle
-            
-            # Sleep directly without background process
-            sleep "${ACCESS_DAEMON_INTERVAL:-300}"
-        done
+        echo "ERROR: Access no longer runs its own daemon"
+        echo "Use 'stacker watchdog access' instead for periodic monitoring"
+        echo "Or use cron for scheduled updates"
+        exit 1
         ;;
     
     init)
