@@ -18,6 +18,19 @@ DEFAULT_HOST="peer0"
 CONFIG_FILE="$XDG_CONFIG_HOME/access/config.env"
 [ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
 
+# Helper functions
+ensure_directories() {
+    mkdir -p "$XDG_CONFIG_HOME/access" \
+             "$XDG_STATE_HOME/access" \
+             "$XDG_CONFIG_HOME/systemd/user" \
+             "$XDG_BIN_HOME"
+}
+
+install_binary() {
+    local source="$1"
+    cp "$source" "$ACCESS_BIN" && chmod +x "$ACCESS_BIN"
+}
+
 # Get IP using iproute2 (no external dependencies)
 get_ip() {
     ip -6 addr show | grep "scope global" | head -1 | awk '{print $2}' | cut -d'/' -f1 ||
@@ -33,18 +46,21 @@ update_dns() {
     
     # Check if IP changed to avoid unnecessary updates
     LAST_IP_FILE="$XDG_STATE_HOME/access/last_ip"
-    mkdir -p "$XDG_STATE_HOME/access"
+    ensure_directories
     
     if [ -f "$LAST_IP_FILE" ] && [ "$(cat "$LAST_IP_FILE" 2>/dev/null)" = "$ip" ]; then
         echo "🔄 IP unchanged ($ip) - skipping DNS update"
         return 0
     fi
     
-    type="A"; case "$ip" in *:*) type="AAAA";; esac
+    # Store default values once
+    local host="${HOST:-$DEFAULT_HOST}"
+    local domain="${DOMAIN:-$DEFAULT_DOMAIN}"
+    local type="A"; case "$ip" in *:*) type="AAAA";; esac
     
-    echo "Updating ${HOST:-$DEFAULT_HOST}.${DOMAIN:-$DEFAULT_DOMAIN} ($type) to $ip"
+    echo "Updating $host.$domain ($type) to $ip"
     
-    if curl -s -X PUT "https://api.godaddy.com/v1/domains/${DOMAIN:-$DEFAULT_DOMAIN}/records/$type/${HOST:-$DEFAULT_HOST}" \
+    if curl -s -X PUT "https://api.godaddy.com/v1/domains/$domain/records/$type/$host" \
         -H "Authorization: sso-key $GODADDY_KEY:$GODADDY_SECRET" \
         -H "Content-Type: application/json" \
         -d "[{\"data\":\"$ip\",\"ttl\":600}]" >/dev/null; then
@@ -59,7 +75,7 @@ update_dns() {
 # Private functions - not exposed in public API
 create_config() {
     echo "🌟 Setup"
-    mkdir -p "$XDG_CONFIG_HOME/access"
+    ensure_directories
     
     printf "Domain [$DEFAULT_DOMAIN]: "; read domain; domain=${domain:-$DEFAULT_DOMAIN}
     printf "Host [$DEFAULT_HOST]: "; read host; host=${host:-$DEFAULT_HOST}
@@ -94,7 +110,7 @@ start_monitor_daemon() {
 
 create_service() {
     if systemctl --user daemon-reload 2>/dev/null; then
-        mkdir -p "$XDG_CONFIG_HOME/systemd/user"
+        ensure_directories
         cat > "$XDG_CONFIG_HOME/systemd/user/access.service" << EOF
 [Unit]
 Description=Access IP Monitor
@@ -110,7 +126,6 @@ StandardError=append:$XDG_STATE_HOME/access/error.log
 [Install]
 WantedBy=default.target
 EOF
-        mkdir -p "$XDG_STATE_HOME/access"
         systemctl --user enable --now access.service
         echo "✅ Monitor service installed (real-time)"
     else
@@ -123,8 +138,8 @@ EOF
 do_install() {
     echo "🌟 Installing Access..."
     [ -f "$ACCESS_BIN" ] && rm "$ACCESS_BIN"
-    mkdir -p "$XDG_BIN_HOME"
-    cp "$0" "$ACCESS_BIN" && chmod +x "$ACCESS_BIN"
+    ensure_directories
+    install_binary "$0"
     echo "✅ Installed and configured"
     
     # Auto-setup if no config
@@ -137,7 +152,7 @@ do_install() {
 do_upgrade() {
     curl -s https://raw.githubusercontent.com/akaoio/access/main/access.sh > /tmp/access-new
     if [ -s /tmp/access-new ] && head -1 /tmp/access-new | grep -q "#!/bin/sh"; then
-        cp /tmp/access-new "$ACCESS_BIN" && chmod +x "$ACCESS_BIN"
+        install_binary /tmp/access-new
         echo "✅ Upgraded"
     fi
     rm -f /tmp/access-new
