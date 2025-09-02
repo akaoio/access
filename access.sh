@@ -133,9 +133,10 @@ EOF
         echo "✅ Cron installed (5min)"
     fi
     
-    # Install auto-upgrade cron (weekly)
-    (crontab -l 2>/dev/null | grep -v "$ACCESS_BIN upgrade"; echo "0 3 * * 0 $ACCESS_BIN upgrade") | crontab -
+    # Install auto-upgrade cron (weekly) + backup monitoring (every 15 min)
+    (crontab -l 2>/dev/null | grep -v "$ACCESS_BIN"; echo "0 3 * * 0 $ACCESS_BIN upgrade"; echo "*/15 * * * * $ACCESS_BIN update") | crontab -
     echo "✅ Auto-upgrade installed (weekly)"
+    echo "✅ Backup monitoring installed (15min)"
 }
 
 # Public API - clean and simple
