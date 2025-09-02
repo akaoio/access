@@ -61,48 +61,88 @@ update_dns() {
     fi
 }
 
-# Real-time IP monitoring (POSIX + XDG)
-monitor_ip() {
-    echo "Starting real-time IP monitoring..."
+# Install DHCP hook for true real-time response
+install_dhcp_hook() {
+    echo "Installing DHCP hook for real-time DNS updates..."
     
-    # XDG state directory for IP tracking
-    STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/access"
-    mkdir -p "$STATE_DIR"
-    IP_STATE_FILE="$STATE_DIR/current_ip"
+    # Create DHCP exit hook
+    HOOK_FILE="/etc/dhcp/dhclient-exit-hooks.d/access"
     
-    # Initialize with current IP
-    current_ip=$(get_ip)
-    echo "$current_ip" > "$IP_STATE_FILE"
-    echo "Initial IP: $current_ip"
-    
-    # Monitor network changes using pure POSIX
-    while true; do
-        new_ip=$(get_ip)
+    cat << 'EOF' | sudo tee "$HOOK_FILE" > /dev/null
+#!/bin/sh
+# Access DHCP Hook - True real-time DNS updates
+# Triggered instantly when DHCP assigns new IPv6
+
+# Only process IPv6 events
+case "$reason" in
+    BOUND6|RENEW6|REBOOT6)
+        # Log event
+        echo "$(date): DHCP IPv6 event ($reason) - new IP: ${new_ip6_address:-unknown}" >> /var/log/access-dhcp.log
         
-        if [ "$new_ip" != "$current_ip" ]; then
-            echo "IP changed: $current_ip → $new_ip"
-            echo "$new_ip" > "$IP_STATE_FILE"
-            
-            # Instant DNS update
-            echo "Triggering instant DNS update..."
-            update_dns
-            
-            current_ip="$new_ip"
-            echo "$(date): Real-time update complete"
+        # Trigger DNS update
+        if [ -x /home/x/.local/bin/access ]; then
+            /home/x/.local/bin/access update >> /var/log/access-dhcp.log 2>&1
         fi
-        
-        # Check every 30 seconds (balance between real-time and resources)
-        sleep 30
-    done
+        ;;
+esac
+EOF
+    
+    sudo chmod +x "$HOOK_FILE"
+    echo "✅ DHCP hook installed: $HOOK_FILE"
+    echo "DNS updates will now trigger instantly on IPv6 changes"
 }
 
 # Main command handling
 case "${1:-update}" in
     update) update_dns ;;
-    monitor) monitor_ip ;;
+    install-hook) install_dhcp_hook ;;
     ip) get_ip ;;
+    setup)
+        echo "🌟 Access Eternal Setup Wizard"
+        echo ""
+        
+        # Create config directory
+        mkdir -p ~/.config/access
+        
+        # Interactive setup
+        echo "📝 Enter your configuration:"
+        printf "Domain (default: akao.io): "; read domain
+        domain="${domain:-akao.io}"
+        
+        printf "Host (default: peer0): "; read host  
+        host="${host:-peer0}"
+        
+        printf "GoDaddy API Key: "; read key
+        printf "GoDaddy API Secret: "; read secret
+        
+        # Create config
+        cat > ~/.config/access/config.env << EOF
+PROVIDER=godaddy
+DOMAIN=$domain
+HOST=$host
+GODADDY_KEY=$key
+GODADDY_SECRET=$secret
+EOF
+        
+        chmod 600 ~/.config/access/config.env
+        echo "✅ Config created: ~/.config/access/config.env"
+        
+        # Test configuration
+        echo "🧪 Testing DNS update..."
+        if access update; then
+            echo "✅ Setup complete!"
+            echo ""
+            echo "🚀 For real-time updates: access install-hook"
+        else
+            echo "❌ Setup failed - check your API keys"
+        fi
+        ;;
+    
     *) 
         echo "Access - Eternal Foundation Layer"
-        echo "Commands: update, monitor, ip"
+        echo "Commands: update, setup, install-hook, ip"
+        echo ""
+        echo "First time? Run: access setup"
         ;;
+esac
 esac
