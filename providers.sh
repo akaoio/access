@@ -288,6 +288,23 @@ update_with_provider() {
     
     load_provider "$provider_name" || return 1
     
+    # Load provider credentials from JSON config
+    ACCESS_CONFIG="${ACCESS_CONFIG:-$HOME/.config/access/config.json}"
+    if [ -f "$ACCESS_CONFIG" ]; then
+        case "$provider_name" in
+            godaddy)
+                export GODADDY_KEY=$(sed -n 's/.*"key"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$ACCESS_CONFIG")
+                export GODADDY_SECRET=$(sed -n 's/.*"secret"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$ACCESS_CONFIG")
+                ;;
+            cloudflare)
+                export CLOUDFLARE_TOKEN=$(sed -n 's/.*"token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$ACCESS_CONFIG")
+                ;;
+            digitalocean)
+                export DO_TOKEN=$(sed -n 's/.*"token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$ACCESS_CONFIG")
+                ;;
+        esac
+    fi
+    
     # Validate configuration first
     if ! provider_validate; then
         echo "Error: Provider validation failed" >&2
