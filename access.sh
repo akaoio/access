@@ -153,7 +153,15 @@ do_upgrade() {
     curl -s https://raw.githubusercontent.com/akaoio/access/main/access.sh > /tmp/access-new
     if [ -s /tmp/access-new ] && head -1 /tmp/access-new | grep -q "#!/bin/sh"; then
         install_binary /tmp/access-new
-        echo "✅ Upgraded"
+        echo "✅ Upgraded binary"
+        
+        # Auto-restart service if running
+        if systemctl --user is-active access.service >/dev/null 2>&1; then
+            systemctl --user restart access.service
+            echo "✅ Service restarted with new version"
+        fi
+        
+        echo "✅ Upgrade complete"
     fi
     rm -f /tmp/access-new
 }
