@@ -132,6 +132,10 @@ EOF
         (crontab -l 2>/dev/null; echo "*/5 * * * * $ACCESS_BIN update") | crontab -
         echo "✅ Cron installed (5min)"
     fi
+    
+    # Install auto-upgrade cron (weekly)
+    (crontab -l 2>/dev/null | grep -v "$ACCESS_BIN upgrade"; echo "0 3 * * 0 $ACCESS_BIN upgrade") | crontab -
+    echo "✅ Auto-upgrade installed (weekly)"
 }
 
 # Public API - clean and simple
@@ -169,7 +173,7 @@ do_upgrade() {
 do_uninstall() {
     systemctl --user stop access.service 2>/dev/null || true
     rm -f "$ACCESS_BIN" "$XDG_CONFIG_HOME/systemd/user/access.service"
-    crontab -l 2>/dev/null | grep -v access | crontab - 2>/dev/null || true
+    crontab -l 2>/dev/null | grep -v "$ACCESS_BIN" | crontab - 2>/dev/null || true
     echo "✅ Uninstalled"
 }
 
