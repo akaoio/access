@@ -24,28 +24,7 @@ fi
 # Main command handling
 case "${1:-help}" in
     daemon)
-        # PID file for single instance enforcement
-        PID_FILE="${XDG_RUNTIME_DIR:-$HOME/.local/state/access}/access.pid"
-        mkdir -p "$(dirname "$PID_FILE")"
-        
-        # Check if daemon is already running
-        if [ -f "$PID_FILE" ]; then
-            if kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
-                echo "Access daemon already running (PID: $(cat "$PID_FILE"))"
-                exit 0
-            else
-                rm -f "$PID_FILE"
-            fi
-        fi
-        
-        # Create PID file
-        echo $$ > "$PID_FILE"
-        trap 'rm -f "$PID_FILE"; exit' EXIT TERM INT
-        
-        echo "Starting Access monitoring daemon (PID: $$)..."
-        echo "Monitoring DNS sync and system health..."
-        
-        # Set up proper daemon environment
+        # Set up logging environment first
         if command -v stacker_log >/dev/null 2>&1; then
             stacker_log "Access daemon starting with Stacker integration"
             
@@ -68,6 +47,28 @@ case "${1:-help}" in
             mkdir -p "$ACCESS_LOG_DIR"
             ACCESS_LOG_FILE="$ACCESS_LOG_DIR/daemon.log"
         fi
+        
+        # PID file for single instance enforcement
+        PID_FILE="${XDG_RUNTIME_DIR:-$HOME/.local/state/access}/access.pid"
+        mkdir -p "$(dirname "$PID_FILE")"
+        
+        # Check if daemon is already running
+        if [ -f "$PID_FILE" ]; then
+            if kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
+                echo "Access daemon already running (PID: $(cat "$PID_FILE"))"
+                exit 0
+            else
+                rm -f "$PID_FILE"
+            fi
+        fi
+        
+        # Create PID file
+        echo $$ > "$PID_FILE"
+        echo "[$(date)] Created PID file: $PID_FILE (PID: $$)" >> "$ACCESS_LOG_FILE"
+        trap 'rm -f "$PID_FILE"; exit' EXIT TERM INT
+        
+        echo "Starting Access monitoring daemon (PID: $$)..."
+        echo "Monitoring DNS sync and system health..."
         
         # Log daemon startup
         echo "[$(date)] Access daemon started (PID: $$)" >> "$ACCESS_LOG_FILE"
