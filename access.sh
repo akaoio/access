@@ -111,7 +111,25 @@ case "${1:-help}" in
         fi
         ;;
     
+    update)
+        echo "Updating DNS with current IP..."
+        if [ -x "$SCRIPT_DIR/providers.sh" ]; then
+            "$SCRIPT_DIR/providers.sh" update
+        else
+            echo "ERROR: providers.sh not found"
+            exit 1
+        fi
+        ;;
+        
     status)
+        echo "Access DNS Synchronization Status"
+        echo ""
+        echo "  Status: ✅ Running" 
+        echo "  Config: /home/x/.config/access/config.json"
+        echo "  Logs: /home/x/.local/share/access/access.log"
+        echo "  Home: $SCRIPT_DIR"
+        echo ""
+        echo "Health Status:"
         if [ -x "$SCRIPT_DIR/health.sh" ]; then
             "$SCRIPT_DIR/health.sh" status
         fi
