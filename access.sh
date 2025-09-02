@@ -142,9 +142,12 @@ EOF
 # Public API - clean and simple
 do_install() {
     echo "🌟 Installing Access..."
-    [ -f "$ACCESS_BIN" ] && rm "$ACCESS_BIN"
     ensure_directories
-    install_binary "$0"
+    
+    # Only install if not already in correct location or if different
+    if [ "$0" != "$ACCESS_BIN" ]; then
+        install_binary "$0"
+    fi
     echo "✅ Installed and configured"
     
     # Auto-setup if no config
