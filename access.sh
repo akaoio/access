@@ -68,9 +68,10 @@ case "${1:-help}" in
         ;;
     
     scan) 
-        if [ -x "$SCRIPT_DIR/scan.sh" ]; then
-            "$SCRIPT_DIR/scan.sh" "$@"
-        fi
+        echo "ERROR: Scan functionality removed to reduce complexity"
+        echo "Use access for basic DNS sync only"
+        echo "For peer discovery, use dedicated network tools"
+        exit 1
         ;;
     
     service)
