@@ -73,17 +73,63 @@ EOF
     fi
 }
 
-# DHCP hook for real-time
+# Runtime detection of actual network service
 install_hook() {
-    echo "Installing DHCP hook..."
-    cat << 'HOOK' | sudo tee /etc/dhcp/dhclient-exit-hooks.d/access > /dev/null
+    echo "🔍 Runtime network service detection..."
+    
+    # Test what's actually running and usable
+    if systemctl is-active systemd-networkd >/dev/null 2>&1; then
+        echo "✅ systemd-networkd detected - using systemd timer instead of hooks"
+        
+        # Create systemd timer for IP monitoring (better than hooks for systemd-networkd)
+        cat << 'TIMER' | sudo tee /etc/systemd/system/access-monitor.timer > /dev/null
+[Unit]
+Description=Access IP Monitor Timer
+[Timer]
+OnCalendar=*:0/2
+Persistent=true
+[Install]
+WantedBy=timers.target
+TIMER
+
+        cat << 'SERVICE' | sudo tee /etc/systemd/system/access-monitor.service > /dev/null  
+[Unit]
+Description=Access IP Monitor
+[Service]
+Type=oneshot
+ExecStart=/home/x/.local/bin/access update
+SERVICE
+
+        sudo systemctl enable access-monitor.timer
+        sudo systemctl start access-monitor.timer
+        echo "✅ Real-time monitoring via systemd timer (2min interval)"
+        
+    elif pgrep dhclient >/dev/null && [ -d /etc/dhcp/dhclient-exit-hooks.d ]; then
+        echo "✅ dhclient detected - installing exit hook"
+        cat << 'HOOK' | sudo tee /etc/dhcp/dhclient-exit-hooks.d/access > /dev/null
 #!/bin/sh
 case "$reason" in BOUND6|RENEW6|REBOOT6)
-    [ -x ~/.local/bin/access ] && ~/.local/bin/access update >> /var/log/access.log 2>&1
+    /home/x/.local/bin/access update >> /var/log/access.log 2>&1
 ;; esac
 HOOK
-    sudo chmod +x /etc/dhcp/dhclient-exit-hooks.d/access
-    echo "✅ Real-time updates enabled"
+        sudo chmod +x /etc/dhcp/dhclient-exit-hooks.d/access
+        echo "✅ DHCP hook installed"
+        
+    elif pgrep NetworkManager >/dev/null && [ -d /etc/NetworkManager/dispatcher.d ]; then
+        echo "✅ NetworkManager detected - installing dispatcher"
+        cat << 'DISPATCHER' | sudo tee /etc/NetworkManager/dispatcher.d/access > /dev/null
+#!/bin/sh
+case "$2" in up|dhcp6-change) /home/x/.local/bin/access update; esac
+DISPATCHER
+        sudo chmod +x /etc/NetworkManager/dispatcher.d/access
+        echo "✅ NetworkManager dispatcher installed"
+        
+    else
+        echo "❌ No supported network service found"
+        echo "💡 Installing cron fallback: */5 * * * * access update"
+        (crontab -l 2>/dev/null; echo "*/5 * * * * access update") | crontab -
+        echo "✅ Cron fallback installed"
+    fi
 }
 
 # Commands  
