@@ -1,225 +1,124 @@
 #!/bin/sh
-# Access - Eternal Foundation Layer (Ultimate Single File)
-# Pure POSIX implementation - 100 lines max - zero dependencies
+# Access Eternal - Minimal 100-line version
 # "When everything fails, Access survives"
 
 set -e
 
-# Self-install capability with robust error handling
+# Self-install
 if [ "$1" = "install" ]; then
-    echo "🌟 Installing Access Eternal..."
-    
-    # Clean any existing installations
-    [ -L ~/.local/bin/access ] && rm -f ~/.local/bin/access 2>/dev/null
-    [ -f ~/.local/bin/access ] && rm -f ~/.local/bin/access 2>/dev/null
-    
-    # Create directory safely
-    mkdir -p ~/.local/bin || { echo "❌ Cannot create ~/.local/bin"; exit 1; }
-    
-    # Install binary
-    if cp "$0" ~/.local/bin/access && chmod +x ~/.local/bin/access; then
-        echo "✅ Installed to ~/.local/bin/access"
-        
-        # Check PATH automatically
-        if command -v access >/dev/null 2>&1; then
-            echo "✅ Command available: access"
-        else
-            echo "⚠️  Run: export PATH=\"\$HOME/.local/bin:\$PATH\""
-        fi
-        
-        # Check config
-        if [ -f ~/.config/access/config.env ]; then
-            echo "✅ Config found - ready to use"
-        else
-            echo "💡 Next: access setup"
-        fi
-    else
-        echo "❌ Installation failed"
-        exit 1
-    fi
+    echo "🌟 Installing Access..."
+    [ -f ~/.local/bin/access ] && rm ~/.local/bin/access
+    mkdir -p ~/.local/bin
+    cp "$0" ~/.local/bin/access && chmod +x ~/.local/bin/access
+    echo "✅ Installed. Run: access setup"
     exit 0
 fi
 
-# Configuration
-CONFIG_FILE="${ACCESS_CONFIG:-$HOME/.config/access/config.env}"
+# Load config
+CONFIG_FILE="$HOME/.config/access/config.env"
 [ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
 
-# Required variables
-PROVIDER="${PROVIDER:-godaddy}"
-DOMAIN="${DOMAIN:-akao.io}"  
-HOST="${HOST:-peer0}"
-
-# Core functions
-get_ip() { curl -s ifconfig.me || curl -s ipinfo.io/ip; }
-
-update_dns() {
-    [ -z "$GODADDY_KEY" ] || [ -z "$GODADDY_SECRET" ] && { echo "ERROR: Missing API keys"; exit 1; }
-    
-    ip="$(get_ip)"
-    record_type="A"; case "$ip" in *:*) record_type="AAAA";; esac
-    
-    echo "Updating $HOST.$DOMAIN ($record_type) to $ip"
-    
-    response=$(curl -s -w "\n%{http_code}" -X PUT \
-        "https://api.godaddy.com/v1/domains/$DOMAIN/records/$record_type/$HOST" \
-        -H "Authorization: sso-key $GODADDY_KEY:$GODADDY_SECRET" \
-        -H "Content-Type: application/json" \
-        -d "[{\"data\": \"$ip\", \"ttl\": 600}]")
-    
-    [ "$(echo "$response" | tail -n1)" = "200" ] && echo "✅ DNS updated" || { echo "❌ Failed"; exit 1; }
+# Get IP using iproute2 (no external dependencies)
+get_ip() {
+    ip -6 addr show | grep "scope global" | head -1 | awk '{print $2}' | cut -d'/' -f1 ||
+    ip -4 addr show | grep "scope global" | head -1 | awk '{print $2}' | cut -d'/' -f1
 }
 
-# Setup wizard
+# Update DNS 
+update_dns() {
+    [ -z "$GODADDY_KEY" ] && { echo "ERROR: No API key"; exit 1; }
+    
+    ip=$(get_ip)
+    type="A"; case "$ip" in *:*) type="AAAA";; esac
+    
+    echo "Updating ${HOST:-peer0}.${DOMAIN:-akao.io} ($type) to $ip"
+    
+    curl -s -X PUT "https://api.godaddy.com/v1/domains/${DOMAIN:-akao.io}/records/$type/${HOST:-peer0}" \
+        -H "Authorization: sso-key $GODADDY_KEY:$GODADDY_SECRET" \
+        -H "Content-Type: application/json" \
+        -d "[{\"data\":\"$ip\",\"ttl\":600}]" >/dev/null &&
+    echo "✅ DNS updated" || { echo "❌ Failed"; exit 1; }
+}
+
+# Setup
 setup() {
-    echo "🌟 Access Setup"
+    echo "🌟 Setup"
     mkdir -p ~/.config/access
     
-    printf "Domain [akao.io]: "; read domain; domain="${domain:-akao.io}"
-    printf "Host [peer0]: "; read host; host="${host:-peer0}" 
+    printf "Domain [akao.io]: "; read domain; domain=${domain:-akao.io}
+    printf "Host [peer0]: "; read host; host=${host:-peer0}
     printf "GoDaddy Key: "; read key
-    printf "GoDaddy Secret: "; read secret
+    printf "Secret: "; read secret
     
-    cat > ~/.config/access/config.env << EOF
-PROVIDER=godaddy
-DOMAIN=$domain  
+    cat > "$CONFIG_FILE" << EOF
+DOMAIN=$domain
 HOST=$host
 GODADDY_KEY=$key
 GODADDY_SECRET=$secret
 EOF
-    chmod 600 ~/.config/access/config.env
+    chmod 600 "$CONFIG_FILE"
     echo "✅ Config saved"
-    
-    if update_dns 2>/dev/null; then
-        echo "✅ Test successful!"
-        echo "🚀 For real-time: access hook"
-    else
-        echo "❌ Check API keys"
-    fi
+    update_dns && echo "✅ Test OK"
 }
 
-# Smart hook installation with fallback options
-install_hook() {
-    echo "🔍 Auto-configuring real-time monitoring..."
-    
-    # Try user-space solutions first (no sudo needed)
-    if command -v systemctl >/dev/null 2>&1 && [ -w ~/.config ]; then
-        echo "✅ Using user systemd timer (no sudo required)"
-        
+# Real-time monitor  
+monitor() {
+    echo "🔥 Real-time monitoring..."
+    ip monitor addr | while read line; do
+        case "$line" in *"scope global"*) echo "IP changed"; update_dns;; esac
+    done
+}
+
+# Auto-upgrade
+upgrade() {
+    curl -s https://github.com/akaoio/access/raw/main/access.sh > /tmp/access-new
+    if [ -s /tmp/access-new ] && head -1 /tmp/access-new | grep -q "#!/bin/sh"; then
+        cp /tmp/access-new ~/.local/bin/access && chmod +x ~/.local/bin/access
+        echo "✅ Upgraded"
+    fi
+    rm -f /tmp/access-new
+}
+
+# Install monitoring (choose best option)
+hook() {
+    if systemctl --user start 2>/dev/null; then
         mkdir -p ~/.config/systemd/user
-        
-        cat > ~/.config/systemd/user/access-monitor.timer << 'EOF'
-[Unit]
-Description=Access IP Monitor Timer
+        cat > ~/.config/systemd/user/access.timer << 'EOF'
 [Timer]
-OnCalendar=*:0/2
-Persistent=true
+OnCalendar=*:0/5
 [Install]
 WantedBy=default.target
 EOF
-
-        cat > ~/.config/systemd/user/access-monitor.service << 'EOF'
-[Unit]
-Description=Access IP Monitor
+        cat > ~/.config/systemd/user/access.service << 'EOF'
 [Service]
-Type=oneshot
-ExecStart=/bin/sh %h/.local/bin/access update
+Type=oneshot  
+ExecStart=/bin/sh -c '. ~/.local/bin/access; update_dns'
 EOF
-
-        systemctl --user daemon-reload
-        systemctl --user enable access-monitor.timer 2>/dev/null || true
-        systemctl --user start access-monitor.timer 2>/dev/null || true
-        echo "✅ User timer installed (2min intervals)"
-        
+        systemctl --user enable access.timer && systemctl --user start access.timer
+        echo "✅ Timer installed (5min)"
     else
-        echo "💡 Using cron fallback (universal compatibility)"
-        
-        # Check if cron job already exists
-        if ! crontab -l 2>/dev/null | grep -q "access update"; then
-            (crontab -l 2>/dev/null; echo "*/5 * * * * ~/.local/bin/access update >/dev/null 2>&1") | crontab - 2>/dev/null || {
-                echo "⚠️  Manual cron setup needed:"
-                echo "   */5 * * * * ~/.local/bin/access update"
-            }
-            echo "✅ Cron monitoring installed (5min intervals)"
-        else
-            echo "✅ Cron monitoring already configured"
-        fi
+        (crontab -l 2>/dev/null; echo "*/5 * * * * ~/.local/bin/access update") | crontab -
+        echo "✅ Cron installed (5min)"
     fi
 }
 
-# Auto-upgrade from GitHub with proper validation
-upgrade() {
-    echo "🔄 Checking for updates..."
-    
-    # Download with validation
-    if ! curl -s https://github.com/akaoio/access/raw/main/access.sh > /tmp/access-new.sh; then
-        echo "❌ Failed to download update"
-        return 1
-    fi
-    
-    # Validate downloaded file
-    if [ ! -s /tmp/access-new.sh ] || ! head -1 /tmp/access-new.sh | grep -q "^#!/bin/sh"; then
-        echo "❌ Invalid download - keeping current version"
-        rm -f /tmp/access-new.sh
-        return 1
-    fi
-    
-    # Compare versions
-    if cmp -s ~/.local/bin/access /tmp/access-new.sh 2>/dev/null; then
-        echo "✅ Already latest version"
-    else
-        echo "🆕 New version found - installing..."
-        
-        # Backup current version
-        cp ~/.local/bin/access ~/.local/bin/access.backup 2>/dev/null || true
-        
-        # Install new version
-        if cp /tmp/access-new.sh ~/.local/bin/access && chmod +x ~/.local/bin/access; then
-            echo "✅ Upgraded successfully"
-            
-            # Restart timer if running
-            if systemctl --user is-active access-monitor.timer >/dev/null 2>&1; then
-                systemctl --user restart access-monitor.timer
-                echo "✅ Timer restarted with new version"
-            fi
-        else
-            echo "❌ Upgrade failed - restoring backup"
-            cp ~/.local/bin/access.backup ~/.local/bin/access 2>/dev/null || true
-        fi
-    fi
-    
-    rm -f /tmp/access-new.sh
-}
-
-# Complete uninstallation
+# Uninstall
 uninstall() {
-    echo "🗑️ Uninstalling Access Eternal..."
-    
-    # Stop and remove timer
-    systemctl --user stop access-monitor.timer 2>/dev/null || true
-    systemctl --user disable access-monitor.timer 2>/dev/null || true
-    rm -f ~/.config/systemd/user/access-monitor.* 2>/dev/null
-    
-    # Remove cron job  
-    crontab -l 2>/dev/null | grep -v "access update" | crontab - 2>/dev/null || true
-    
-    # Remove binary
-    rm -f ~/.local/bin/access
-    
-    # Ask about config
-    printf "Remove config? [y/N]: "; read remove_config
-    case "$remove_config" in y|Y) rm -rf ~/.config/access;; esac
-    
-    echo "✅ Uninstalled completely"
+    systemctl --user stop access.timer 2>/dev/null || true
+    rm -f ~/.local/bin/access ~/.config/systemd/user/access.*
+    crontab -l 2>/dev/null | grep -v access | crontab - 2>/dev/null || true
+    echo "✅ Uninstalled"
 }
 
-# Commands  
+# Commands
 case "${1:-update}" in
     update) update_dns ;;
+    monitor) monitor ;;
     setup) setup ;;
-    hook) install_hook ;;
+    hook) hook ;;
     upgrade) upgrade ;;
     uninstall) uninstall ;;
     ip) get_ip ;;
-    install) ;; # Handled above
-    *) echo "Access Eternal: update|setup|hook|upgrade|uninstall|ip|install" ;;
+    install) ;;
+    *) echo "Access: update|monitor|setup|hook|upgrade|uninstall|ip|install" ;;
 esac
