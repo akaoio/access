@@ -29,15 +29,31 @@ update_dns() {
     [ -z "$GODADDY_KEY" ] && { echo "⚠️  No config found. Run: access setup"; return 1; }
     
     ip=$(get_ip)
+    [ -z "$ip" ] && { echo "⚠️  No IP address found"; return 1; }
+    
+    # Check if IP changed to avoid unnecessary updates
+    LAST_IP_FILE="$XDG_STATE_HOME/access/last_ip"
+    mkdir -p "$XDG_STATE_HOME/access"
+    
+    if [ -f "$LAST_IP_FILE" ] && [ "$(cat "$LAST_IP_FILE" 2>/dev/null)" = "$ip" ]; then
+        echo "🔄 IP unchanged ($ip) - skipping DNS update"
+        return 0
+    fi
+    
     type="A"; case "$ip" in *:*) type="AAAA";; esac
     
     echo "Updating ${HOST:-$DEFAULT_HOST}.${DOMAIN:-$DEFAULT_DOMAIN} ($type) to $ip"
     
-    curl -s -X PUT "https://api.godaddy.com/v1/domains/${DOMAIN:-$DEFAULT_DOMAIN}/records/$type/${HOST:-$DEFAULT_HOST}" \
+    if curl -s -X PUT "https://api.godaddy.com/v1/domains/${DOMAIN:-$DEFAULT_DOMAIN}/records/$type/${HOST:-$DEFAULT_HOST}" \
         -H "Authorization: sso-key $GODADDY_KEY:$GODADDY_SECRET" \
         -H "Content-Type: application/json" \
-        -d "[{\"data\":\"$ip\",\"ttl\":600}]" >/dev/null &&
-    echo "✅ DNS updated" || { echo "❌ Failed"; exit 1; }
+        -d "[{\"data\":\"$ip\",\"ttl\":600}]" >/dev/null; then
+        echo "✅ DNS updated"
+        echo "$ip" > "$LAST_IP_FILE"
+    else
+        echo "❌ DNS update failed - will retry on next IP change"
+        return 1
+    fi
 }
 
 # Private functions - not exposed in public API
@@ -62,24 +78,17 @@ EOF
 }
 
 start_monitor_daemon() {
-    echo "🔥 Starting resilient real-time monitor..."
+    echo "🔥 Starting real-time IP monitor..."
+    echo "$(date): Starting IP monitor session" >&2
     
-    # Resilient monitoring loop
-    while true; do
-        echo "$(date): Starting IP monitor session" >&2
-        
-        # Monitor with restart on failure
-        ip monitor addr 2>/dev/null | while read line; do
-            case "$line" in
-                *"scope global"*)
-                    echo "$(date): IP change detected - $line" >&2
-                    update_dns
-                    ;;
-            esac
-        done
-        
-        echo "$(date): Monitor session ended - restarting in 5s" >&2
-        sleep 5
+    # Direct IP monitoring - systemd handles restarts
+    exec ip monitor addr 2>/dev/null | while read line; do
+        case "$line" in
+            *"scope global"*)
+                echo "$(date): IP change detected - $line" >&2
+                update_dns || echo "$(date): DNS update failed, will retry on next change" >&2
+                ;;
+        esac
     done
 }
 
