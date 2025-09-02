@@ -74,50 +74,8 @@ case "${1:-help}" in
         ;;
     
     service)
-        # Service management integration with Stacker
-        if command -v stacker_require >/dev/null 2>&1; then
-            export STACKER_TECH_NAME="access"
-            export STACKER_SERVICE_DESCRIPTION="Access DNS synchronization service"
-            export STACKER_INSTALL_DIR="${STACKER_INSTALL_DIR:-/home/x/.local/bin}"
-            export STACKER_CLEAN_CLONE_DIR="$SCRIPT_DIR"
-            
-            # Load service module
-            if stacker_require "service" 2>/dev/null; then
-                case "${2:-help}" in
-                    install)
-                        stacker_setup_systemd_service
-                        ;;
-                    start)
-                        stacker_start_service
-                        ;;
-                    stop)
-                        stacker_stop_service
-                        ;;
-                    restart)
-                        stacker_restart_service
-                        ;;
-                    status)
-                        stacker_service_status
-                        ;;
-                    enable)
-                        stacker_enable_service
-                        ;;
-                    disable)
-                        stacker_disable_service
-                        ;;
-                    *)
-                        echo "Access Service Management"
-                        echo "Commands: install start stop restart status enable disable"
-                        ;;
-                esac
-            else
-                echo "ERROR: Stacker service module not available" >&2
-                exit 1
-            fi
-        else
-            echo "ERROR: Stacker framework required for service management" >&2
-            exit 1
-        fi
+        echo "ERROR: Use 'stacker service access' for service management"
+        exit 1
         ;;
     
     help|--help|-h)
