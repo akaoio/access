@@ -25,6 +25,23 @@ provider_validate() {
     return 0
 }
 
+# Validation functions
+validate_domain_name() {
+    local domain="$1"
+    echo "$domain" | grep -qE '^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+}
+
+validate_hostname() {
+    local host="$1"
+    [ "$host" = "@" ] || echo "$host" | grep -qE '^[a-zA-Z0-9.-]+$'
+}
+
+validate_ip_address() {
+    local ip="$1"
+    # IPv4 or IPv6 validation
+    echo "$ip" | grep -qE '^([0-9]{1,3}\.){3}[0-9]{1,3}$|^([0-9a-fA-F]*:)+[0-9a-fA-F]*$'
+}
+
 provider_update() {
     local domain="$1"
     local host="${2:-@}"
