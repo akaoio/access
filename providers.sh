@@ -74,11 +74,10 @@ load_provider() {
     
     # SECURITY FIX 1: Input sanitization to prevent command injection
     # Validate provider name contains only safe characters
-    case "$provider_name" in
-        *[^a-zA-Z0-9_-]*)
-            echo "Error: Invalid provider name: $provider_name (only alphanumeric, underscore, hyphen allowed)" >&2
-            return 1
-            ;;
+    if ! echo "$provider_name" | grep -q '^[a-zA-Z0-9_-]*$'; then
+        echo "Error: Invalid provider name: $provider_name (only alphanumeric, underscore, hyphen allowed)" >&2
+        return 1
+    fi
         ../*|*/../*|*/..|*/../*)
             echo "Error: Path traversal attempt in provider name: $provider_name" >&2
             return 1
