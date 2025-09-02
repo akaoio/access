@@ -61,12 +61,48 @@ update_dns() {
     fi
 }
 
+# Real-time IP monitoring (POSIX + XDG)
+monitor_ip() {
+    echo "Starting real-time IP monitoring..."
+    
+    # XDG state directory for IP tracking
+    STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/access"
+    mkdir -p "$STATE_DIR"
+    IP_STATE_FILE="$STATE_DIR/current_ip"
+    
+    # Initialize with current IP
+    current_ip=$(get_ip)
+    echo "$current_ip" > "$IP_STATE_FILE"
+    echo "Initial IP: $current_ip"
+    
+    # Monitor network changes using pure POSIX
+    while true; do
+        new_ip=$(get_ip)
+        
+        if [ "$new_ip" != "$current_ip" ]; then
+            echo "IP changed: $current_ip → $new_ip"
+            echo "$new_ip" > "$IP_STATE_FILE"
+            
+            # Instant DNS update
+            echo "Triggering instant DNS update..."
+            update_dns
+            
+            current_ip="$new_ip"
+            echo "$(date): Real-time update complete"
+        fi
+        
+        # Check every 30 seconds (balance between real-time and resources)
+        sleep 30
+    done
+}
+
 # Main command handling
 case "${1:-update}" in
     update) update_dns ;;
+    monitor) monitor_ip ;;
     ip) get_ip ;;
     *) 
         echo "Access - Eternal Foundation Layer"
-        echo "Commands: update, ip"
+        echo "Commands: update, monitor, ip"
         ;;
 esac
