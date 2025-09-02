@@ -27,8 +27,8 @@ ensure_directories() {
 }
 
 install_binary() {
-    local source="$1"
-    cp "$source" "$ACCESS_BIN" && chmod +x "$ACCESS_BIN"
+    _install_source="$1"
+    cp "$_install_source" "$ACCESS_BIN" && chmod +x "$ACCESS_BIN"
 }
 
 # Get IP using iproute2 (no external dependencies)
@@ -54,13 +54,13 @@ update_dns() {
     fi
     
     # Store default values once
-    local host="${HOST:-$DEFAULT_HOST}"
-    local domain="${DOMAIN:-$DEFAULT_DOMAIN}"
-    local type="A"; case "$ip" in *:*) type="AAAA";; esac
+    _dns_host="${HOST:-$DEFAULT_HOST}"
+    _dns_domain="${DOMAIN:-$DEFAULT_DOMAIN}"
+    _dns_type="A"; case "$ip" in *:*) _dns_type="AAAA";; esac
     
-    echo "Updating $host.$domain ($type) to $ip"
+    echo "Updating $_dns_host.$_dns_domain ($_dns_type) to $ip"
     
-    if curl -s -X PUT "https://api.godaddy.com/v1/domains/$domain/records/$type/$host" \
+    if curl -s -X PUT "https://api.godaddy.com/v1/domains/$_dns_domain/records/$_dns_type/$_dns_host" \
         -H "Authorization: sso-key $GODADDY_KEY:$GODADDY_SECRET" \
         -H "Content-Type: application/json" \
         -d "[{\"data\":\"$ip\",\"ttl\":600}]" >/dev/null; then
