@@ -122,7 +122,7 @@ EOF
 Description=Access IP Monitor
 [Service]
 Type=oneshot
-ExecStart=%h/.local/bin/access update
+ExecStart=/bin/sh %h/.local/bin/access update
 EOF
 
         systemctl --user daemon-reload
