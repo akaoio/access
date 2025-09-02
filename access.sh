@@ -4,18 +4,14 @@
 
 set -e
 
-# Self-install
-if [ "$1" = "install" ]; then
-    echo "🌟 Installing Access..."
-    [ -f ~/.local/bin/access ] && rm ~/.local/bin/access
-    mkdir -p ~/.local/bin
-    cp "$0" ~/.local/bin/access && chmod +x ~/.local/bin/access
-    echo "✅ Installed. Run: access setup"
-    exit 0
-fi
+# XDG Base Directory Specification
+XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+XDG_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
+XDG_BIN_HOME="${XDG_BIN_HOME:-$HOME/.local/bin}"
+ACCESS_BIN="$XDG_BIN_HOME/access"
 
 # Load config
-CONFIG_FILE="$HOME/.config/access/config.env"
+CONFIG_FILE="$XDG_CONFIG_HOME/access/config.env"
 [ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
 
 # Get IP using iproute2 (no external dependencies)
@@ -26,7 +22,7 @@ get_ip() {
 
 # Update DNS 
 update_dns() {
-    [ -z "$GODADDY_KEY" ] && { echo "ERROR: No API key"; exit 1; }
+    [ -z "$GODADDY_KEY" ] && { echo "⚠️  No config found. Run: access setup"; return 1; }
     
     ip=$(get_ip)
     type="A"; case "$ip" in *:*) type="AAAA";; esac
@@ -43,7 +39,7 @@ update_dns() {
 # Setup
 setup() {
     echo "🌟 Setup"
-    mkdir -p ~/.config/access
+    mkdir -p "$XDG_CONFIG_HOME/access"
     
     printf "Domain [akao.io]: "; read domain; domain=${domain:-akao.io}
     printf "Host [peer0]: "; read host; host=${host:-peer0}
@@ -61,19 +57,40 @@ EOF
     update_dns && echo "✅ Test OK"
 }
 
-# Real-time monitor  
+# Real-time monitor with systemd service support
 monitor() {
-    echo "🔥 Real-time monitoring..."
-    ip monitor addr | while read line; do
-        case "$line" in *"scope global"*) echo "IP changed"; update_dns;; esac
-    done
+    echo "🔥 Starting resilient real-time monitor..."
+    
+    # Daemon mode (for systemd service)
+    if [ "$2" = "daemon" ]; then
+        # Resilient monitoring loop
+        while true; do
+            echo "$(date): Starting IP monitor session" >&2
+            
+            # Monitor with restart on failure
+            ip monitor addr 2>/dev/null | while read line; do
+                case "$line" in
+                    *"scope global"*)
+                        echo "$(date): IP change detected - $line" >&2
+                        update_dns
+                        ;;
+                esac
+            done
+            
+            echo "$(date): Monitor session ended - restarting in 5s" >&2
+            sleep 5
+        done
+    else
+        echo "Use systemd service: systemctl --user start access.service"
+    fi
 }
+
 
 # Auto-upgrade
 upgrade() {
     curl -s https://github.com/akaoio/access/raw/main/access.sh > /tmp/access-new
     if [ -s /tmp/access-new ] && head -1 /tmp/access-new | grep -q "#!/bin/sh"; then
-        cp /tmp/access-new ~/.local/bin/access && chmod +x ~/.local/bin/access
+        cp /tmp/access-new "$ACCESS_BIN" && chmod +x "$ACCESS_BIN"
         echo "✅ Upgraded"
     fi
     rm -f /tmp/access-new
@@ -81,44 +98,61 @@ upgrade() {
 
 # Install monitoring (choose best option)
 hook() {
-    if systemctl --user start 2>/dev/null; then
-        mkdir -p ~/.config/systemd/user
-        cat > ~/.config/systemd/user/access.timer << 'EOF'
-[Timer]
-OnCalendar=*:0/5
+    if systemctl --user daemon-reload 2>/dev/null; then
+        mkdir -p "$XDG_CONFIG_HOME/systemd/user"
+        cat > "$XDG_CONFIG_HOME/systemd/user/access.service" << EOF
+[Unit]
+Description=Access IP Monitor
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5
+ExecStart=$ACCESS_BIN monitor daemon
+StandardOutput=append:$XDG_STATE_HOME/access/access.log
+StandardError=append:$XDG_STATE_HOME/access/access.log
+
 [Install]
 WantedBy=default.target
 EOF
-        cat > ~/.config/systemd/user/access.service << 'EOF'
-[Service]
-Type=oneshot  
-ExecStart=/bin/sh -c '. ~/.local/bin/access; update_dns'
-EOF
-        systemctl --user enable access.timer && systemctl --user start access.timer
-        echo "✅ Timer installed (5min)"
+        mkdir -p "$XDG_STATE_HOME/access"
+        systemctl --user enable --now access.service
+        echo "✅ Monitor service installed (real-time)"
     else
-        (crontab -l 2>/dev/null; echo "*/5 * * * * ~/.local/bin/access update") | crontab -
+        (crontab -l 2>/dev/null; echo "*/5 * * * * $ACCESS_BIN update") | crontab -
         echo "✅ Cron installed (5min)"
     fi
 }
 
 # Uninstall
 uninstall() {
-    systemctl --user stop access.timer 2>/dev/null || true
-    rm -f ~/.local/bin/access ~/.config/systemd/user/access.*
+    systemctl --user stop access.service 2>/dev/null || true
+    rm -f "$ACCESS_BIN" "$XDG_CONFIG_HOME/systemd/user/access.service"
     crontab -l 2>/dev/null | grep -v access | crontab - 2>/dev/null || true
     echo "✅ Uninstalled"
 }
 
 # Commands
-case "${1:-update}" in
+case "${1:-install}" in
+    install)
+        echo "🌟 Installing Access..."
+        [ -f "$ACCESS_BIN" ] && rm "$ACCESS_BIN"
+        mkdir -p "$XDG_BIN_HOME"
+        cp "$0" "$ACCESS_BIN" && chmod +x "$ACCESS_BIN"
+        echo "✅ Installed. Run: access setup"
+        
+        # Auto-setup if no config
+        if [ ! -f "$CONFIG_FILE" ]; then
+            "$ACCESS_BIN" setup
+        fi
+        
+        # Auto-hook
+        "$ACCESS_BIN" hook
+        ;;
     update) update_dns ;;
-    monitor) monitor ;;
-    setup) setup ;;
-    hook) hook ;;
     upgrade) upgrade ;;
     uninstall) uninstall ;;
-    ip) get_ip ;;
-    install) ;;
-    *) echo "Access: update|monitor|setup|hook|upgrade|uninstall|ip|install" ;;
+    setup) setup ;;
+    hook) hook ;;
+    *) echo "Access: install|update|upgrade|uninstall" ;;
 esac
