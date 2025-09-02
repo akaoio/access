@@ -156,6 +156,5 @@ case "${1:-install}" in
     monitor) monitor "$@" ;;
     upgrade) upgrade ;;
     uninstall) uninstall ;;
-    hook) hook ;;
-    *) echo "Access: install|update|upgrade|uninstall|hook|monitor" ;;
+    *) echo "Access: install|update|upgrade|uninstall" ;;
 esac
