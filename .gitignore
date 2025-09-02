@@ -1,0 +1,5 @@
+# Security - Never commit credentials
+config.env
+*.key
+*.secret
+.env
