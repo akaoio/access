@@ -40,8 +40,8 @@ update_dns() {
     echo "✅ DNS updated" || { echo "❌ Failed"; exit 1; }
 }
 
-# Setup
-setup() {
+# Private functions - not exposed in public API
+create_config() {
     echo "🌟 Setup"
     mkdir -p "$XDG_CONFIG_HOME/access"
     
@@ -61,46 +61,29 @@ EOF
     update_dns && echo "✅ Test OK"
 }
 
-# Real-time monitor with systemd service support
-monitor() {
+start_monitor_daemon() {
     echo "🔥 Starting resilient real-time monitor..."
     
-    # Daemon mode (for systemd service)
-    if [ "$2" = "daemon" ]; then
-        # Resilient monitoring loop
-        while true; do
-            echo "$(date): Starting IP monitor session" >&2
-            
-            # Monitor with restart on failure
-            ip monitor addr 2>/dev/null | while read line; do
-                case "$line" in
-                    *"scope global"*)
-                        echo "$(date): IP change detected - $line" >&2
-                        update_dns
-                        ;;
-                esac
-            done
-            
-            echo "$(date): Monitor session ended - restarting in 5s" >&2
-            sleep 5
+    # Resilient monitoring loop
+    while true; do
+        echo "$(date): Starting IP monitor session" >&2
+        
+        # Monitor with restart on failure
+        ip monitor addr 2>/dev/null | while read line; do
+            case "$line" in
+                *"scope global"*)
+                    echo "$(date): IP change detected - $line" >&2
+                    update_dns
+                    ;;
+            esac
         done
-    else
-        echo "Use systemd service: systemctl --user start access.service"
-    fi
+        
+        echo "$(date): Monitor session ended - restarting in 5s" >&2
+        sleep 5
+    done
 }
 
-# Auto-upgrade
-upgrade() {
-    curl -s https://raw.githubusercontent.com/akaoio/access/main/access.sh > /tmp/access-new
-    if [ -s /tmp/access-new ] && head -1 /tmp/access-new | grep -q "#!/bin/sh"; then
-        cp /tmp/access-new "$ACCESS_BIN" && chmod +x "$ACCESS_BIN"
-        echo "✅ Upgraded"
-    fi
-    rm -f /tmp/access-new
-}
-
-# Install monitoring (choose best option)
-hook() {
+create_service() {
     if systemctl --user daemon-reload 2>/dev/null; then
         mkdir -p "$XDG_CONFIG_HOME/systemd/user"
         cat > "$XDG_CONFIG_HOME/systemd/user/access.service" << EOF
@@ -111,7 +94,7 @@ Description=Access IP Monitor
 Type=simple
 Restart=always
 RestartSec=5
-ExecStart=$ACCESS_BIN monitor daemon
+ExecStart=$ACCESS_BIN _monitor
 StandardOutput=append:$XDG_STATE_HOME/access/access.log
 StandardError=append:$XDG_STATE_HOME/access/error.log
 
@@ -127,34 +110,43 @@ EOF
     fi
 }
 
-# Uninstall
-uninstall() {
+# Public API - clean and simple
+do_install() {
+    echo "🌟 Installing Access..."
+    [ -f "$ACCESS_BIN" ] && rm "$ACCESS_BIN"
+    mkdir -p "$XDG_BIN_HOME"
+    cp "$0" "$ACCESS_BIN" && chmod +x "$ACCESS_BIN"
+    echo "✅ Installed and configured"
+    
+    # Auto-setup if no config
+    [ ! -f "$CONFIG_FILE" ] && create_config
+    
+    # Create and start service
+    create_service
+}
+
+do_upgrade() {
+    curl -s https://raw.githubusercontent.com/akaoio/access/main/access.sh > /tmp/access-new
+    if [ -s /tmp/access-new ] && head -1 /tmp/access-new | grep -q "#!/bin/sh"; then
+        cp /tmp/access-new "$ACCESS_BIN" && chmod +x "$ACCESS_BIN"
+        echo "✅ Upgraded"
+    fi
+    rm -f /tmp/access-new
+}
+
+do_uninstall() {
     systemctl --user stop access.service 2>/dev/null || true
     rm -f "$ACCESS_BIN" "$XDG_CONFIG_HOME/systemd/user/access.service"
     crontab -l 2>/dev/null | grep -v access | crontab - 2>/dev/null || true
     echo "✅ Uninstalled"
 }
 
-# Commands
+# Commands - Pure Public API
 case "${1:-install}" in
-    install)
-        echo "🌟 Installing Access..."
-        [ -f "$ACCESS_BIN" ] && rm "$ACCESS_BIN"
-        mkdir -p "$XDG_BIN_HOME"
-        cp "$0" "$ACCESS_BIN" && chmod +x "$ACCESS_BIN"
-        echo "✅ Installed and configured"
-        
-        # Auto-setup if no config
-        if [ ! -f "$CONFIG_FILE" ]; then
-            "$ACCESS_BIN" setup
-        fi
-        
-        # Auto-hook
-        "$ACCESS_BIN" hook
-        ;;
+    install) do_install ;;
     update) update_dns ;;
-    monitor) monitor "$@" ;;
-    upgrade) upgrade ;;
-    uninstall) uninstall ;;
+    upgrade) do_upgrade ;;
+    uninstall) do_uninstall ;;
+    _monitor) start_monitor_daemon ;;  # Internal only
     *) echo "Access: install|update|upgrade|uninstall" ;;
 esac
