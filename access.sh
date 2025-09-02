@@ -91,7 +91,7 @@ monitor() {
 
 # Auto-upgrade
 upgrade() {
-    curl -s https://github.com/akaoio/access/raw/main/access.sh > /tmp/access-new
+    curl -s https://raw.githubusercontent.com/akaoio/access/main/access.sh > /tmp/access-new
     if [ -s /tmp/access-new ] && head -1 /tmp/access-new | grep -q "#!/bin/sh"; then
         cp /tmp/access-new "$ACCESS_BIN" && chmod +x "$ACCESS_BIN"
         echo "✅ Upgraded"
