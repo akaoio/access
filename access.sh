@@ -146,21 +146,47 @@ EOF
     fi
 }
 
-# Auto-upgrade from GitHub
+# Auto-upgrade from GitHub with proper validation
 upgrade() {
     echo "🔄 Checking for updates..."
-    curl -s https://github.com/akaoio/access/raw/main/access.sh > /tmp/access-new.sh
     
-    if cmp -s "$0" /tmp/access-new.sh; then
+    # Download with validation
+    if ! curl -s https://github.com/akaoio/access/raw/main/access.sh > /tmp/access-new.sh; then
+        echo "❌ Failed to download update"
+        return 1
+    fi
+    
+    # Validate downloaded file
+    if [ ! -s /tmp/access-new.sh ] || ! head -1 /tmp/access-new.sh | grep -q "^#!/bin/sh"; then
+        echo "❌ Invalid download - keeping current version"
+        rm -f /tmp/access-new.sh
+        return 1
+    fi
+    
+    # Compare versions
+    if cmp -s ~/.local/bin/access /tmp/access-new.sh 2>/dev/null; then
         echo "✅ Already latest version"
     else
         echo "🆕 New version found - installing..."
+        
+        # Backup current version
+        cp ~/.local/bin/access ~/.local/bin/access.backup 2>/dev/null || true
+        
+        # Install new version
         if cp /tmp/access-new.sh ~/.local/bin/access && chmod +x ~/.local/bin/access; then
             echo "✅ Upgraded successfully"
+            
+            # Restart timer if running
+            if systemctl --user is-active access-monitor.timer >/dev/null 2>&1; then
+                systemctl --user restart access-monitor.timer
+                echo "✅ Timer restarted with new version"
+            fi
         else
-            echo "❌ Upgrade failed"
+            echo "❌ Upgrade failed - restoring backup"
+            cp ~/.local/bin/access.backup ~/.local/bin/access 2>/dev/null || true
         fi
     fi
+    
     rm -f /tmp/access-new.sh
 }
 
