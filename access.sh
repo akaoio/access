@@ -155,5 +155,6 @@ case "${1:-install}" in
     update) update_dns ;;
     upgrade) upgrade ;;
     uninstall) uninstall ;;
-    *) echo "Access: install|update|upgrade|uninstall" ;;
+    hook) hook ;;
+    *) echo "Access: install|update|upgrade|uninstall|hook" ;;
 esac
