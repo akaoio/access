@@ -72,7 +72,8 @@ Access follows [XDG Base Directory Specification](https://specifications.freedes
 ```
 ~/.config/access/config.env          # Configuration
 ~/.local/bin/access                  # Executable  
-~/.local/state/access/access.log     # Logs
+~/.local/state/access/access.log     # Operation logs
+~/.local/state/access/error.log      # Error logs
 ~/.config/systemd/user/access.service # Service file
 ```
 
@@ -87,7 +88,11 @@ export XDG_BIN_HOME=/custom/bin
 
 **View logs:**
 ```bash
+# Normal operation logs
 tail -f ~/.local/state/access/access.log
+
+# Error logs (if any)
+tail -f ~/.local/state/access/error.log
 ```
 
 **Service status:**

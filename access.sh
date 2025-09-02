@@ -113,7 +113,7 @@ Restart=always
 RestartSec=5
 ExecStart=$ACCESS_BIN monitor daemon
 StandardOutput=append:$XDG_STATE_HOME/access/access.log
-StandardError=append:$XDG_STATE_HOME/access/access.log
+StandardError=append:$XDG_STATE_HOME/access/error.log
 
 [Install]
 WantedBy=default.target
