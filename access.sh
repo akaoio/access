@@ -153,8 +153,9 @@ case "${1:-install}" in
         "$ACCESS_BIN" hook
         ;;
     update) update_dns ;;
+    monitor) monitor "$@" ;;
     upgrade) upgrade ;;
     uninstall) uninstall ;;
     hook) hook ;;
-    *) echo "Access: install|update|upgrade|uninstall|hook" ;;
+    *) echo "Access: install|update|upgrade|uninstall|hook|monitor" ;;
 esac
