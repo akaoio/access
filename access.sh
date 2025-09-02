@@ -146,12 +146,54 @@ EOF
     fi
 }
 
+# Auto-upgrade from GitHub
+upgrade() {
+    echo "🔄 Checking for updates..."
+    curl -s https://github.com/akaoio/access/raw/main/access.sh > /tmp/access-new.sh
+    
+    if cmp -s "$0" /tmp/access-new.sh; then
+        echo "✅ Already latest version"
+    else
+        echo "🆕 New version found - installing..."
+        if cp /tmp/access-new.sh ~/.local/bin/access && chmod +x ~/.local/bin/access; then
+            echo "✅ Upgraded successfully"
+        else
+            echo "❌ Upgrade failed"
+        fi
+    fi
+    rm -f /tmp/access-new.sh
+}
+
+# Complete uninstallation
+uninstall() {
+    echo "🗑️ Uninstalling Access Eternal..."
+    
+    # Stop and remove timer
+    systemctl --user stop access-monitor.timer 2>/dev/null || true
+    systemctl --user disable access-monitor.timer 2>/dev/null || true
+    rm -f ~/.config/systemd/user/access-monitor.* 2>/dev/null
+    
+    # Remove cron job  
+    crontab -l 2>/dev/null | grep -v "access update" | crontab - 2>/dev/null || true
+    
+    # Remove binary
+    rm -f ~/.local/bin/access
+    
+    # Ask about config
+    printf "Remove config? [y/N]: "; read remove_config
+    case "$remove_config" in y|Y) rm -rf ~/.config/access;; esac
+    
+    echo "✅ Uninstalled completely"
+}
+
 # Commands  
 case "${1:-update}" in
     update) update_dns ;;
     setup) setup ;;
     hook) install_hook ;;
+    upgrade) upgrade ;;
+    uninstall) uninstall ;;
     ip) get_ip ;;
     install) ;; # Handled above
-    *) echo "Access Eternal: update|setup|hook|ip|install" ;;
+    *) echo "Access Eternal: update|setup|hook|upgrade|uninstall|ip|install" ;;
 esac
