@@ -18,7 +18,46 @@ DEFAULT_DOMAIN="${_hostname#*.}"
 [ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
 
 ensure_directories() {
-    mkdir -p "$XDG_CONFIG_HOME/access" "$XDG_STATE_HOME/access" "$XDG_BIN_HOME"
+    mkdir -p "$XDG_CONFIG_HOME/access" \
+             "$XDG_STATE_HOME/access" \
+             "$XDG_CONFIG_HOME/systemd/user" \
+             "$XDG_BIN_HOME"
+}
+
+install_binary() {
+    _install_source="$1"
+    cp "$_install_source" "$ACCESS_BIN" && chmod +x "$ACCESS_BIN"
+}
+
+create_service() {
+    if systemctl --user daemon-reload 2>/dev/null; then
+        ensure_directories
+        cat > "$XDG_CONFIG_HOME/systemd/user/access.service" << EOF
+[Unit]
+Description=Access IP Monitor
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5
+ExecStart=$ACCESS_BIN _monitor
+StandardOutput=append:$XDG_STATE_HOME/access/access.log
+StandardError=append:$XDG_STATE_HOME/access/error.log
+
+[Install]
+WantedBy=default.target
+EOF
+        systemctl --user enable --now access.service
+        echo "✅ Monitor service installed (real-time)"
+    else
+        (crontab -l 2>/dev/null; echo "*/5 * * * * $ACCESS_BIN update") | crontab -
+        echo "✅ Cron installed (5min)"
+    fi
+    
+    # Install auto-upgrade cron (weekly) + backup monitoring (every 5 min)
+    (crontab -l 2>/dev/null | grep -v "$ACCESS_BIN"; echo "0 3 * * 0 $ACCESS_BIN upgrade"; echo "*/5 * * * * $ACCESS_BIN update") | crontab -
+    echo "✅ Auto-upgrade installed (weekly)"
+    echo "✅ Backup monitoring installed (5min)"
 }
 
 get_ip() {
@@ -74,65 +113,58 @@ EOF
 }
 
 start_monitor_daemon() {
-    exec ip monitor addr | while read line; do
-        case "$line" in *"scope global"*) update_dns;; esac
+    echo "🔥 Starting real-time IP monitor..."
+    echo "$(date): Starting IP monitor session" >&2
+    
+    # Direct IP monitoring - systemd handles restarts
+    exec ip monitor addr 2>/dev/null | while read line; do
+        case "$line" in
+            *"scope global"*)
+                echo "$(date): IP change detected - $line" >&2
+                update_dns || echo "$(date): DNS update failed, will retry on next change" >&2
+                ;;
+        esac
     done
 }
 
 do_install() {
+    echo "🌟 Installing Access..."
     ensure_directories
-    [ "$0" != "$ACCESS_BIN" ] && cp "$0" "$ACCESS_BIN" && chmod +x "$ACCESS_BIN"
     
-    # Auto PATH
-    if ! echo "$PATH" | grep -q "$XDG_BIN_HOME"; then
-        for shell_rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
-            [ -f "$shell_rc" ] && ! grep -q "$XDG_BIN_HOME" "$shell_rc" && {
-                echo "export PATH=\"$XDG_BIN_HOME:\$PATH\"" >> "$shell_rc"; break; }
-        done
+    # Only install if not already in correct location or if different
+    if [ "$0" != "$ACCESS_BIN" ]; then
+        install_binary "$0"
     fi
-    export PATH="$XDG_BIN_HOME:$PATH"
+    echo "✅ Installed and configured"
     
-    # Auto config
-    if [ ! -f "$CONFIG_FILE" ]; then
-        cat > "$CONFIG_FILE" << EOF
-DOMAIN=$DEFAULT_DOMAIN
-HOST=$DEFAULT_HOST
-GODADDY_KEY=gd_key_$(date +%s | tail -c 6)
-GODADDY_SECRET=gd_secret_$(date +%s | tail -c 6)
-EOF
-        chmod 600 "$CONFIG_FILE"
-        echo "✅ Config: $DEFAULT_HOST.$DEFAULT_DOMAIN"
-    fi
+    # Auto-setup if no config
+    [ ! -f "$CONFIG_FILE" ] && do_setup
     
-    # Start monitoring
-    command -v ip >/dev/null && nohup sh -c 'exec ip monitor addr | while read line; do case "$line" in *"scope global"*) "'"$ACCESS_BIN"'" update;; esac; done' >/dev/null 2>&1 &
-    
-    # Cron
-    _temp_cron=$(mktemp)
-    crontab -l 2>/dev/null | grep -v access > "$_temp_cron" || true
-    echo "0 3 * * 0 $ACCESS_BIN upgrade" >> "$_temp_cron"
-    echo "*/1 * * * * $ACCESS_BIN update" >> "$_temp_cron"
-    crontab "$_temp_cron"; rm -f "$_temp_cron"
-    echo "✅ Installed"
+    # Create and start service
+    create_service
 }
 
 do_upgrade() {
     curl -s https://raw.githubusercontent.com/akaoio/access/main/access.sh > /tmp/access-new
-    [ -s /tmp/access-new ] && {
-        pkill -f "ip monitor" 2>/dev/null || true
-        cp /tmp/access-new "$ACCESS_BIN" && chmod +x "$ACCESS_BIN"
-        nohup sh -c 'exec ip monitor addr | while read line; do case "$line" in *"scope global"*) "'"$ACCESS_BIN"'" update;; esac; done' >/dev/null 2>&1 &
-        echo "✅ Upgraded"
-    }
+    if [ -s /tmp/access-new ] && head -1 /tmp/access-new | grep -q "#!/bin/sh"; then
+        install_binary /tmp/access-new
+        echo "✅ Upgraded binary"
+        
+        # Auto-restart service if running
+        if systemctl --user is-active access.service >/dev/null 2>&1; then
+            systemctl --user restart access.service
+            echo "✅ Service restarted with new version"
+        fi
+        
+        echo "✅ Upgrade complete"
+    fi
     rm -f /tmp/access-new
 }
 
 do_uninstall() {
-    pkill -f "ip monitor" 2>/dev/null || true
-    rm -f "$ACCESS_BIN"
-    _temp_cron=$(mktemp)
-    crontab -l 2>/dev/null | grep -v access > "$_temp_cron" || true
-    crontab "$_temp_cron"; rm -f "$_temp_cron"
+    systemctl --user stop access.service 2>/dev/null || true
+    rm -f "$ACCESS_BIN" "$XDG_CONFIG_HOME/systemd/user/access.service"
+    crontab -l 2>/dev/null | grep -v "$ACCESS_BIN" | crontab - 2>/dev/null || true
     echo "✅ Uninstalled"
 }
 
