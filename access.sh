@@ -32,7 +32,11 @@ install_binary() {
 create_service() {
     if [ "$USER" = "root" ]; then
         # Root uses system cron, not user systemd
-        (crontab -l 2>/dev/null | grep -v access; echo "0 3 * * 0 $ACCESS_BIN upgrade"; echo "*/5 * * * * $ACCESS_BIN sync") | crontab -
+        _temp_cron=$(mktemp)
+        crontab -l 2>/dev/null | grep -v access > "$_temp_cron" || true
+        echo "0 3 * * 0 $ACCESS_BIN upgrade" >> "$_temp_cron"
+        echo "*/5 * * * * $ACCESS_BIN sync" >> "$_temp_cron"
+        crontab "$_temp_cron" && rm -f "$_temp_cron"
         echo "✅ Cron setup"
     elif systemctl --user daemon-reload 2>/dev/null; then
         ensure_directories
@@ -54,7 +58,11 @@ EOF
         systemctl --user enable --now access.service
         echo "✅ Service started"
     else
-        (crontab -l 2>/dev/null | grep -v access; echo "0 3 * * 0 $ACCESS_BIN upgrade"; echo "*/5 * * * * $ACCESS_BIN sync") | crontab -
+        _temp_cron=$(mktemp)
+        crontab -l 2>/dev/null | grep -v access > "$_temp_cron" || true
+        echo "0 3 * * 0 $ACCESS_BIN upgrade" >> "$_temp_cron"
+        echo "*/5 * * * * $ACCESS_BIN sync" >> "$_temp_cron"
+        crontab "$_temp_cron" && rm -f "$_temp_cron"
         echo "✅ Cron fallback"
     fi
 }
@@ -180,7 +188,9 @@ do_uninstall() {
     systemctl --user stop access.service 2>/dev/null || true
     rm -f "$ACCESS_BIN" "$XDG_CONFIG_HOME/systemd/user/access.service"
     rm -f "/usr/bin/access" 2>/dev/null || true
-    crontab -l 2>/dev/null | grep -v access | crontab - 2>/dev/null || crontab -r 2>/dev/null || true
+    _temp_cron=$(mktemp)
+    crontab -l 2>/dev/null | grep -v access > "$_temp_cron" || true
+    crontab "$_temp_cron" && rm -f "$_temp_cron"
     rm -rf "$XDG_CONFIG_HOME/access" "$XDG_STATE_HOME/access" 2>/dev/null || true
     echo "✅ Removed"
 }
