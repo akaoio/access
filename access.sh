@@ -65,7 +65,7 @@ get_ip() {
     ip -4 addr show | grep "scope global" | head -1 | awk '{print $2}' | cut -d'/' -f1
 }
 
-update_dns() {
+sync_dns() {
     [ -z "$GODADDY_KEY" ] && { echo "⚠️  No config. Run: access setup"; return 1; }
     ip=$(get_ip)
     [ -z "$ip" ] && { echo "⚠️  No IP found"; return 1; }
@@ -112,8 +112,8 @@ GODADDY_KEY=$key
 GODADDY_SECRET=$secret
 EOF
     chmod 600 "$CONFIG_FILE"
-    echo "✅ Config updated"
-    update_dns
+    echo "✅ Config synced"
+    sync_dns
 }
 
 start_monitor_daemon() {
@@ -125,7 +125,7 @@ start_monitor_daemon() {
         case "$line" in
             *"scope global"*)
                 echo "$(date): IP change detected - $line" >&2
-                update_dns || echo "$(date): DNS sync failed, will retry on next change" >&2
+                sync_dns || echo "$(date): DNS sync failed, will retry on next change" >&2
                 ;;
         esac
     done
@@ -191,7 +191,7 @@ do_status() {
         if [ "$current_ip" = "$last_ip" ]; then
             echo "✅ IP Status: Unchanged"
         else
-            echo "🔄 IP Status: Changed (needs update)"
+            echo "🔄 IP Status: Changed (needs sync)"
         fi
     else
         echo "🌐 Current IP: ${current_ip:-Unknown}"
@@ -251,8 +251,7 @@ do_status() {
 case "${1:-install}" in
     install) do_install ;;
     setup) do_setup ;;
-    sync) update_dns ;;
-    update) update_dns ;;
+    sync) sync_dns ;;
     upgrade) do_upgrade ;;
     uninstall) do_uninstall ;;
     status) do_status ;;
