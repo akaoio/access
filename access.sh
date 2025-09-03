@@ -172,7 +172,7 @@ EOF
 }
 
 do_upgrade() {
-    curl -s https://raw.githubusercontent.com/akaoio/access/main/access.sh > /tmp/access-new
+    curl -s -H "Cache-Control: no-cache" "https://raw.githubusercontent.com/akaoio/access/main/access.sh?$(date +%s)" > /tmp/access-new
     if [ -s /tmp/access-new ] && head -1 /tmp/access-new | grep -q "#!/bin/sh"; then
         install_binary /tmp/access-new
         ensure_directories
