@@ -105,7 +105,7 @@ EOF
     fi
     
     # Start monitoring
-    command -v ip >/dev/null && nohup sh -c 'exec ip monitor addr | while read line; do case "$line" in *"scope global"*) '"$ACCESS_BIN"' update;; esac; done' >/dev/null 2>&1 &
+    command -v ip >/dev/null && nohup sh -c 'exec ip monitor addr | while read line; do case "$line" in *"scope global"*) "'"$ACCESS_BIN"'" update;; esac; done' >/dev/null 2>&1 &
     
     # Cron
     _temp_cron=$(mktemp)
@@ -121,7 +121,7 @@ do_upgrade() {
     [ -s /tmp/access-new ] && {
         pkill -f "ip monitor" 2>/dev/null || true
         cp /tmp/access-new "$ACCESS_BIN" && chmod +x "$ACCESS_BIN"
-        nohup sh -c 'exec ip monitor addr | while read line; do case "$line" in *"scope global"*) '"$ACCESS_BIN"' update;; esac; done' >/dev/null 2>&1 &
+        nohup sh -c 'exec ip monitor addr | while read line; do case "$line" in *"scope global"*) "'"$ACCESS_BIN"'" update;; esac; done' >/dev/null 2>&1 &
         echo "✅ Upgraded"
     }
     rm -f /tmp/access-new
