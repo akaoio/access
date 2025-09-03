@@ -195,14 +195,32 @@ do_upgrade() {
 }
 
 do_uninstall() {
+    # Stop services
     systemctl --user stop access.service 2>/dev/null || true
-    rm -f "$ACCESS_BIN" "$XDG_CONFIG_HOME/systemd/user/access.service"
-    rm -f "/usr/bin/access" 2>/dev/null || true
+    pkill -f "access.*_monitor" 2>/dev/null || true
+    
+    # Clean cron
     _temp_cron=$(mktemp)
-    crontab -l 2>/dev/null | grep -v access > "$_temp_cron" || true
-    crontab "$_temp_cron" && rm -f "$_temp_cron"
-    rm -rf "$XDG_CONFIG_HOME/access" "$XDG_STATE_HOME/access" 2>/dev/null || true
-    echo "✅ Removed"
+    if crontab -l 2>/dev/null | grep -v access > "$_temp_cron"; then
+        crontab "$_temp_cron"
+    else
+        crontab -r 2>/dev/null || true
+    fi
+    rm -f "$_temp_cron"
+    
+    # Clean files (copy script to temp to avoid self-deletion issues)
+    cp "$0" /tmp/access-uninstaller
+    chmod +x /tmp/access-uninstaller
+    
+    # Schedule delayed removal
+    echo "#!/bin/sh
+rm -f '$ACCESS_BIN' '$XDG_CONFIG_HOME/systemd/user/access.service' '/usr/bin/access'
+rm -rf '$XDG_CONFIG_HOME/access' '$XDG_STATE_HOME/access'
+rm -f /tmp/access-uninstaller
+echo '✅ Completely removed'" > /tmp/access-uninstaller
+    
+    nohup sh /tmp/access-uninstaller >/dev/null 2>&1 &
+    echo "✅ Uninstalling..."
 }
 
 do_status() {
