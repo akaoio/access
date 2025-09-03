@@ -199,28 +199,28 @@ do_uninstall() {
     systemctl --user stop access.service 2>/dev/null || true
     pkill -f "access.*_monitor" 2>/dev/null || true
     
-    # Clean cron
+    # Clean cron first
     _temp_cron=$(mktemp)
-    if crontab -l 2>/dev/null | grep -v access > "$_temp_cron"; then
-        crontab "$_temp_cron"
+    crontab -l 2>/dev/null > "$_temp_cron" || true
+    if [ -s "$_temp_cron" ]; then
+        grep -v access "$_temp_cron" > "$_temp_cron.new" || touch "$_temp_cron.new"
+        if [ -s "$_temp_cron.new" ]; then
+            crontab "$_temp_cron.new"
+        else
+            crontab -r 2>/dev/null || true
+        fi
+        rm -f "$_temp_cron.new"
     else
         crontab -r 2>/dev/null || true
     fi
     rm -f "$_temp_cron"
     
-    # Clean files (copy script to temp to avoid self-deletion issues)
-    cp "$0" /tmp/access-uninstaller
-    chmod +x /tmp/access-uninstaller
+    # Clean config and service files
+    rm -rf "$XDG_CONFIG_HOME/access" "$XDG_STATE_HOME/access" "$XDG_CONFIG_HOME/systemd/user/access.service"
     
-    # Schedule delayed removal
-    echo "#!/bin/sh
-rm -f '$ACCESS_BIN' '$XDG_CONFIG_HOME/systemd/user/access.service' '/usr/bin/access'
-rm -rf '$XDG_CONFIG_HOME/access' '$XDG_STATE_HOME/access'
-rm -f /tmp/access-uninstaller
-echo '✅ Completely removed'" > /tmp/access-uninstaller
-    
-    nohup sh /tmp/access-uninstaller >/dev/null 2>&1 &
-    echo "✅ Uninstalling..."
+    # Self-destruct - remove binaries last (this will kill current process)
+    rm -f "/usr/bin/access" "$ACCESS_BIN"
+    echo "✅ Removed"
 }
 
 do_status() {
