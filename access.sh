@@ -218,8 +218,9 @@ do_uninstall() {
     # Clean config and service files
     rm -rf "$XDG_CONFIG_HOME/access" "$XDG_STATE_HOME/access" "$XDG_CONFIG_HOME/systemd/user/access.service"
     
-    # Self-destruct - remove binaries last (this will kill current process)
-    rm -f "/usr/bin/access" "$ACCESS_BIN"
+    # Self-destruct - remove binaries last (this will kill current process) 
+    sudo rm -f "/usr/bin/access" 2>/dev/null || rm -f "/usr/bin/access" 2>/dev/null || true
+    rm -f "$ACCESS_BIN"
     echo "✅ Removed"
 }
 
