@@ -109,6 +109,7 @@ GODADDY_SECRET=$secret
 EOF
     chmod 600 "$CONFIG_FILE"
     echo "✅ Config synced"
+    [ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
     sync_dns
 }
 
