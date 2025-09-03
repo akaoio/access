@@ -163,7 +163,6 @@ do_upgrade() {
 do_uninstall() {
     systemctl --user stop access.service 2>/dev/null || true
     rm -f "$ACCESS_BIN" "$XDG_CONFIG_HOME/systemd/user/access.service"
-    rm -f "/usr/local/bin/access" "/home/x/.local/bin/access"
     crontab -l 2>/dev/null | grep -v access | crontab - 2>/dev/null || crontab -r 2>/dev/null || true
     rm -rf "$XDG_CONFIG_HOME/access" "$XDG_STATE_HOME/access" 2>/dev/null || true
     echo "✅ Removed"
