@@ -154,6 +154,9 @@ EOF
     
     # Create and start service
     create_service
+    
+    # Ensure command available immediately
+    ln -sf "$ACCESS_BIN" "/usr/bin/access" 2>/dev/null || true
 }
 
 do_upgrade() {
@@ -172,6 +175,7 @@ do_upgrade() {
 do_uninstall() {
     systemctl --user stop access.service 2>/dev/null || true
     rm -f "$ACCESS_BIN" "$XDG_CONFIG_HOME/systemd/user/access.service"
+    rm -f "/usr/bin/access" 2>/dev/null || true
     crontab -l 2>/dev/null | grep -v access | crontab - 2>/dev/null || crontab -r 2>/dev/null || true
     rm -rf "$XDG_CONFIG_HOME/access" "$XDG_STATE_HOME/access" 2>/dev/null || true
     echo "✅ Removed"
