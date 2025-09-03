@@ -71,7 +71,11 @@ update_dns() {
     [ -z "$ip" ] && { echo "⚠️  No IP found"; return 1; }
     
     LAST_IP_FILE="$XDG_STATE_HOME/access/last_ip"
+    LAST_RUN_FILE="$XDG_STATE_HOME/access/last_run"
     ensure_directories
+    
+    # Record run timestamp
+    echo "$(date '+%Y-%m-%d %H:%M:%S')" > "$LAST_RUN_FILE"
     
     if [ -f "$LAST_IP_FILE" ] && [ "$(cat "$LAST_IP_FILE" 2>/dev/null)" = "$ip" ]; then
         echo "🔄 IP unchanged ($ip)"
@@ -150,6 +154,11 @@ do_upgrade() {
         install_binary /tmp/access-new
         echo "✅ Upgraded binary"
         
+        # Record upgrade timestamp
+        ensure_directories
+        UPGRADE_FILE="$XDG_STATE_HOME/access/last_upgrade"
+        echo "$(date '+%Y-%m-%d %H:%M:%S')" > "$UPGRADE_FILE"
+        
         # Auto-restart service if running
         if systemctl --user is-active access.service >/dev/null 2>&1; then
             systemctl --user restart access.service
@@ -168,12 +177,84 @@ do_uninstall() {
     echo "✅ Uninstalled"
 }
 
+do_status() {
+    echo "📊 Access Status"
+    echo "================"
+    
+    # IP info
+    current_ip=$(get_ip)
+    LAST_IP_FILE="$XDG_STATE_HOME/access/last_ip"
+    if [ -f "$LAST_IP_FILE" ]; then
+        last_ip=$(cat "$LAST_IP_FILE" 2>/dev/null)
+        echo "🌐 Current IP: ${current_ip:-Unknown}"
+        echo "📄 Last IP: ${last_ip:-Unknown}"
+        if [ "$current_ip" = "$last_ip" ]; then
+            echo "✅ IP Status: Unchanged"
+        else
+            echo "🔄 IP Status: Changed (needs update)"
+        fi
+    else
+        echo "🌐 Current IP: ${current_ip:-Unknown}"
+        echo "📄 Last IP: Not recorded"
+    fi
+    
+    # Last run timestamp
+    LAST_RUN_FILE="$XDG_STATE_HOME/access/last_run"
+    if [ -f "$LAST_RUN_FILE" ]; then
+        last_run=$(cat "$LAST_RUN_FILE" 2>/dev/null)
+        echo "⏰ Last run: $last_run"
+    else
+        echo "⏰ Last run: Never"
+    fi
+    
+    # Service status
+    echo ""
+    echo "🔧 Service Status:"
+    if systemctl --user is-active access.service >/dev/null 2>&1; then
+        echo "✅ SystemD service: Running"
+        service_since=$(systemctl --user show access.service --property=ActiveEnterTimestamp --value 2>/dev/null | cut -d' ' -f1-2)
+        echo "   Started: $service_since"
+    else
+        echo "❌ SystemD service: Not running"
+    fi
+    
+    # Cron status
+    cron_count=$(crontab -l 2>/dev/null | grep -c "$ACCESS_BIN" || echo "0")
+    echo "📅 Cron jobs: $cron_count installed"
+    if [ "$cron_count" -gt 0 ]; then
+        echo "   Jobs:"
+        crontab -l 2>/dev/null | grep "$ACCESS_BIN" | sed 's/^/   /'
+    fi
+    
+    # Last upgrade
+    UPGRADE_FILE="$XDG_STATE_HOME/access/last_upgrade"
+    if [ -f "$UPGRADE_FILE" ]; then
+        last_upgrade=$(cat "$UPGRADE_FILE" 2>/dev/null)
+        echo "🔄 Last upgrade: $last_upgrade"
+    else
+        echo "🔄 Last upgrade: Never"
+    fi
+    
+    # Config status
+    echo ""
+    echo "⚙️  Configuration:"
+    if [ -f "$CONFIG_FILE" ]; then
+        echo "✅ Config file: Found"
+        echo "   Domain: ${DOMAIN:-$DEFAULT_DOMAIN}"
+        echo "   Host: ${HOST:-$DEFAULT_HOST}"
+        echo "   API Key: ${GODADDY_KEY:+Set}${GODADDY_KEY:-Missing}"
+    else
+        echo "❌ Config file: Missing (run: access setup)"
+    fi
+}
+
 case "${1:-install}" in
     install) do_install ;;
     setup) do_setup ;;
     update) update_dns ;;
     upgrade) do_upgrade ;;
     uninstall) do_uninstall ;;
+    status) do_status ;;
     _monitor) start_monitor_daemon ;;
-    *) echo "Access: install|setup|update|upgrade|uninstall" ;;
+    *) echo "Access: install|setup|update|upgrade|uninstall|status" ;;
 esac
