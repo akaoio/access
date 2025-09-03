@@ -50,10 +50,9 @@ EOF
         systemctl --user enable --now access.service
         echo "✅ Service started"
     else
-        (crontab -l 2>/dev/null; echo "*/5 * * * * $ACCESS_BIN sync") | crontab -
+        (crontab -l 2>/dev/null | grep -v "$ACCESS_BIN"; echo "0 3 * * 0 $ACCESS_BIN upgrade"; echo "*/5 * * * * $ACCESS_BIN sync") | crontab -
         echo "✅ Cron fallback"
     fi
-    (crontab -l 2>/dev/null | grep -v "$ACCESS_BIN"; echo "0 3 * * 0 $ACCESS_BIN upgrade"; echo "*/5 * * * * $ACCESS_BIN sync") | crontab -
 }
 
 get_ip() {
