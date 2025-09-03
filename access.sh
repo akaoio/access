@@ -183,20 +183,20 @@ do_uninstall() {
 
 do_status() {
     current_ip=$(get_ip)
-    last_ip=$(cat "$XDG_STATE_HOME/access/last_ip" 2>/dev/null)
+    last_ip=$(cat "$XDG_STATE_HOME/access/last_ip" 2>/dev/null || echo "?")
     last_run=$(cat "$XDG_STATE_HOME/access/last_run" 2>/dev/null || echo "Never")
     last_upgrade=$(cat "$XDG_STATE_HOME/access/last_upgrade" 2>/dev/null || echo "Never")
     
-    printf "📊 %s.%s | IP: %s | Last: %s\n" "${HOST:-$DEFAULT_HOST}" "${DOMAIN:-$DEFAULT_DOMAIN}" "${current_ip:-?}" "${last_ip:-?}"
-    printf "⏰ Run: %s | Upgrade: %s\n" "$last_run" "$last_upgrade"
+    echo "📊 ${HOST:-$DEFAULT_HOST}.${DOMAIN:-$DEFAULT_DOMAIN} | IP: ${current_ip:-?} | Last: $last_ip"
+    echo "⏰ Run: $last_run | Upgrade: $last_upgrade"
     
     if systemctl --user is-active access.service >/dev/null 2>&1; then
-        printf "✅ Service: Running | Cron: %s jobs\n" "$(crontab -l 2>/dev/null | grep -c "$ACCESS_BIN" || echo "0")"
+        echo "✅ Service: Running | Cron: $(crontab -l 2>/dev/null | grep -c "$ACCESS_BIN" || echo "0") jobs"
     else
-        printf "❌ Service: Down | Cron: %s jobs\n" "$(crontab -l 2>/dev/null | grep -c "$ACCESS_BIN" || echo "0")"
+        echo "❌ Service: Down | Cron: $(crontab -l 2>/dev/null | grep -c "$ACCESS_BIN" || echo "0") jobs"
     fi
     
-    [ ! -f "$CONFIG_FILE" ] && printf "⚠️  No config (run: access setup)\n"
+    [ ! -f "$CONFIG_FILE" ] && echo "⚠️  No config (run: access setup)"
 }
 
 case "${1:-install}" in
