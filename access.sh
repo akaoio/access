@@ -242,6 +242,7 @@ do_status() {
         echo "✅ Config file: Found"
         echo "   Domain: ${DOMAIN:-$DEFAULT_DOMAIN}"
         echo "   Host: ${HOST:-$DEFAULT_HOST}"
+        echo "   Full DNS: ${HOST:-$DEFAULT_HOST}.${DOMAIN:-$DEFAULT_DOMAIN}"
         echo "   API Key: ${GODADDY_KEY:+Set}${GODADDY_KEY:-Missing}"
     else
         echo "❌ Config file: Missing (run: access setup)"
