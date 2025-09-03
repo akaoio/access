@@ -225,6 +225,7 @@ do_uninstall() {
 }
 
 do_status() {
+    exec >&1
     current_ip=$(get_ip)
     last_ip=$(cat "$XDG_STATE_HOME/access/last_ip" 2>/dev/null || echo "?")
     last_run=$(cat "$XDG_STATE_HOME/access/last_run" 2>/dev/null || echo "Never")
