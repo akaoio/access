@@ -131,6 +131,15 @@ do_install() {
     ensure_directories
     [ "$0" != "$ACCESS_BIN" ] && install_binary "$0"
     
+    # Auto PATH
+    if ! echo "$PATH" | grep -q "$XDG_BIN_HOME"; then
+        for shell_rc in "$HOME/.bashrc" "$HOME/.zshrc" "/root/.bashrc" "/root/.profile"; do
+            [ -f "$shell_rc" ] && ! grep -q "$XDG_BIN_HOME" "$shell_rc" && {
+                echo "export PATH=\"$XDG_BIN_HOME:\$PATH\"" >> "$shell_rc"; break; }
+        done
+    fi
+    export PATH="$XDG_BIN_HOME:$PATH"
+    
     # Create basic config if none exists
     if [ ! -f "$CONFIG_FILE" ]; then
         cat > "$CONFIG_FILE" << EOF
