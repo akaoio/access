@@ -50,12 +50,12 @@ EOF
         systemctl --user enable --now access.service
         echo "✅ Monitor service installed (real-time)"
     else
-        (crontab -l 2>/dev/null; echo "*/5 * * * * $ACCESS_BIN update") | crontab -
+        (crontab -l 2>/dev/null; echo "*/5 * * * * $ACCESS_BIN sync") | crontab -
         echo "✅ Cron installed (5min)"
     fi
     
     # Install auto-upgrade cron (weekly) + backup monitoring (every 5 min)
-    (crontab -l 2>/dev/null | grep -v "$ACCESS_BIN"; echo "0 3 * * 0 $ACCESS_BIN upgrade"; echo "*/5 * * * * $ACCESS_BIN update") | crontab -
+    (crontab -l 2>/dev/null | grep -v "$ACCESS_BIN"; echo "0 3 * * 0 $ACCESS_BIN upgrade"; echo "*/5 * * * * $ACCESS_BIN sync") | crontab -
     echo "✅ Auto-upgrade installed (weekly)"
     echo "✅ Backup monitoring installed (5min)"
 }
@@ -125,7 +125,7 @@ start_monitor_daemon() {
         case "$line" in
             *"scope global"*)
                 echo "$(date): IP change detected - $line" >&2
-                update_dns || echo "$(date): DNS update failed, will retry on next change" >&2
+                update_dns || echo "$(date): DNS sync failed, will retry on next change" >&2
                 ;;
         esac
     done
@@ -251,10 +251,11 @@ do_status() {
 case "${1:-install}" in
     install) do_install ;;
     setup) do_setup ;;
+    sync) update_dns ;;
     update) update_dns ;;
     upgrade) do_upgrade ;;
     uninstall) do_uninstall ;;
     status) do_status ;;
     _monitor) start_monitor_daemon ;;
-    *) echo "Access: install|setup|update|upgrade|uninstall|status" ;;
+    *) echo "Access: install|setup|sync|upgrade|uninstall|status" ;;
 esac
