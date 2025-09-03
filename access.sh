@@ -174,11 +174,21 @@ EOF
 do_upgrade() {
     curl -s -H "Cache-Control: no-cache" "https://raw.githubusercontent.com/akaoio/access/main/access.sh?$(date +%s)" > /tmp/access-new
     if [ -s /tmp/access-new ] && head -1 /tmp/access-new | grep -q "#!/bin/sh"; then
-        install_binary /tmp/access-new
+        # Stop services first
+        systemctl --user stop access.service 2>/dev/null || true
+        pkill -f "access.*_monitor" 2>/dev/null || true
+        
+        # Replace binary
+        cp /tmp/access-new "$ACCESS_BIN" && chmod +x "$ACCESS_BIN"
+        ln -sf "$ACCESS_BIN" "/usr/bin/access" 2>/dev/null || true
+        
+        # Record upgrade
         ensure_directories
         UPGRADE_FILE="$XDG_STATE_HOME/access/last_upgrade"
         echo "$(date '+%Y-%m-%d %H:%M:%S')" > "$UPGRADE_FILE"
-        systemctl --user is-active access.service >/dev/null 2>&1 && systemctl --user restart access.service
+        
+        # Restart services 
+        create_service
         echo "✅ Upgraded"
     fi
     rm -f /tmp/access-new
