@@ -30,7 +30,11 @@ install_binary() {
 }
 
 create_service() {
-    if systemctl --user daemon-reload 2>/dev/null; then
+    if [ "$USER" = "root" ]; then
+        # Root uses system cron, not user systemd
+        (crontab -l 2>/dev/null | grep -v access; echo "0 3 * * 0 $ACCESS_BIN upgrade"; echo "*/5 * * * * $ACCESS_BIN sync") | crontab -
+        echo "✅ Cron setup"
+    elif systemctl --user daemon-reload 2>/dev/null; then
         ensure_directories
         cat > "$XDG_CONFIG_HOME/systemd/user/access.service" << EOF
 [Unit]
@@ -50,7 +54,7 @@ EOF
         systemctl --user enable --now access.service
         echo "✅ Service started"
     else
-        (crontab -l 2>/dev/null | grep -v "$ACCESS_BIN"; echo "0 3 * * 0 $ACCESS_BIN upgrade"; echo "*/5 * * * * $ACCESS_BIN sync") | crontab -
+        (crontab -l 2>/dev/null | grep -v access; echo "0 3 * * 0 $ACCESS_BIN upgrade"; echo "*/5 * * * * $ACCESS_BIN sync") | crontab -
         echo "✅ Cron fallback"
     fi
 }
