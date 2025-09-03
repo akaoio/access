@@ -230,21 +230,23 @@ do_status() {
     last_run=$(cat "$XDG_STATE_HOME/access/last_run" 2>/dev/null || echo "Never")
     last_upgrade=$(cat "$XDG_STATE_HOME/access/last_upgrade" 2>/dev/null || echo "Never")
     
-    printf "📊 %s.%s | IP: %s | Last: %s\n" "${HOST:-$DEFAULT_HOST}" "${DOMAIN:-$DEFAULT_DOMAIN}" "${current_ip:-?}" "$last_ip" >&1
-    printf "⏰ Run: %s | Upgrade: %s\n" "$last_run" "$last_upgrade" >&1
+    cat << EOF
+📊 ${HOST:-$DEFAULT_HOST}.${DOMAIN:-$DEFAULT_DOMAIN} | IP: ${current_ip:-?} | Last: $last_ip
+⏰ Run: $last_run | Upgrade: $last_upgrade
+EOF
     
     if [ "$USER" = "root" ]; then
         cron_jobs=$(crontab -l 2>/dev/null | grep -c access || echo "0")
-        printf "✅ Root cron: %s jobs\n" "$cron_jobs" >&1
+        echo "✅ Root cron: $cron_jobs jobs"
     elif systemctl --user is-active access.service >/dev/null 2>&1; then
         cron_jobs=$(crontab -l 2>/dev/null | grep -c "$ACCESS_BIN" || echo "0")
-        printf "✅ Service: Running | Cron: %s jobs\n" "$cron_jobs" >&1
+        echo "✅ Service: Running | Cron: $cron_jobs jobs"
     else
         cron_jobs=$(crontab -l 2>/dev/null | grep -c "$ACCESS_BIN" || echo "0")
-        printf "❌ Service: Down | Cron: %s jobs\n" "$cron_jobs" >&1
+        echo "❌ Service: Down | Cron: $cron_jobs jobs"
     fi
     
-    [ ! -f "$CONFIG_FILE" ] && printf "⚠️  No config (run: access setup)\n" >&1
+    [ ! -f "$CONFIG_FILE" ] && echo "⚠️  No config (run: access setup)"
 }
 
 case "${1:-install}" in
