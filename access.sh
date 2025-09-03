@@ -48,16 +48,12 @@ StandardError=append:$XDG_STATE_HOME/access/error.log
 WantedBy=default.target
 EOF
         systemctl --user enable --now access.service
-        echo "✅ Monitor service installed (real-time)"
+        echo "✅ Service started"
     else
         (crontab -l 2>/dev/null; echo "*/5 * * * * $ACCESS_BIN sync") | crontab -
-        echo "✅ Cron installed (5min)"
+        echo "✅ Cron fallback"
     fi
-    
-    # Install auto-upgrade cron (weekly) + backup monitoring (every 5 min)
     (crontab -l 2>/dev/null | grep -v "$ACCESS_BIN"; echo "0 3 * * 0 $ACCESS_BIN upgrade"; echo "*/5 * * * * $ACCESS_BIN sync") | crontab -
-    echo "✅ Auto-upgrade installed (weekly)"
-    echo "✅ Backup monitoring installed (5min)"
 }
 
 get_ip() {
@@ -132,17 +128,20 @@ start_monitor_daemon() {
 }
 
 do_install() {
-    echo "🌟 Installing Access..."
     ensure_directories
+    [ "$0" != "$ACCESS_BIN" ] && install_binary "$0"
     
-    # Only install if not already in correct location or if different
-    if [ "$0" != "$ACCESS_BIN" ]; then
-        install_binary "$0"
+    # Create basic config if none exists
+    if [ ! -f "$CONFIG_FILE" ]; then
+        cat > "$CONFIG_FILE" << EOF
+DOMAIN=$DEFAULT_DOMAIN
+HOST=$DEFAULT_HOST
+GODADDY_KEY=YOUR_KEY_HERE
+GODADDY_SECRET=YOUR_SECRET_HERE
+EOF
+        chmod 600 "$CONFIG_FILE"
+        echo "⚠️  Basic config created. Edit $CONFIG_FILE or run: access setup"
     fi
-    echo "✅ Installed and configured"
-    
-    # Auto-setup if no config
-    [ ! -f "$CONFIG_FILE" ] && do_setup
     
     # Create and start service
     create_service
@@ -152,20 +151,11 @@ do_upgrade() {
     curl -s https://raw.githubusercontent.com/akaoio/access/main/access.sh > /tmp/access-new
     if [ -s /tmp/access-new ] && head -1 /tmp/access-new | grep -q "#!/bin/sh"; then
         install_binary /tmp/access-new
-        echo "✅ Upgraded binary"
-        
-        # Record upgrade timestamp
         ensure_directories
         UPGRADE_FILE="$XDG_STATE_HOME/access/last_upgrade"
         echo "$(date '+%Y-%m-%d %H:%M:%S')" > "$UPGRADE_FILE"
-        
-        # Auto-restart service if running
-        if systemctl --user is-active access.service >/dev/null 2>&1; then
-            systemctl --user restart access.service
-            echo "✅ Service restarted with new version"
-        fi
-        
-        echo "✅ Upgrade complete"
+        systemctl --user is-active access.service >/dev/null 2>&1 && systemctl --user restart access.service
+        echo "✅ Upgraded"
     fi
     rm -f /tmp/access-new
 }
@@ -174,79 +164,25 @@ do_uninstall() {
     systemctl --user stop access.service 2>/dev/null || true
     rm -f "$ACCESS_BIN" "$XDG_CONFIG_HOME/systemd/user/access.service"
     crontab -l 2>/dev/null | grep -v "$ACCESS_BIN" | crontab - 2>/dev/null || true
-    echo "✅ Uninstalled"
+    echo "✅ Removed"
 }
 
 do_status() {
-    echo "📊 Access Status"
-    echo "================"
-    
-    # IP info
     current_ip=$(get_ip)
-    LAST_IP_FILE="$XDG_STATE_HOME/access/last_ip"
-    if [ -f "$LAST_IP_FILE" ]; then
-        last_ip=$(cat "$LAST_IP_FILE" 2>/dev/null)
-        echo "🌐 Current IP: ${current_ip:-Unknown}"
-        echo "📄 Last IP: ${last_ip:-Unknown}"
-        if [ "$current_ip" = "$last_ip" ]; then
-            echo "✅ IP Status: Unchanged"
-        else
-            echo "🔄 IP Status: Changed (needs sync)"
-        fi
-    else
-        echo "🌐 Current IP: ${current_ip:-Unknown}"
-        echo "📄 Last IP: Not recorded"
-    fi
+    last_ip=$(cat "$XDG_STATE_HOME/access/last_ip" 2>/dev/null)
+    last_run=$(cat "$XDG_STATE_HOME/access/last_run" 2>/dev/null || echo "Never")
+    last_upgrade=$(cat "$XDG_STATE_HOME/access/last_upgrade" 2>/dev/null || echo "Never")
     
-    # Last run timestamp
-    LAST_RUN_FILE="$XDG_STATE_HOME/access/last_run"
-    if [ -f "$LAST_RUN_FILE" ]; then
-        last_run=$(cat "$LAST_RUN_FILE" 2>/dev/null)
-        echo "⏰ Last run: $last_run"
-    else
-        echo "⏰ Last run: Never"
-    fi
+    echo "📊 ${HOST:-$DEFAULT_HOST}.${DOMAIN:-$DEFAULT_DOMAIN} | IP: ${current_ip:-?} | Last: ${last_ip:-?}"
+    echo "⏰ Run: $last_run | Upgrade: $last_upgrade"
     
-    # Service status
-    echo ""
-    echo "🔧 Service Status:"
     if systemctl --user is-active access.service >/dev/null 2>&1; then
-        echo "✅ SystemD service: Running"
-        service_since=$(systemctl --user show access.service --property=ActiveEnterTimestamp --value 2>/dev/null | cut -d' ' -f1-2)
-        echo "   Started: $service_since"
+        echo "✅ Service: Running | Cron: $(crontab -l 2>/dev/null | grep -c "$ACCESS_BIN" || echo "0") jobs"
     else
-        echo "❌ SystemD service: Not running"
+        echo "❌ Service: Down | Cron: $(crontab -l 2>/dev/null | grep -c "$ACCESS_BIN" || echo "0") jobs"
     fi
     
-    # Cron status
-    cron_count=$(crontab -l 2>/dev/null | grep -c "$ACCESS_BIN" || echo "0")
-    echo "📅 Cron jobs: $cron_count installed"
-    if [ "$cron_count" -gt 0 ]; then
-        echo "   Jobs:"
-        crontab -l 2>/dev/null | grep "$ACCESS_BIN" | sed 's/^/   /'
-    fi
-    
-    # Last upgrade
-    UPGRADE_FILE="$XDG_STATE_HOME/access/last_upgrade"
-    if [ -f "$UPGRADE_FILE" ]; then
-        last_upgrade=$(cat "$UPGRADE_FILE" 2>/dev/null)
-        echo "🔄 Last upgrade: $last_upgrade"
-    else
-        echo "🔄 Last upgrade: Never"
-    fi
-    
-    # Config status
-    echo ""
-    echo "⚙️  Configuration:"
-    if [ -f "$CONFIG_FILE" ]; then
-        echo "✅ Config file: Found"
-        echo "   Domain: ${DOMAIN:-$DEFAULT_DOMAIN}"
-        echo "   Host: ${HOST:-$DEFAULT_HOST}"
-        echo "   Full DNS: ${HOST:-$DEFAULT_HOST}.${DOMAIN:-$DEFAULT_DOMAIN}"
-        echo "   API Key: ${GODADDY_KEY:+Set}${GODADDY_KEY:-Missing}"
-    else
-        echo "❌ Config file: Missing (run: access setup)"
-    fi
+    [ ! -f "$CONFIG_FILE" ] && echo "⚠️  No config (run: access setup)"
 }
 
 case "${1:-install}" in
