@@ -173,16 +173,16 @@ do_status() {
     last_run=$(cat "$XDG_STATE_HOME/access/last_run" 2>/dev/null || echo "Never")
     last_upgrade=$(cat "$XDG_STATE_HOME/access/last_upgrade" 2>/dev/null || echo "Never")
     
-    echo "📊 ${HOST:-$DEFAULT_HOST}.${DOMAIN:-$DEFAULT_DOMAIN} | IP: ${current_ip:-?} | Last: ${last_ip:-?}"
-    echo "⏰ Run: $last_run | Upgrade: $last_upgrade"
+    printf "📊 %s.%s | IP: %s | Last: %s\n" "${HOST:-$DEFAULT_HOST}" "${DOMAIN:-$DEFAULT_DOMAIN}" "${current_ip:-?}" "${last_ip:-?}"
+    printf "⏰ Run: %s | Upgrade: %s\n" "$last_run" "$last_upgrade"
     
     if systemctl --user is-active access.service >/dev/null 2>&1; then
-        echo "✅ Service: Running | Cron: $(crontab -l 2>/dev/null | grep -c "$ACCESS_BIN" || echo "0") jobs"
+        printf "✅ Service: Running | Cron: %s jobs\n" "$(crontab -l 2>/dev/null | grep -c "$ACCESS_BIN" || echo "0")"
     else
-        echo "❌ Service: Down | Cron: $(crontab -l 2>/dev/null | grep -c "$ACCESS_BIN" || echo "0") jobs"
+        printf "❌ Service: Down | Cron: %s jobs\n" "$(crontab -l 2>/dev/null | grep -c "$ACCESS_BIN" || echo "0")"
     fi
     
-    [ ! -f "$CONFIG_FILE" ] && echo "⚠️  No config (run: access setup)"
+    [ ! -f "$CONFIG_FILE" ] && printf "⚠️  No config (run: access setup)\n"
 }
 
 case "${1:-install}" in
