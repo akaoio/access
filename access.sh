@@ -194,10 +194,15 @@ do_status() {
     echo "📊 ${HOST:-$DEFAULT_HOST}.${DOMAIN:-$DEFAULT_DOMAIN} | IP: ${current_ip:-?} | Last: $last_ip"
     echo "⏰ Run: $last_run | Upgrade: $last_upgrade"
     
-    if systemctl --user is-active access.service >/dev/null 2>&1; then
-        echo "✅ Service: Running | Cron: $(crontab -l 2>/dev/null | grep -c "$ACCESS_BIN" || echo "0") jobs"
+    if [ "$USER" = "root" ]; then
+        cron_jobs=$(crontab -l 2>/dev/null | grep -c access || echo "0")
+        echo "✅ Root cron: $cron_jobs jobs"
+    elif systemctl --user is-active access.service >/dev/null 2>&1; then
+        cron_jobs=$(crontab -l 2>/dev/null | grep -c "$ACCESS_BIN" || echo "0")
+        echo "✅ Service: Running | Cron: $cron_jobs jobs"
     else
-        echo "❌ Service: Down | Cron: $(crontab -l 2>/dev/null | grep -c "$ACCESS_BIN" || echo "0") jobs"
+        cron_jobs=$(crontab -l 2>/dev/null | grep -c "$ACCESS_BIN" || echo "0")
+        echo "❌ Service: Down | Cron: $cron_jobs jobs"
     fi
     
     [ ! -f "$CONFIG_FILE" ] && echo "⚠️  No config (run: access setup)"
