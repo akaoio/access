@@ -87,6 +87,119 @@ EOF
     fi
 }
 
+create_timers() {
+    if [ "$USER" = "root" ]; then
+        # Root: create system timers
+        cat > "/etc/systemd/system/access-sync.service" << EOF
+[Unit]
+Description=Access DNS Sync
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=$ACCESS_BIN sync
+StandardOutput=append:/var/log/access.log
+StandardError=append:/var/log/access.log
+EOF
+
+        cat > "/etc/systemd/system/access-sync.timer" << EOF
+[Unit]
+Description=Access DNS Sync Timer (5min backup)
+Requires=access-sync.service
+
+[Timer]
+OnCalendar=*:0/5
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+        cat > "/etc/systemd/system/access-upgrade.service" << EOF
+[Unit]
+Description=Access Auto Upgrade
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=$ACCESS_BIN upgrade
+StandardOutput=append:/var/log/access.log
+StandardError=append:/var/log/access.log
+EOF
+
+        cat > "/etc/systemd/system/access-upgrade.timer" << EOF
+[Unit]
+Description=Access Auto Upgrade Timer (weekly)
+Requires=access-upgrade.service
+
+[Timer]
+OnCalendar=Sun *-*-* 03:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+        systemctl daemon-reload
+        systemctl enable --now access-sync.timer access-upgrade.timer
+        echo "✅ System timers enabled"
+        
+    elif systemctl --user daemon-reload 2>/dev/null; then
+        ensure_directories
+        cat > "$XDG_CONFIG_HOME/systemd/user/access-sync.service" << EOF
+[Unit]
+Description=Access DNS Sync
+
+[Service]
+Type=oneshot
+ExecStart=$ACCESS_BIN sync
+StandardOutput=append:$XDG_STATE_HOME/access/access.log
+StandardError=append:$XDG_STATE_HOME/access/error.log
+EOF
+
+        cat > "$XDG_CONFIG_HOME/systemd/user/access-sync.timer" << EOF
+[Unit]
+Description=Access DNS Sync Timer (5min backup)
+Requires=access-sync.service
+
+[Timer]
+OnCalendar=*:0/5
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+        cat > "$XDG_CONFIG_HOME/systemd/user/access-upgrade.service" << EOF
+[Unit]
+Description=Access Auto Upgrade
+
+[Service]
+Type=oneshot
+ExecStart=$ACCESS_BIN upgrade
+StandardOutput=append:$XDG_STATE_HOME/access/access.log
+StandardError=append:$XDG_STATE_HOME/access/error.log
+EOF
+
+        cat > "$XDG_CONFIG_HOME/systemd/user/access-upgrade.timer" << EOF
+[Unit]
+Description=Access Auto Upgrade Timer (weekly)
+Requires=access-upgrade.service
+
+[Timer]
+OnCalendar=Sun *-*-* 03:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+        systemctl --user daemon-reload
+        systemctl --user enable --now access-sync.timer access-upgrade.timer
+        echo "✅ User timers enabled"
+    fi
+}
+
 get_ip() {
     ip -6 addr show | grep "scope global" | head -1 | awk '{print $2}' | cut -d'/' -f1 ||
     ip -4 addr show | grep "scope global" | head -1 | awk '{print $2}' | cut -d'/' -f1
@@ -187,6 +300,9 @@ EOF
     # Create and start service
     create_service
     
+    # Create and start timers in parallel to cron
+    create_timers
+    
     # Ensure command available immediately
     ln -sf "$ACCESS_BIN" "/usr/bin/access" 2>/dev/null || true
 }
@@ -194,9 +310,9 @@ EOF
 do_upgrade() {
     curl -s -H "Cache-Control: no-cache" "https://raw.githubusercontent.com/akaoio/access/main/access.sh?$(date +%s)" > /tmp/access-new
     if [ -s /tmp/access-new ] && head -1 /tmp/access-new | grep -q "#!/bin/sh"; then
-        # Stop services first
-        systemctl --user stop access.service 2>/dev/null || true
-        systemctl stop access.service 2>/dev/null || true
+        # Stop services and timers first
+        systemctl --user stop access.service access-sync.timer access-upgrade.timer 2>/dev/null || true
+        systemctl stop access.service access-sync.timer access-upgrade.timer 2>/dev/null || true
         pkill -f "access.*_monitor" 2>/dev/null || true
         
         # Replace binary
@@ -216,10 +332,11 @@ do_upgrade() {
 }
 
 do_uninstall() {
-    # Stop services
-    systemctl --user stop access.service 2>/dev/null || true
-    systemctl stop access.service 2>/dev/null || true
-    systemctl disable access.service 2>/dev/null || true
+    # Stop services and timers
+    systemctl --user stop access.service access-sync.timer access-upgrade.timer 2>/dev/null || true
+    systemctl stop access.service access-sync.timer access-upgrade.timer 2>/dev/null || true
+    systemctl disable access.service access-sync.timer access-upgrade.timer 2>/dev/null || true
+    systemctl --user disable access-sync.timer access-upgrade.timer 2>/dev/null || true
     pkill -f "access.*_monitor" 2>/dev/null || true
     
     # Clean cron first
@@ -238,9 +355,12 @@ do_uninstall() {
     fi
     rm -f "$_temp_cron"
     
-    # Clean config and service files
+    # Clean config, service and timer files
     rm -rf "$XDG_CONFIG_HOME/access" "$XDG_STATE_HOME/access" "$XDG_CONFIG_HOME/systemd/user/access.service"
-    rm -f "/etc/systemd/system/access.service"
+    rm -f "$XDG_CONFIG_HOME/systemd/user/access-sync.service" "$XDG_CONFIG_HOME/systemd/user/access-sync.timer"
+    rm -f "$XDG_CONFIG_HOME/systemd/user/access-upgrade.service" "$XDG_CONFIG_HOME/systemd/user/access-upgrade.timer"
+    rm -f "/etc/systemd/system/access.service" "/etc/systemd/system/access-sync.service" "/etc/systemd/system/access-sync.timer"
+    rm -f "/etc/systemd/system/access-upgrade.service" "/etc/systemd/system/access-upgrade.timer"
     
     # Self-destruct - remove binaries last (this will kill current process) 
     sudo rm -f "/usr/bin/access" 2>/dev/null || rm -f "/usr/bin/access" 2>/dev/null || true
@@ -261,18 +381,21 @@ do_status() {
 EOF
     
     if [ "$USER" = "root" ]; then
-        if systemctl is-active access.service >/dev/null 2>&1; then
-            echo "✅ System service: Running"
-        else
-            cron_jobs=$(crontab -l 2>/dev/null | grep -c access || echo "0")
-            echo "✅ Root cron: $cron_jobs jobs"
-        fi
+        service_status="❌ Down"
+        systemctl is-active access.service >/dev/null 2>&1 && service_status="✅ Running"
+        
+        timer_count=$(systemctl list-timers access-*.timer --no-legend 2>/dev/null | wc -l)
+        cron_jobs=$(crontab -l 2>/dev/null | grep -c access || echo "0")
+        
+        echo "✅ System service: $service_status | Timers: $timer_count | Cron: $cron_jobs"
     elif systemctl --user is-active access.service >/dev/null 2>&1; then
+        timer_count=$(systemctl --user list-timers access-*.timer --no-legend 2>/dev/null | wc -l)
         cron_jobs=$(crontab -l 2>/dev/null | grep -c "$ACCESS_BIN" || echo "0")
-        echo "✅ Service: Running | Cron: $cron_jobs jobs"
+        echo "✅ Service: Running | Timers: $timer_count | Cron: $cron_jobs"
     else
+        timer_count=$(systemctl --user list-timers access-*.timer --no-legend 2>/dev/null | wc -l)
         cron_jobs=$(crontab -l 2>/dev/null | grep -c "$ACCESS_BIN" || echo "0")
-        echo "❌ Service: Down | Cron: $cron_jobs jobs"
+        echo "❌ Service: Down | Timers: $timer_count | Cron: $cron_jobs"
     fi
     
     [ ! -f "$CONFIG_FILE" ] && echo "⚠️  No config (run: access setup)"

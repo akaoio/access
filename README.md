@@ -10,9 +10,9 @@
 - **🏗️ One-command installation** - `./access.sh install` does everything  
 - **📁 100% XDG Base Directory compliant** - respects all XDG environment variables
 - **🔧 100% POSIX shell compatible** - works on any Unix-like system
-- **🚀 Dual monitoring architecture** - systemd service + cron backup
+- **🚀 Triple monitoring architecture** - systemd service + systemd timers + cron backup
 - **📝 Separate error logging** - operation logs and error logs split
-- **⚡ Bulletproof redundancy** - systemd → cron → weekly auto-upgrade
+- **⚡ Bulletproof redundancy** - systemd service → systemd timers → cron → weekly auto-upgrade
 - **🔒 Secure by design** - config files are `chmod 600`, no secrets in logs
 - **🔄 Auto-upgrade system** - weekly updates with service restart
 - **🛡️ Self-healing** - auto-restart on failures, boot persistence
@@ -37,8 +37,8 @@ chmod +x access.sh
 That's it! The installer will:
 1. Install binary to `~/.local/bin/access`
 2. Prompt for your domain configuration (if first install)
-3. Set up dual monitoring: systemd service (real-time) + cron backup (15min)
-4. Install weekly auto-upgrade cron job
+3. Set up triple monitoring: systemd service (real-time) + systemd timers + cron backup (5min)
+4. Install weekly auto-upgrade via systemd timers and cron jobs
 5. Start monitoring immediately with bulletproof redundancy
 
 ### Configuration
@@ -56,8 +56,9 @@ This creates: `~/.config/access/config.env`
 
 After installation, Access runs automatically with dual monitoring:
 
-- **Systemd service**: Real-time IP monitoring  
-- **Cron backup**: DNS check every 15 minutes
+- **Systemd service**: Real-time IP monitoring using `ip monitor addr`
+- **Systemd timers**: DNS sync every 5 minutes + weekly upgrades (more secure)
+- **Cron backup**: DNS sync every 5 minutes + weekly upgrades (fallback)
 - **Auto-upgrade**: Weekly updates every Sunday 3 AM
 
 Manual commands:
@@ -107,17 +108,19 @@ tail -f ~/.local/state/access/error.log
 
 **Service status:**
 ```bash
-systemctl --user status access.service  # Check systemd service
-crontab -l | grep access                # Check cron backup jobs
+systemctl --user status access.service         # Check systemd service
+systemctl --user list-timers access-*.timer  # Check systemd timers
+crontab -l | grep access                     # Check cron backup jobs
 ```
 
 **Monitoring details:**
 - **Primary**: Systemd service with `ip monitor addr` (instant detection)
-- **Backup**: Cron job every 15 minutes (safety net if systemd fails)
+- **Secondary**: Systemd timers every 5 minutes + weekly upgrades (secure, robust)
+- **Backup**: Cron jobs every 5 minutes + weekly upgrades (fallback if systemd unavailable)
 - **Auto-upgrade**: Weekly on Sunday 3 AM with automatic service restart
 - **IP deduplication**: Prevents unnecessary DNS updates for same IP
 
-## 🏗️ Dual Monitoring Architecture
+## 🏗️ Triple Monitoring Architecture
 
 ```
                     ┌─────────────────────┐
@@ -125,15 +128,15 @@ crontab -l | grep access                # Check cron backup jobs
                     └─────────────────────┘
                               ↓
                     ┌─────────────────────┐
-                    │    Dual Detection   │
+                    │   Triple Detection  │
                     └─────────────────────┘ 
-                           ↙        ↘
-              ┌─────────────────┐   ┌─────────────────┐
-              │ Systemd Service │   │   Cron Backup   │
-              │  (real-time)    │   │   (15 minutes)  │ 
-              │ ip monitor addr │   │ access update   │
-              └─────────────────┘   └─────────────────┘
-                           ↘        ↙
+                           ↙    ↓    ↘
+         ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
+         │ Systemd Service │ │ Systemd Timers  │ │   Cron Backup   │
+         │  (real-time)    │ │   (5 minutes)   │ │   (5 minutes)   │ 
+         │ ip monitor addr │ │ access sync     │ │ access sync     │
+         └─────────────────┘ └─────────────────┘ └─────────────────┘
+                           ↘         ↓         ↙
                     ┌─────────────────────┐
                     │   update_dns()      │ ← Shared Logic
                     │ • IP deduplication  │
