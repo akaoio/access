@@ -141,7 +141,8 @@ WantedBy=timers.target
 EOF
 
         systemctl daemon-reload
-        systemctl enable --now access-sync.timer access-upgrade.timer
+        systemctl enable access-sync.timer access-upgrade.timer
+        systemctl start access-sync.timer access-upgrade.timer
         echo "✅ System timers enabled"
         
     elif systemctl --user daemon-reload 2>/dev/null; then
@@ -195,7 +196,8 @@ WantedBy=timers.target
 EOF
 
         systemctl --user daemon-reload
-        systemctl --user enable --now access-sync.timer access-upgrade.timer
+        systemctl --user enable access-sync.timer access-upgrade.timer
+        systemctl --user start access-sync.timer access-upgrade.timer
         echo "✅ User timers enabled"
     fi
 }
