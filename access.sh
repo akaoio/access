@@ -8,7 +8,20 @@ XDG_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
 XDG_BIN_HOME="${XDG_BIN_HOME:-$HOME/.local/bin}"
 [ -w "/usr/local/bin" ] 2>/dev/null && XDG_BIN_HOME="/usr/local/bin"
 ACCESS_BIN="$XDG_BIN_HOME/access"
-CONFIG_FILE="$XDG_CONFIG_HOME/access/config.env"
+
+# Check for config in both user and system locations when running with sudo
+if [ "$USER" = "root" ] && [ -n "$SUDO_USER" ]; then
+    # When running as root via sudo, check original user's config first
+    SUDO_USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+    USER_CONFIG_FILE="$SUDO_USER_HOME/.config/access/config.env"
+    if [ -f "$USER_CONFIG_FILE" ]; then
+        CONFIG_FILE="$USER_CONFIG_FILE"
+    else
+        CONFIG_FILE="$XDG_CONFIG_HOME/access/config.env"
+    fi
+else
+    CONFIG_FILE="$XDG_CONFIG_HOME/access/config.env"
+fi
 
 _hostname=$(hostname 2>/dev/null || echo "peer0.akao.io")
 DEFAULT_HOST="${_hostname%%.*}"
@@ -18,6 +31,13 @@ DEFAULT_DOMAIN="${_hostname#*.}"
 [ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
 
 ensure_directories() {
+    if [ "$USER" = "root" ] && [ -n "$SUDO_USER" ]; then
+        SUDO_USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+        if [ -f "$SUDO_USER_HOME/.config/access/config.env" ]; then
+            # Ensure user directories exist for state files
+            sudo -u "$SUDO_USER" mkdir -p "$SUDO_USER_HOME/.local/state/access"
+        fi
+    fi
     mkdir -p "$XDG_CONFIG_HOME/access" \
              "$XDG_STATE_HOME/access" \
              "$XDG_CONFIG_HOME/systemd/user" \
@@ -203,9 +223,24 @@ get_ip() {
 sync_dns() {
     [ -z "$GODADDY_KEY" ] && { echo "⚠️  No config. Run: access setup"; return 1; }
     
-    LOCK_FILE="$XDG_STATE_HOME/access/sync.lock"
-    LAST_IP_FILE="$XDG_STATE_HOME/access/last_ip"
-    LAST_RUN_FILE="$XDG_STATE_HOME/access/last_run"
+    # Use same user's state directory as config when running with sudo
+    if [ "$USER" = "root" ] && [ -n "$SUDO_USER" ]; then
+        SUDO_USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+        USER_STATE_DIR="$SUDO_USER_HOME/.local/state/access"
+        if [ -f "$USER_CONFIG_FILE" ]; then
+            LOCK_FILE="$USER_STATE_DIR/sync.lock"
+            LAST_IP_FILE="$USER_STATE_DIR/last_ip"
+            LAST_RUN_FILE="$USER_STATE_DIR/last_run"
+        else
+            LOCK_FILE="$XDG_STATE_HOME/access/sync.lock"
+            LAST_IP_FILE="$XDG_STATE_HOME/access/last_ip"
+            LAST_RUN_FILE="$XDG_STATE_HOME/access/last_run"
+        fi
+    else
+        LOCK_FILE="$XDG_STATE_HOME/access/sync.lock"
+        LAST_IP_FILE="$XDG_STATE_HOME/access/last_ip"
+        LAST_RUN_FILE="$XDG_STATE_HOME/access/last_run"
+    fi
     ensure_directories
     
     # Process lock to prevent concurrent runs
@@ -386,9 +421,25 @@ do_uninstall() {
 do_status() {
     exec >&1
     current_ip=$(get_ip)
-    last_ip=$(cat "$XDG_STATE_HOME/access/last_ip" 2>/dev/null || echo "?")
-    last_run=$(cat "$XDG_STATE_HOME/access/last_run" 2>/dev/null || echo "Never")
-    last_upgrade=$(cat "$XDG_STATE_HOME/access/last_upgrade" 2>/dev/null || echo "Never")
+    
+    # Use same logic as sync_dns for state files
+    if [ "$USER" = "root" ] && [ -n "$SUDO_USER" ]; then
+        SUDO_USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+        USER_STATE_DIR="$SUDO_USER_HOME/.local/state/access"
+        if [ -f "$SUDO_USER_HOME/.config/access/config.env" ]; then
+            last_ip=$(cat "$USER_STATE_DIR/last_ip" 2>/dev/null || echo "?")
+            last_run=$(cat "$USER_STATE_DIR/last_run" 2>/dev/null || echo "Never")
+            last_upgrade=$(cat "$USER_STATE_DIR/last_upgrade" 2>/dev/null || echo "Never")
+        else
+            last_ip=$(cat "$XDG_STATE_HOME/access/last_ip" 2>/dev/null || echo "?")
+            last_run=$(cat "$XDG_STATE_HOME/access/last_run" 2>/dev/null || echo "Never")
+            last_upgrade=$(cat "$XDG_STATE_HOME/access/last_upgrade" 2>/dev/null || echo "Never")
+        fi
+    else
+        last_ip=$(cat "$XDG_STATE_HOME/access/last_ip" 2>/dev/null || echo "?")
+        last_run=$(cat "$XDG_STATE_HOME/access/last_run" 2>/dev/null || echo "Never")
+        last_upgrade=$(cat "$XDG_STATE_HOME/access/last_upgrade" 2>/dev/null || echo "Never")
+    fi
     
     cat << EOF
 📊 ${HOST:-$DEFAULT_HOST}.${DOMAIN:-$DEFAULT_DOMAIN} | IP: ${current_ip:-?} | Last: $last_ip
