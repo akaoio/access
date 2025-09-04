@@ -147,7 +147,8 @@ EOF
             systemctl start access-sync.timer access-upgrade.timer 2>/dev/null || true
             echo "✅ Timers enabled manually"
         fi
-    elif systemctl --user daemon-reload 2>/dev/null; then
+    else
+        # Force user systemd services to work
         ensure_directories
         cat > "$XDG_CONFIG_HOME/systemd/user/access.service" << EOF
 [Unit]
@@ -164,8 +165,17 @@ StandardError=append:$XDG_STATE_HOME/access/error.log
 [Install]
 WantedBy=default.target
 EOF
-        systemctl --user enable --now access.service
-        echo "✅ Service started"
+        if systemctl --user enable --now access.service; then
+            echo "✅ Service started"
+        else
+            echo "⚠️ User systemctl failed, forcing manual enable..."
+            # Force create user service symlinks
+            mkdir -p "$XDG_CONFIG_HOME/systemd/user/default.target.wants"
+            ln -sf "$XDG_CONFIG_HOME/systemd/user/access.service" "$XDG_CONFIG_HOME/systemd/user/default.target.wants/"
+            systemctl --user daemon-reload 2>/dev/null || true
+            systemctl --user start access.service 2>/dev/null || echo "Manual service start needed"
+            echo "✅ Service enabled manually"
+        fi
         
         # Create user timers
         cat > "$XDG_CONFIG_HOME/systemd/user/access-sync.service" << EOF
@@ -216,10 +226,18 @@ Persistent=true
 WantedBy=timers.target
 EOF
 
-        systemctl --user daemon-reload
-        systemctl --user enable access-sync.timer access-upgrade.timer
-        systemctl --user start access-sync.timer access-upgrade.timer
-        echo "✅ User timers enabled"
+        if systemctl --user daemon-reload && systemctl --user enable access-sync.timer access-upgrade.timer && systemctl --user start access-sync.timer access-upgrade.timer; then
+            echo "✅ User timers enabled"
+        else
+            echo "⚠️ User timer systemctl failed, forcing manual enable..."
+            # Force create user timer symlinks
+            mkdir -p "$XDG_CONFIG_HOME/systemd/user/timers.target.wants"
+            ln -sf "$XDG_CONFIG_HOME/systemd/user/access-sync.timer" "$XDG_CONFIG_HOME/systemd/user/timers.target.wants/"
+            ln -sf "$XDG_CONFIG_HOME/systemd/user/access-upgrade.timer" "$XDG_CONFIG_HOME/systemd/user/timers.target.wants/"
+            systemctl --user daemon-reload 2>/dev/null || true
+            systemctl --user start access-sync.timer access-upgrade.timer 2>/dev/null || true
+            echo "✅ User timers enabled manually"
+        fi
     else
         _temp_cron=$(mktemp)
         crontab -l 2>/dev/null | grep -v access > "$_temp_cron" || true
