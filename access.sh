@@ -242,7 +242,14 @@ EOF
 }
 
 get_ip() {
-    # Prefer stable IPv6 over temporary privacy addresses
+    # Prefer IPv4 for better SSH compatibility
+    ipv4=$(ip -4 addr show | grep "scope global" | head -1 | awk '{print $2}' | cut -d'/' -f1)
+    if [ -n "$ipv4" ]; then
+        echo "$ipv4"
+        return
+    fi
+    
+    # Fallback to stable IPv6 over temporary privacy addresses
     stable_ipv6=$(ip -6 addr show | grep "scope global" | grep -v "temporary" | head -1 | awk '{print $2}' | cut -d'/' -f1)
     if [ -n "$stable_ipv6" ]; then
         echo "$stable_ipv6"
@@ -250,14 +257,7 @@ get_ip() {
     fi
     
     # Fallback to any global IPv6
-    temp_ipv6=$(ip -6 addr show | grep "scope global" | head -1 | awk '{print $2}' | cut -d'/' -f1)
-    if [ -n "$temp_ipv6" ]; then
-        echo "$temp_ipv6"
-        return
-    fi
-    
-    # Fallback to IPv4
-    ip -4 addr show | grep "scope global" | head -1 | awk '{print $2}' | cut -d'/' -f1
+    ip -6 addr show | grep "scope global" | head -1 | awk '{print $2}' | cut -d'/' -f1
 }
 
 sync_dns() {
