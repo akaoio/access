@@ -68,7 +68,7 @@ StandardError=append:/var/log/access.log
 [Install]
 WantedBy=multi-user.target
 EOF
-        systemctl daemon-reload && systemctl enable --now access.service
+        systemctl daemon-reload 2>/dev/null && systemctl enable --now access.service 2>/dev/null || echo "⚠️  Manual service start needed: systemctl enable --now access.service"
         echo "✅ System service started"
         _temp_cron=$(mktemp)
         crontab -l 2>/dev/null | grep -v access > "$_temp_cron" || true
@@ -128,9 +128,9 @@ Persistent=true
 WantedBy=timers.target
 EOF
 
-        systemctl daemon-reload
-        systemctl enable access-sync.timer access-upgrade.timer
-        systemctl start access-sync.timer access-upgrade.timer
+        systemctl daemon-reload 2>/dev/null || true
+        systemctl enable access-sync.timer access-upgrade.timer 2>/dev/null || true
+        systemctl start access-sync.timer access-upgrade.timer 2>/dev/null || true
         echo "✅ System timers enabled"
     elif systemctl --user daemon-reload 2>/dev/null; then
         ensure_directories
