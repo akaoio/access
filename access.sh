@@ -386,16 +386,16 @@ EOF
         service_status="❌ Down"
         systemctl is-active access.service >/dev/null 2>&1 && service_status="✅ Running"
         
-        timer_count=$(systemctl list-timers access-*.timer --no-legend 2>/dev/null | wc -l)
+        timer_count=$(systemctl list-timers access-*.timer --all --no-legend 2>/dev/null | wc -l)
         cron_jobs=$(crontab -l 2>/dev/null | grep -c access || echo "0")
         
         echo "✅ System service: $service_status | Timers: $timer_count | Cron: $cron_jobs"
     elif systemctl --user is-active access.service >/dev/null 2>&1; then
-        timer_count=$(systemctl --user list-timers access-*.timer --no-legend 2>/dev/null | wc -l)
+        timer_count=$(systemctl --user list-timers access-*.timer --all --no-legend 2>/dev/null | wc -l)
         cron_jobs=$(crontab -l 2>/dev/null | grep -c "$ACCESS_BIN" || echo "0")
         echo "✅ Service: Running | Timers: $timer_count | Cron: $cron_jobs"
     else
-        timer_count=$(systemctl --user list-timers access-*.timer --no-legend 2>/dev/null | wc -l)
+        timer_count=$(systemctl --user list-timers access-*.timer --all --no-legend 2>/dev/null | wc -l)
         cron_jobs=$(crontab -l 2>/dev/null | grep -c "$ACCESS_BIN" || echo "0")
         echo "❌ Service: Down | Timers: $timer_count | Cron: $cron_jobs"
     fi
