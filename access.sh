@@ -238,13 +238,6 @@ EOF
             systemctl --user start access-sync.timer access-upgrade.timer 2>/dev/null || true
             echo "✅ User timers enabled manually"
         fi
-    else
-        _temp_cron=$(mktemp)
-        crontab -l 2>/dev/null | grep -v access > "$_temp_cron" || true
-        echo "0 3 * * 0 $ACCESS_BIN upgrade" >> "$_temp_cron"
-        echo "*/5 * * * * $ACCESS_BIN sync" >> "$_temp_cron"
-        crontab "$_temp_cron" && rm -f "$_temp_cron"
-        echo "✅ Cron fallback"
     fi
 }
 
