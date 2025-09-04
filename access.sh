@@ -242,7 +242,21 @@ EOF
 }
 
 get_ip() {
-    ip -6 addr show | grep "scope global" | head -1 | awk '{print $2}' | cut -d'/' -f1 ||
+    # Prefer stable IPv6 over temporary privacy addresses
+    stable_ipv6=$(ip -6 addr show | grep "scope global" | grep -v "temporary" | head -1 | awk '{print $2}' | cut -d'/' -f1)
+    if [ -n "$stable_ipv6" ]; then
+        echo "$stable_ipv6"
+        return
+    fi
+    
+    # Fallback to any global IPv6
+    temp_ipv6=$(ip -6 addr show | grep "scope global" | head -1 | awk '{print $2}' | cut -d'/' -f1)
+    if [ -n "$temp_ipv6" ]; then
+        echo "$temp_ipv6"
+        return
+    fi
+    
+    # Fallback to IPv4
     ip -4 addr show | grep "scope global" | head -1 | awk '{print $2}' | cut -d'/' -f1
 }
 
