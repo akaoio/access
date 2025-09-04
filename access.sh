@@ -31,13 +31,34 @@ install_binary() {
 
 create_service() {
     if [ "$USER" = "root" ]; then
-        # Root uses system cron, not user systemd
-        _temp_cron=$(mktemp)
-        crontab -l 2>/dev/null | grep -v access > "$_temp_cron" || true
-        echo "0 3 * * 0 $ACCESS_BIN upgrade" >> "$_temp_cron"
-        echo "*/5 * * * * $ACCESS_BIN sync" >> "$_temp_cron"
-        crontab "$_temp_cron" && rm -f "$_temp_cron"
-        echo "✅ Cron setup"
+        # Root: try system service first, fallback to cron
+        cat > "/etc/systemd/system/access.service" << EOF
+[Unit]
+Description=Access IP Monitor
+After=network.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5
+ExecStart=$ACCESS_BIN _monitor
+StandardOutput=append:/var/log/access.log
+StandardError=append:/var/log/access.log
+
+[Install]
+WantedBy=multi-user.target
+EOF
+        if systemctl daemon-reload && systemctl enable --now access.service; then
+            echo "✅ System service started"
+        else
+            rm -f "/etc/systemd/system/access.service"
+            _temp_cron=$(mktemp)
+            crontab -l 2>/dev/null | grep -v access > "$_temp_cron" || true
+            echo "0 3 * * 0 $ACCESS_BIN upgrade" >> "$_temp_cron"
+            echo "*/5 * * * * $ACCESS_BIN sync" >> "$_temp_cron"
+            crontab "$_temp_cron" && rm -f "$_temp_cron"
+            echo "✅ Cron setup"
+        fi
     elif systemctl --user daemon-reload 2>/dev/null; then
         ensure_directories
         cat > "$XDG_CONFIG_HOME/systemd/user/access.service" << EOF
@@ -197,6 +218,8 @@ do_upgrade() {
 do_uninstall() {
     # Stop services
     systemctl --user stop access.service 2>/dev/null || true
+    systemctl stop access.service 2>/dev/null || true
+    systemctl disable access.service 2>/dev/null || true
     pkill -f "access.*_monitor" 2>/dev/null || true
     
     # Clean cron first
@@ -217,6 +240,7 @@ do_uninstall() {
     
     # Clean config and service files
     rm -rf "$XDG_CONFIG_HOME/access" "$XDG_STATE_HOME/access" "$XDG_CONFIG_HOME/systemd/user/access.service"
+    rm -f "/etc/systemd/system/access.service"
     
     # Self-destruct - remove binaries last (this will kill current process) 
     sudo rm -f "/usr/bin/access" 2>/dev/null || rm -f "/usr/bin/access" 2>/dev/null || true
@@ -237,8 +261,12 @@ do_status() {
 EOF
     
     if [ "$USER" = "root" ]; then
-        cron_jobs=$(crontab -l 2>/dev/null | grep -c access || echo "0")
-        echo "✅ Root cron: $cron_jobs jobs"
+        if systemctl is-active access.service >/dev/null 2>&1; then
+            echo "✅ System service: Running"
+        else
+            cron_jobs=$(crontab -l 2>/dev/null | grep -c access || echo "0")
+            echo "✅ Root cron: $cron_jobs jobs"
+        fi
     elif systemctl --user is-active access.service >/dev/null 2>&1; then
         cron_jobs=$(crontab -l 2>/dev/null | grep -c "$ACCESS_BIN" || echo "0")
         echo "✅ Service: Running | Cron: $cron_jobs jobs"
