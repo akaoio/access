@@ -196,6 +196,7 @@ do_upgrade() {
     if [ -s /tmp/access-new ] && head -1 /tmp/access-new | grep -q "#!/bin/sh"; then
         # Stop services first
         systemctl --user stop access.service 2>/dev/null || true
+        systemctl stop access.service 2>/dev/null || true
         pkill -f "access.*_monitor" 2>/dev/null || true
         
         # Replace binary
@@ -207,8 +208,8 @@ do_upgrade() {
         UPGRADE_FILE="$XDG_STATE_HOME/access/last_upgrade"
         echo "$(date '+%Y-%m-%d %H:%M:%S')" > "$UPGRADE_FILE"
         
-        # Restart services 
-        create_service
+        # Re-run full install to ensure services are properly configured
+        /tmp/access-new install
         echo "✅ Upgraded"
     fi
     rm -f /tmp/access-new
