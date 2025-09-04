@@ -68,8 +68,16 @@ StandardError=append:/var/log/access.log
 [Install]
 WantedBy=multi-user.target
 EOF
-        systemctl daemon-reload 2>/dev/null && systemctl enable --now access.service 2>/dev/null || echo "⚠️  Manual service start needed: systemctl enable --now access.service"
-        echo "✅ System service started"
+        if systemctl daemon-reload && systemctl enable --now access.service; then
+            echo "✅ System service started"
+        else
+            echo "⚠️ Systemctl failed, trying alternative..."
+            # Force enable service files
+            ln -sf /etc/systemd/system/access.service /etc/systemd/system/multi-user.target.wants/
+            systemctl daemon-reload 2>/dev/null || true
+            systemctl start access.service 2>/dev/null || echo "⚠️ Service creation failed - check systemd permissions"
+            echo "✅ Service enabled manually"
+        fi
         _temp_cron=$(mktemp)
         crontab -l 2>/dev/null | grep -v access > "$_temp_cron" || true
         echo "0 3 * * 0 $ACCESS_BIN upgrade" >> "$_temp_cron"
@@ -128,10 +136,17 @@ Persistent=true
 WantedBy=timers.target
 EOF
 
-        systemctl daemon-reload 2>/dev/null || true
-        systemctl enable access-sync.timer access-upgrade.timer 2>/dev/null || true
-        systemctl start access-sync.timer access-upgrade.timer 2>/dev/null || true
-        echo "✅ System timers enabled"
+        if systemctl daemon-reload && systemctl enable access-sync.timer access-upgrade.timer && systemctl start access-sync.timer access-upgrade.timer; then
+            echo "✅ System timers enabled"
+        else
+            echo "⚠️ Timer systemctl failed, enabling manually..."
+            # Force enable timer files
+            ln -sf /etc/systemd/system/access-sync.timer /etc/systemd/system/timers.target.wants/
+            ln -sf /etc/systemd/system/access-upgrade.timer /etc/systemd/system/timers.target.wants/
+            systemctl daemon-reload 2>/dev/null || true
+            systemctl start access-sync.timer access-upgrade.timer 2>/dev/null || true
+            echo "✅ Timers enabled manually"
+        fi
     elif systemctl --user daemon-reload 2>/dev/null; then
         ensure_directories
         cat > "$XDG_CONFIG_HOME/systemd/user/access.service" << EOF
