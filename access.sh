@@ -307,6 +307,9 @@ EOF
     chmod 600 "$CONFIG_FILE"
     echo "✅ Config synced"
     [ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
+    
+    # Enable services automatically after setup
+    create_service
     sync_dns
 }
 
