@@ -31,7 +31,7 @@ DEFAULT_DOMAIN="${_hostname#*.}"
 [ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
 
 ensure_directories() {
-    if [ "$USER" = "root" ] && [ -n "$SUDO_USER" ]; then
+    if [ "$UID" = "0" ] && [ -n "$SUDO_USER" ]; then
         SUDO_USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
         if [ -f "$SUDO_USER_HOME/.config/access/config.env" ]; then
             # Ensure user directories exist for state files
@@ -50,7 +50,7 @@ install_binary() {
 }
 
 create_service() {
-    if [ "$USER" = "root" ]; then
+    if [ "$UID" = "0" ] || [ "$(id -u)" = "0" ]; then
         # Root: create both system service and cron for redundancy
         cat > "/etc/systemd/system/access.service" << EOF
 [Unit]
@@ -239,7 +239,7 @@ sync_dns() {
     [ -z "$GODADDY_KEY" ] && { echo "⚠️  No config. Run: access setup"; return 1; }
     
     # Use same user's state directory as config when running with sudo
-    if [ "$USER" = "root" ] && [ -n "$SUDO_USER" ]; then
+    if [ "$UID" = "0" ] && [ -n "$SUDO_USER" ]; then
         SUDO_USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
         USER_STATE_DIR="$SUDO_USER_HOME/.local/state/access"
         if [ -f "$USER_CONFIG_FILE" ]; then
@@ -441,7 +441,7 @@ do_status() {
     current_ip=$(get_ip)
     
     # Use same logic as sync_dns for state files
-    if [ "$USER" = "root" ] && [ -n "$SUDO_USER" ]; then
+    if [ "$UID" = "0" ] && [ -n "$SUDO_USER" ]; then
         SUDO_USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
         USER_STATE_DIR="$SUDO_USER_HOME/.local/state/access"
         if [ -f "$SUDO_USER_HOME/.config/access/config.env" ]; then
@@ -464,7 +464,7 @@ do_status() {
 ⏰ Run: $last_run | Upgrade: $last_upgrade
 EOF
     
-    if [ "$USER" = "root" ]; then
+    if [ "$UID" = "0" ] || [ "$(id -u)" = "0" ]; then
         service_status="❌ Down"
         systemctl is-active access.service >/dev/null 2>&1 && service_status="✅ Running"
         
