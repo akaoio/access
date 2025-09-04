@@ -31,7 +31,7 @@ install_binary() {
 
 create_service() {
     if [ "$USER" = "root" ]; then
-        # Root: try system service first, fallback to cron
+        # Root: create both system service and cron for redundancy
         cat > "/etc/systemd/system/access.service" << EOF
 [Unit]
 Description=Access IP Monitor
@@ -48,17 +48,16 @@ StandardError=append:/var/log/access.log
 [Install]
 WantedBy=multi-user.target
 EOF
-        if systemctl daemon-reload && systemctl enable --now access.service; then
-            echo "✅ System service started"
-        else
-            rm -f "/etc/systemd/system/access.service"
-            _temp_cron=$(mktemp)
-            crontab -l 2>/dev/null | grep -v access > "$_temp_cron" || true
-            echo "0 3 * * 0 $ACCESS_BIN upgrade" >> "$_temp_cron"
-            echo "*/5 * * * * $ACCESS_BIN sync" >> "$_temp_cron"
-            crontab "$_temp_cron" && rm -f "$_temp_cron"
-            echo "✅ Cron setup"
-        fi
+        systemctl daemon-reload && systemctl enable --now access.service
+        echo "✅ System service started"
+        
+        # Always create cron as backup
+        _temp_cron=$(mktemp)
+        crontab -l 2>/dev/null | grep -v access > "$_temp_cron" || true
+        echo "0 3 * * 0 $ACCESS_BIN upgrade" >> "$_temp_cron"
+        echo "*/5 * * * * $ACCESS_BIN sync" >> "$_temp_cron"
+        crontab "$_temp_cron" && rm -f "$_temp_cron"
+        echo "✅ Cron backup enabled"
     elif systemctl --user daemon-reload 2>/dev/null; then
         ensure_directories
         cat > "$XDG_CONFIG_HOME/systemd/user/access.service" << EOF
