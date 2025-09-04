@@ -242,22 +242,22 @@ EOF
 }
 
 get_ip() {
-    # Prefer IPv4 for better SSH compatibility
-    ipv4=$(ip -4 addr show | grep "scope global" | head -1 | awk '{print $2}' | cut -d'/' -f1)
-    if [ -n "$ipv4" ]; then
-        echo "$ipv4"
-        return
-    fi
-    
-    # Fallback to stable IPv6 over temporary privacy addresses
+    # For IPv6-only networks, prefer stable IPv6 over temporary privacy addresses
     stable_ipv6=$(ip -6 addr show | grep "scope global" | grep -v "temporary" | head -1 | awk '{print $2}' | cut -d'/' -f1)
     if [ -n "$stable_ipv6" ]; then
         echo "$stable_ipv6"
         return
     fi
     
-    # Fallback to any global IPv6
-    ip -6 addr show | grep "scope global" | head -1 | awk '{print $2}' | cut -d'/' -f1
+    # Fallback to any global IPv6 (including temporary)
+    temp_ipv6=$(ip -6 addr show | grep "scope global" | head -1 | awk '{print $2}' | cut -d'/' -f1)
+    if [ -n "$temp_ipv6" ]; then
+        echo "$temp_ipv6"
+        return
+    fi
+    
+    # Fallback to IPv4 (likely private/internal only)
+    ip -4 addr show | grep "scope global" | head -1 | awk '{print $2}' | cut -d'/' -f1
 }
 
 sync_dns() {
