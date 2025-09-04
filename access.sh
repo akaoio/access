@@ -202,12 +202,35 @@ get_ip() {
 
 sync_dns() {
     [ -z "$GODADDY_KEY" ] && { echo "⚠️  No config. Run: access setup"; return 1; }
-    ip=$(get_ip)
-    [ -z "$ip" ] && { echo "⚠️  No IP found"; return 1; }
     
+    LOCK_FILE="$XDG_STATE_HOME/access/sync.lock"
     LAST_IP_FILE="$XDG_STATE_HOME/access/last_ip"
     LAST_RUN_FILE="$XDG_STATE_HOME/access/last_run"
     ensure_directories
+    
+    # Process lock to prevent concurrent runs
+    exec 200>"$LOCK_FILE"
+    if ! flock -n 200; then
+        echo "🔒 Another sync in progress, skipping"
+        return 0
+    fi
+    
+    ip=$(get_ip)
+    [ -z "$ip" ] && { echo "⚠️  No IP found"; return 1; }
+    
+    # Check if recent sync happened (within 2 minutes) to avoid redundant runs
+    if [ -f "$LAST_RUN_FILE" ]; then
+        last_run_time=$(cat "$LAST_RUN_FILE" 2>/dev/null || echo "0")
+        current_time=$(date '+%Y-%m-%d %H:%M:%S')
+        last_epoch=$(date -d "$last_run_time" +%s 2>/dev/null || echo "0")
+        current_epoch=$(date -d "$current_time" +%s)
+        time_diff=$((current_epoch - last_epoch))
+        
+        if [ $time_diff -lt 120 ]; then
+            echo "🕐 Recent sync ${time_diff}s ago, skipping"
+            return 0
+        fi
+    fi
     
     # Record run timestamp
     echo "$(date '+%Y-%m-%d %H:%M:%S')" > "$LAST_RUN_FILE"
