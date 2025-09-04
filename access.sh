@@ -50,46 +50,14 @@ WantedBy=multi-user.target
 EOF
         systemctl daemon-reload && systemctl enable --now access.service
         echo "✅ System service started"
-        
-        # Always create cron as backup
         _temp_cron=$(mktemp)
         crontab -l 2>/dev/null | grep -v access > "$_temp_cron" || true
         echo "0 3 * * 0 $ACCESS_BIN upgrade" >> "$_temp_cron"
         echo "*/5 * * * * $ACCESS_BIN sync" >> "$_temp_cron"
         crontab "$_temp_cron" && rm -f "$_temp_cron"
         echo "✅ Cron backup enabled"
-    elif systemctl --user daemon-reload 2>/dev/null; then
-        ensure_directories
-        cat > "$XDG_CONFIG_HOME/systemd/user/access.service" << EOF
-[Unit]
-Description=Access IP Monitor
-
-[Service]
-Type=simple
-Restart=always
-RestartSec=5
-ExecStart=$ACCESS_BIN _monitor
-StandardOutput=append:$XDG_STATE_HOME/access/access.log
-StandardError=append:$XDG_STATE_HOME/access/error.log
-
-[Install]
-WantedBy=default.target
-EOF
-        systemctl --user enable --now access.service
-        echo "✅ Service started"
-    else
-        _temp_cron=$(mktemp)
-        crontab -l 2>/dev/null | grep -v access > "$_temp_cron" || true
-        echo "0 3 * * 0 $ACCESS_BIN upgrade" >> "$_temp_cron"
-        echo "*/5 * * * * $ACCESS_BIN sync" >> "$_temp_cron"
-        crontab "$_temp_cron" && rm -f "$_temp_cron"
-        echo "✅ Cron fallback"
-    fi
-}
-
-create_timers() {
-    if [ "$USER" = "root" ]; then
-        # Root: create system timers
+        
+        # Create system timers for root
         cat > "/etc/systemd/system/access-sync.service" << EOF
 [Unit]
 Description=Access DNS Sync
@@ -144,9 +112,27 @@ EOF
         systemctl enable access-sync.timer access-upgrade.timer
         systemctl start access-sync.timer access-upgrade.timer
         echo "✅ System timers enabled"
-        
     elif systemctl --user daemon-reload 2>/dev/null; then
         ensure_directories
+        cat > "$XDG_CONFIG_HOME/systemd/user/access.service" << EOF
+[Unit]
+Description=Access IP Monitor
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5
+ExecStart=$ACCESS_BIN _monitor
+StandardOutput=append:$XDG_STATE_HOME/access/access.log
+StandardError=append:$XDG_STATE_HOME/access/error.log
+
+[Install]
+WantedBy=default.target
+EOF
+        systemctl --user enable --now access.service
+        echo "✅ Service started"
+        
+        # Create user timers
         cat > "$XDG_CONFIG_HOME/systemd/user/access-sync.service" << EOF
 [Unit]
 Description=Access DNS Sync
@@ -199,6 +185,13 @@ EOF
         systemctl --user enable access-sync.timer access-upgrade.timer
         systemctl --user start access-sync.timer access-upgrade.timer
         echo "✅ User timers enabled"
+    else
+        _temp_cron=$(mktemp)
+        crontab -l 2>/dev/null | grep -v access > "$_temp_cron" || true
+        echo "0 3 * * 0 $ACCESS_BIN upgrade" >> "$_temp_cron"
+        echo "*/5 * * * * $ACCESS_BIN sync" >> "$_temp_cron"
+        crontab "$_temp_cron" && rm -f "$_temp_cron"
+        echo "✅ Cron fallback"
     fi
 }
 
@@ -299,11 +292,8 @@ EOF
         echo "⚠️  Basic config created. Edit $CONFIG_FILE or run: access setup"
     fi
     
-    # Create and start service
+    # Create and start service (includes timers)
     create_service
-    
-    # Create and start timers in parallel to cron
-    create_timers
     
     # Ensure command available immediately
     ln -sf "$ACCESS_BIN" "/usr/bin/access" 2>/dev/null || true
