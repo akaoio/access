@@ -244,9 +244,9 @@ sync_dns() {
     ensure_directories
     
     # Process lock to prevent concurrent runs
-    exec 200>"$LOCK_FILE"
-    if ! flock -n 200; then
-        echo "🔒 Another sync in progress, skipping"
+    if ! (
+        flock -n 9 || { echo "🔒 Another sync in progress, skipping"; exit 1; }
+    ) 9>"$LOCK_FILE"; then
         return 0
     fi
     
