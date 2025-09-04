@@ -480,7 +480,12 @@ EOF
         systemctl is-active access.service >/dev/null 2>&1 && service_status="✅ Running"
         
         timer_count=$(systemctl list-timers --all --no-legend 2>/dev/null | grep -c "access.*timer" || echo "0")
-        cron_jobs=$(crontab -l 2>/dev/null | grep -c access || echo "0")
+        # Check root cron when running as root
+        if [ "$UID" = "0" ] || [ "$(id -u)" = "0" ]; then
+            cron_jobs=$(crontab -l 2>/dev/null | grep -c access || echo "0")
+        else
+            cron_jobs=$(sudo crontab -l 2>/dev/null | grep -c access || echo "0")
+        fi
         
         echo "✅ System service: $service_status | Timers: $timer_count | Cron: $cron_jobs"
     elif systemctl --user is-active access.service >/dev/null 2>&1; then
