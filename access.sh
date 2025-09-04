@@ -6,7 +6,10 @@ set -e
 XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 XDG_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
 XDG_BIN_HOME="${XDG_BIN_HOME:-$HOME/.local/bin}"
-[ -w "/usr/local/bin" ] 2>/dev/null && XDG_BIN_HOME="/usr/local/bin"
+# Detect best binary location
+for bin_dir in "/usr/local/bin" "/usr/bin" "$HOME/.local/bin"; do
+    [ -w "$bin_dir" ] 2>/dev/null && XDG_BIN_HOME="$bin_dir" && break
+done
 ACCESS_BIN="$XDG_BIN_HOME/access"
 
 # Check for config in both user and system locations when running with sudo
@@ -23,10 +26,10 @@ else
     CONFIG_FILE="$XDG_CONFIG_HOME/access/config.env"
 fi
 
-_hostname=$(hostname 2>/dev/null || echo "peer0.akao.io")
+_hostname=$(hostname 2>/dev/null || echo "localhost.local")
 DEFAULT_HOST="${_hostname%%.*}"
 DEFAULT_DOMAIN="${_hostname#*.}"
-[ "$DEFAULT_DOMAIN" = "$DEFAULT_HOST" ] && DEFAULT_DOMAIN="akao.io"
+[ "$DEFAULT_DOMAIN" = "$DEFAULT_HOST" ] && DEFAULT_DOMAIN="example.com"
 
 [ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
 
@@ -62,8 +65,8 @@ Type=simple
 Restart=always
 RestartSec=5
 ExecStart=$ACCESS_BIN _monitor
-StandardOutput=append:/var/log/access.log
-StandardError=append:/var/log/access.log
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
@@ -94,8 +97,8 @@ After=network.target
 [Service]
 Type=oneshot
 ExecStart=$ACCESS_BIN sync
-StandardOutput=append:/var/log/access.log
-StandardError=append:/var/log/access.log
+StandardOutput=journal
+StandardError=journal
 EOF
 
         cat > "/etc/systemd/system/access-sync.timer" << EOF
@@ -119,8 +122,8 @@ After=network.target
 [Service]
 Type=oneshot
 ExecStart=$ACCESS_BIN upgrade
-StandardOutput=append:/var/log/access.log
-StandardError=append:/var/log/access.log
+StandardOutput=journal
+StandardError=journal
 EOF
 
         cat > "/etc/systemd/system/access-upgrade.timer" << EOF
@@ -378,7 +381,8 @@ do_install() {
     
     # Auto PATH
     if ! echo "$PATH" | grep -q "$XDG_BIN_HOME"; then
-        for shell_rc in "$HOME/.bashrc" "$HOME/.zshrc" "/root/.bashrc" "/root/.profile"; do
+        # Try to add to common shell RC files
+        for shell_rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
             [ -f "$shell_rc" ] && ! grep -q "$XDG_BIN_HOME" "$shell_rc" && {
                 echo "export PATH=\"$XDG_BIN_HOME:\$PATH\"" >> "$shell_rc"; break; }
         done
@@ -390,8 +394,8 @@ do_install() {
         cat > "$CONFIG_FILE" << EOF
 DOMAIN=$DEFAULT_DOMAIN
 HOST=$DEFAULT_HOST
-GODADDY_KEY=YOUR_KEY_HERE
-GODADDY_SECRET=YOUR_SECRET_HERE
+GODADDY_KEY=REPLACE_WITH_YOUR_GODADDY_API_KEY
+GODADDY_SECRET=REPLACE_WITH_YOUR_GODADDY_API_SECRET
 EOF
         chmod 600 "$CONFIG_FILE"
         echo "⚠️  Basic config created. Edit $CONFIG_FILE or run: access setup"
