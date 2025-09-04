@@ -209,7 +209,7 @@ do_upgrade() {
         echo "$(date '+%Y-%m-%d %H:%M:%S')" > "$UPGRADE_FILE"
         
         # Re-run full install to ensure services are properly configured
-        /tmp/access-new install
+        chmod +x /tmp/access-new && /tmp/access-new install
         echo "✅ Upgraded"
     fi
     rm -f /tmp/access-new
