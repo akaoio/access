@@ -343,14 +343,18 @@ start_monitor_daemon() {
     echo "🔥 Starting real-time IP monitor..."
     echo "$(date): Starting IP monitor session" >&2
     
-    # Direct IP monitoring - systemd handles restarts
-    exec ip monitor addr 2>/dev/null | while read line; do
-        case "$line" in
-            *"scope global"*)
-                echo "$(date): IP change detected - $line" >&2
-                sync_dns || echo "$(date): DNS sync failed, will retry on next change" >&2
-                ;;
-        esac
+    # Robust IP monitoring with error handling
+    while true; do
+        ip monitor addr 2>/dev/null | while read line; do
+            case "$line" in
+                *"scope global"*)
+                    echo "$(date): IP change detected - $line" >&2
+                    sync_dns 2>/dev/null || echo "$(date): DNS sync failed, will retry on next change" >&2
+                    ;;
+            esac
+        done
+        echo "$(date): IP monitor exited, restarting in 5 seconds..." >&2
+        sleep 5
     done
 }
 
