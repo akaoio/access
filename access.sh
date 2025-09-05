@@ -414,8 +414,13 @@ EOF
 }
 
 do_upgrade() {
-    # Check config before attempting upgrade
+    # Check config before attempting upgrade - but more lenient at boot
     if [ ! -f "$CONFIG_FILE" ] || [ ! -r "$CONFIG_FILE" ]; then
+        # Check if we're being called by systemd at boot
+        if [ -n "$INVOCATION_ID" ] || [ -n "$SYSTEMD_EXEC_PID" ]; then
+            # During boot, just skip upgrade silently
+            exit 0
+        fi
         echo "⚠️  No config found. Run: access setup"
         return 6
     fi
