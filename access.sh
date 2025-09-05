@@ -264,6 +264,16 @@ get_ip() {
 }
 
 sync_dns() {
+    # Force correct paths when running from systemd
+    if [ -n "$INVOCATION_ID" ] || [ -n "$SYSTEMD_EXEC_PID" ]; then
+        # Running from systemd - ensure we use root's config
+        export HOME="/root"
+        export XDG_CONFIG_HOME="/root/.config"
+        CONFIG_FILE="/root/.config/access/config.env"
+        # Reload config with correct path
+        [ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
+    fi
+    
     # Check if config file exists and is readable before checking variables
     if [ ! -f "$CONFIG_FILE" ] || [ ! -r "$CONFIG_FILE" ]; then
         echo "⚠️  No config file found at $CONFIG_FILE. Run: access setup"
@@ -414,14 +424,17 @@ EOF
 }
 
 do_upgrade() {
-    # Check config before attempting upgrade - but more lenient at boot
+    # Force correct paths when running from systemd
+    if [ -n "$INVOCATION_ID" ] || [ -n "$SYSTEMD_EXEC_PID" ]; then
+        # Running from systemd - ensure we use root's config
+        export HOME="/root"
+        export XDG_CONFIG_HOME="/root/.config"
+        CONFIG_FILE="/root/.config/access/config.env"
+    fi
+    
+    # Check config before attempting upgrade
     if [ ! -f "$CONFIG_FILE" ] || [ ! -r "$CONFIG_FILE" ]; then
-        # Check if we're being called by systemd at boot
-        if [ -n "$INVOCATION_ID" ] || [ -n "$SYSTEMD_EXEC_PID" ]; then
-            # During boot, just skip upgrade silently
-            exit 0
-        fi
-        echo "⚠️  No config found. Run: access setup"
+        echo "⚠️  No config found at $CONFIG_FILE. Run: access setup"
         return 6
     fi
     
