@@ -55,6 +55,11 @@ install_binary() {
 create_service() {
     if [ "$UID" = "0" ] || [ "$(id -u)" = "0" ]; then
         # Root: create both system service and cron for redundancy
+        # Detect the actual user running this (in case of sudo)
+        SERVICE_USER="${SUDO_USER:-root}"
+        SERVICE_HOME="$(getent passwd "$SERVICE_USER" | cut -d: -f6)"
+        [ -z "$SERVICE_HOME" ] && SERVICE_HOME="/root"
+        
         cat > "/etc/systemd/system/access.service" << EOF
 [Unit]
 Description=Access IP Monitor
@@ -64,6 +69,9 @@ After=network.target
 Type=simple
 Restart=always
 RestartSec=5
+User=$SERVICE_USER
+Environment="HOME=$SERVICE_HOME"
+Environment="XDG_CONFIG_HOME=$SERVICE_HOME/.config"
 ExecStart=$ACCESS_BIN _monitor
 StandardOutput=journal
 StandardError=journal
@@ -92,10 +100,14 @@ EOF
         cat > "/etc/systemd/system/access-sync.service" << EOF
 [Unit]
 Description=Access DNS Sync
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=oneshot
+User=$SERVICE_USER
+Environment="HOME=$SERVICE_HOME"
+Environment="XDG_CONFIG_HOME=$SERVICE_HOME/.config"
 ExecStart=$ACCESS_BIN sync
 StandardOutput=journal
 StandardError=journal
@@ -117,10 +129,14 @@ EOF
         cat > "/etc/systemd/system/access-upgrade.service" << EOF
 [Unit]
 Description=Access Auto Upgrade
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=oneshot
+User=$SERVICE_USER
+Environment="HOME=$SERVICE_HOME"
+Environment="XDG_CONFIG_HOME=$SERVICE_HOME/.config"
 ExecStart=$ACCESS_BIN upgrade
 StandardOutput=journal
 StandardError=journal
@@ -266,10 +282,17 @@ get_ip() {
 sync_dns() {
     # Force correct paths when running from systemd
     if [ -n "$INVOCATION_ID" ] || [ -n "$SYSTEMD_EXEC_PID" ]; then
-        # Running from systemd - ensure we use root's config
-        export HOME="/root"
-        export XDG_CONFIG_HOME="/root/.config"
-        CONFIG_FILE="/root/.config/access/config.env"
+        # Running from systemd - detect actual user home
+        if [ -z "$HOME" ] || [ "$HOME" = "/" ]; then
+            # Try to detect the actual user's home directory
+            if [ "$UID" = "0" ] || [ "$(id -u)" = "0" ]; then
+                export HOME="/root"
+            else
+                export HOME="$(getent passwd "$(id -un)" | cut -d: -f6)"
+            fi
+        fi
+        export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+        CONFIG_FILE="$XDG_CONFIG_HOME/access/config.env"
         # Reload config with correct path
         [ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
     fi
@@ -426,10 +449,19 @@ EOF
 do_upgrade() {
     # Force correct paths when running from systemd
     if [ -n "$INVOCATION_ID" ] || [ -n "$SYSTEMD_EXEC_PID" ]; then
-        # Running from systemd - ensure we use root's config
-        export HOME="/root"
-        export XDG_CONFIG_HOME="/root/.config"
-        CONFIG_FILE="/root/.config/access/config.env"
+        # Running from systemd - detect actual user home
+        if [ -z "$HOME" ] || [ "$HOME" = "/" ]; then
+            # Try to detect the actual user's home directory
+            if [ "$UID" = "0" ] || [ "$(id -u)" = "0" ]; then
+                export HOME="/root"
+            else
+                export HOME="$(getent passwd "$(id -un)" | cut -d: -f6)"
+            fi
+        fi
+        export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+        CONFIG_FILE="$XDG_CONFIG_HOME/access/config.env"
+        # Reload config with correct path
+        [ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
     fi
     
     # Check config before attempting upgrade
