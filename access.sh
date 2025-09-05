@@ -264,7 +264,12 @@ get_ip() {
 }
 
 sync_dns() {
-    [ -z "$GODADDY_KEY" ] && { echo "⚠️  No config. Run: access setup"; return 1; }
+    # Check if config file exists and is readable before checking variables
+    if [ ! -f "$CONFIG_FILE" ] || [ ! -r "$CONFIG_FILE" ]; then
+        echo "⚠️  No config file found at $CONFIG_FILE. Run: access setup"
+        return 6
+    fi
+    [ -z "$GODADDY_KEY" ] && { echo "⚠️  No config. Run: access setup"; return 6; }
     
     # Use same user's state directory as config when running with sudo
     if [ "$UID" = "0" ] && [ -n "$SUDO_USER" ]; then
@@ -409,15 +414,23 @@ EOF
 }
 
 do_upgrade() {
-    curl -s -H "Cache-Control: no-cache" "https://raw.githubusercontent.com/akaoio/access/main/access.sh?$(date +%s)" > /tmp/access-new
-    if [ -s /tmp/access-new ] && head -1 /tmp/access-new | grep -q "#!/bin/sh"; then
+    # Check config before attempting upgrade
+    if [ ! -f "$CONFIG_FILE" ] || [ ! -r "$CONFIG_FILE" ]; then
+        echo "⚠️  No config found. Run: access setup"
+        return 6
+    fi
+    
+    # Use unique temp file to avoid permission conflicts
+    temp_file=$(mktemp /tmp/access-new.XXXXXX) || temp_file="/tmp/access-new.$$"
+    curl -s -H "Cache-Control: no-cache" "https://raw.githubusercontent.com/akaoio/access/main/access.sh?$(date +%s)" > "$temp_file"
+    if [ -s "$temp_file" ] && head -1 "$temp_file" | grep -q "#!/bin/sh"; then
         # Stop services and timers first
         systemctl --user stop access.service access-sync.timer access-upgrade.timer 2>/dev/null || true
         systemctl stop access.service access-sync.timer access-upgrade.timer 2>/dev/null || true
         pkill -f "access.*_monitor" 2>/dev/null || true
         
         # Replace binary
-        cp /tmp/access-new "$ACCESS_BIN" && chmod +x "$ACCESS_BIN"
+        cp "$temp_file" "$ACCESS_BIN" && chmod +x "$ACCESS_BIN"
         ln -sf "$ACCESS_BIN" "/usr/bin/access" 2>/dev/null || true
         
         # Record upgrade
@@ -426,10 +439,10 @@ do_upgrade() {
         echo "$(date '+%Y-%m-%d %H:%M:%S')" > "$UPGRADE_FILE"
         
         # Re-run full install to ensure services are properly configured
-        chmod +x /tmp/access-new && /tmp/access-new install
+        chmod +x "$temp_file" && "$temp_file" install
         echo "✅ Upgraded"
     fi
-    rm -f /tmp/access-new
+    rm -f "$temp_file"
 }
 
 do_uninstall() {
