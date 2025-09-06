@@ -80,21 +80,21 @@ StandardError=journal
 WantedBy=multi-user.target
 EOF
         if systemctl daemon-reload && systemctl enable --now access.service; then
-            echo "✅ System service started"
+            echo "System service started"
         else
-            echo "⚠️ Systemctl failed, trying alternative..."
+            echo "WARNING: Systemctl failed, trying alternative..."
             # Force enable service files
             ln -sf /etc/systemd/system/access.service /etc/systemd/system/multi-user.target.wants/
             systemctl daemon-reload 2>/dev/null || true
-            systemctl start access.service 2>/dev/null || echo "⚠️ Service creation failed - check systemd permissions"
-            echo "✅ Service enabled manually"
+            systemctl start access.service 2>/dev/null || echo "WARNING: Service creation failed - check systemd permissions"
+            echo "Service enabled manually"
         fi
         _temp_cron=$(mktemp)
         crontab -l 2>/dev/null | grep -v access > "$_temp_cron" || true
         echo "0 3 * * 0 $ACCESS_BIN upgrade" >> "$_temp_cron"
         echo "*/5 * * * * $ACCESS_BIN sync" >> "$_temp_cron"
         crontab "$_temp_cron" && rm -f "$_temp_cron"
-        echo "✅ Cron backup enabled"
+        echo "Cron backup enabled"
         
         # Create system timers for root
         cat > "/etc/systemd/system/access-sync.service" << EOF
@@ -156,15 +156,15 @@ WantedBy=timers.target
 EOF
 
         if systemctl daemon-reload && systemctl enable access-sync.timer access-upgrade.timer && systemctl start access-sync.timer access-upgrade.timer; then
-            echo "✅ System timers enabled"
+            echo "System timers enabled"
         else
-            echo "⚠️ Timer systemctl failed, enabling manually..."
+            echo "WARNING: Timer systemctl failed, enabling manually..."
             # Force enable timer files
             ln -sf /etc/systemd/system/access-sync.timer /etc/systemd/system/timers.target.wants/
             ln -sf /etc/systemd/system/access-upgrade.timer /etc/systemd/system/timers.target.wants/
             systemctl daemon-reload 2>/dev/null || true
             systemctl start access-sync.timer access-upgrade.timer 2>/dev/null || true
-            echo "✅ Timers enabled manually"
+            echo "Timers enabled manually"
         fi
     else
         # Force user systemd services to work
@@ -185,15 +185,15 @@ StandardError=append:$XDG_STATE_HOME/access/error.log
 WantedBy=default.target
 EOF
         if systemctl --user enable --now access.service; then
-            echo "✅ Service started"
+            echo "Service started"
         else
-            echo "⚠️ User systemctl failed, forcing manual enable..."
+            echo "WARNING: User systemctl failed, forcing manual enable..."
             # Force create user service symlinks
             mkdir -p "$XDG_CONFIG_HOME/systemd/user/default.target.wants"
             ln -sf "$XDG_CONFIG_HOME/systemd/user/access.service" "$XDG_CONFIG_HOME/systemd/user/default.target.wants/"
             systemctl --user daemon-reload 2>/dev/null || true
             systemctl --user start access.service 2>/dev/null || echo "Manual service start needed"
-            echo "✅ Service enabled manually"
+            echo "Service enabled manually"
         fi
         
         # Create user timers
@@ -246,16 +246,16 @@ WantedBy=timers.target
 EOF
 
         if systemctl --user daemon-reload && systemctl --user enable access-sync.timer access-upgrade.timer && systemctl --user start access-sync.timer access-upgrade.timer; then
-            echo "✅ User timers enabled"
+            echo "User timers enabled"
         else
-            echo "⚠️ User timer systemctl failed, forcing manual enable..."
+            echo "WARNING: User timer systemctl failed, forcing manual enable..."
             # Force create user timer symlinks
             mkdir -p "$XDG_CONFIG_HOME/systemd/user/timers.target.wants"
             ln -sf "$XDG_CONFIG_HOME/systemd/user/access-sync.timer" "$XDG_CONFIG_HOME/systemd/user/timers.target.wants/"
             ln -sf "$XDG_CONFIG_HOME/systemd/user/access-upgrade.timer" "$XDG_CONFIG_HOME/systemd/user/timers.target.wants/"
             systemctl --user daemon-reload 2>/dev/null || true
             systemctl --user start access-sync.timer access-upgrade.timer 2>/dev/null || true
-            echo "✅ User timers enabled manually"
+            echo "User timers enabled manually"
         fi
     fi
 }
@@ -299,10 +299,10 @@ sync_dns() {
     
     # Check if config file exists and is readable before checking variables
     if [ ! -f "$CONFIG_FILE" ] || [ ! -r "$CONFIG_FILE" ]; then
-        echo "⚠️  No config file found at $CONFIG_FILE. Run: access setup"
+        echo "WARNING: No config file found at $CONFIG_FILE. Run: access setup"
         return 6
     fi
-    [ -z "$GODADDY_KEY" ] && { echo "⚠️  No config. Run: access setup"; return 6; }
+    [ -z "$GODADDY_KEY" ] && { echo "WARNING: No config. Run: access setup"; return 6; }
     
     # Use same user's state directory as config when running with sudo
     if [ "$UID" = "0" ] && [ -n "$SUDO_USER" ]; then
@@ -326,13 +326,13 @@ sync_dns() {
     
     # Process lock to prevent concurrent runs
     if ! (
-        flock -n 9 || { echo "🔒 Another sync in progress, skipping"; exit 1; }
+        flock -n 9 || { echo "LOCK: Another sync in progress, skipping"; exit 1; }
     ) 9>"$LOCK_FILE"; then
         return 0
     fi
     
     ip=$(get_ip)
-    [ -z "$ip" ] && { echo "⚠️  No IP found"; return 1; }
+    [ -z "$ip" ] && { echo "WARNING: No IP found"; return 1; }
     
     # Check if recent sync happened (within 2 minutes) to avoid redundant runs
     if [ -f "$LAST_RUN_FILE" ]; then
@@ -343,7 +343,7 @@ sync_dns() {
         time_diff=$((current_epoch - last_epoch))
         
         if [ $time_diff -lt 120 ]; then
-            echo "🕐 Recent sync ${time_diff}s ago, skipping"
+            echo "SKIP: Recent sync ${time_diff}s ago, skipping"
             return 0
         fi
     fi
@@ -352,7 +352,7 @@ sync_dns() {
     echo "$(date '+%Y-%m-%d %H:%M:%S')" > "$LAST_RUN_FILE"
     
     if [ -f "$LAST_IP_FILE" ] && [ "$(cat "$LAST_IP_FILE" 2>/dev/null)" = "$ip" ]; then
-        echo "🔄 IP unchanged ($ip)"
+        echo "SYNC: IP unchanged ($ip)"
         return 0
     fi
     
@@ -364,10 +364,10 @@ sync_dns() {
         -H "Authorization: sso-key $GODADDY_KEY:$GODADDY_SECRET" \
         -H "Content-Type: application/json" \
         -d "[{\"data\":\"$ip\",\"ttl\":600}]" >/dev/null; then
-        echo "✅ $_dns_host.$_dns_domain → $ip"
+        echo "SUCCESS: $_dns_host.$_dns_domain -> $ip"
         echo "$ip" > "$LAST_IP_FILE"
     else
-        echo "❌ Update failed"
+        echo "ERROR: Update failed"
         return 1
     fi
 }
@@ -386,7 +386,7 @@ GODADDY_KEY=$key
 GODADDY_SECRET=$secret
 EOF
     chmod 600 "$CONFIG_FILE"
-    echo "✅ Config synced"
+    echo "Config synced"
     [ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
     
     # Enable services automatically after setup
@@ -395,7 +395,7 @@ EOF
 }
 
 start_monitor_daemon() {
-    echo "🔥 Starting real-time IP monitor..."
+    echo "Starting real-time IP monitor..."
     echo "$(date): Starting IP monitor session" >&2
     
     # Robust IP monitoring with error handling
@@ -436,7 +436,7 @@ GODADDY_KEY=REPLACE_WITH_YOUR_GODADDY_API_KEY
 GODADDY_SECRET=REPLACE_WITH_YOUR_GODADDY_API_SECRET
 EOF
         chmod 600 "$CONFIG_FILE"
-        echo "⚠️  Basic config created. Edit $CONFIG_FILE or run: access setup"
+        echo "WARNING: Basic config created. Edit $CONFIG_FILE or run: access setup"
     fi
     
     # Create and start service (includes timers)
@@ -466,7 +466,7 @@ do_upgrade() {
     
     # Check config before attempting upgrade
     if [ ! -f "$CONFIG_FILE" ] || [ ! -r "$CONFIG_FILE" ]; then
-        echo "⚠️  No config found at $CONFIG_FILE. Run: access setup"
+        echo "WARNING: No config found at $CONFIG_FILE. Run: access setup"
         return 6
     fi
     
@@ -490,7 +490,7 @@ do_upgrade() {
         
         # Re-run full install to ensure services are properly configured
         chmod +x "$temp_file" && "$temp_file" install
-        echo "✅ Upgraded"
+        echo "Upgraded"
     fi
     rm -f "$temp_file"
 }
@@ -529,7 +529,7 @@ do_uninstall() {
     # Self-destruct - remove binaries last (this will kill current process) 
     sudo rm -f "/usr/bin/access" 2>/dev/null || rm -f "/usr/bin/access" 2>/dev/null || true
     rm -f "$ACCESS_BIN"
-    echo "✅ Removed"
+    echo "Removed"
 }
 
 do_status() {
@@ -563,24 +563,24 @@ do_status() {
     fi
     
     cat << EOF
-📊 ${HOST:-$DEFAULT_HOST}.${DOMAIN:-$DEFAULT_DOMAIN} | IP: ${current_ip:-?} | Last: $last_ip
-⏰ Run: $last_run | Upgrade: $last_upgrade
+STATUS: ${HOST:-$DEFAULT_HOST}.${DOMAIN:-$DEFAULT_DOMAIN} | IP: ${current_ip:-?} | Last: $last_ip
+TIME: Run: $last_run | Upgrade: $last_upgrade
 EOF
     
     if systemctl is-active access.service >/dev/null 2>&1; then
         # System service is running
-        service_status="✅ Running"
+        service_status="Running"
         timer_count=$(systemctl list-timers --all --no-legend 2>/dev/null | grep -c "access.*timer")
         cron_jobs=$(crontab -l 2>/dev/null | grep -c access || echo "0")
-        echo "✅ System service: $service_status | Timers: $timer_count | Cron: $cron_jobs"
+        echo "ACTIVE: System service: $service_status | Timers: $timer_count | Cron: $cron_jobs"
     elif systemctl --user is-active access.service >/dev/null 2>&1; then
         timer_count=$(systemctl --user list-timers --all --no-legend 2>/dev/null | grep -c "access.*timer")
         cron_jobs=$(crontab -l 2>/dev/null | grep -c "$ACCESS_BIN" || echo "0")
-        echo "✅ Service: Running | Timers: $timer_count | Cron: $cron_jobs"
+        echo "ACTIVE: Service: Running | Timers: $timer_count | Cron: $cron_jobs"
     else
         timer_count=$(systemctl --user list-timers --all --no-legend 2>/dev/null | grep -c "access.*timer")
         cron_jobs=$(crontab -l 2>/dev/null | grep -c "$ACCESS_BIN" || echo "0")
-        echo "❌ Service: Down | Timers: $timer_count | Cron: $cron_jobs"
+        echo "INACTIVE: Service: Down | Timers: $timer_count | Cron: $cron_jobs"
     fi
 }
 
