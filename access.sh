@@ -534,6 +534,13 @@ do_uninstall() {
 
 do_status() {
     exec >&1
+    
+    # Check for config first
+    if [ ! -f "$CONFIG_FILE" ]; then
+        echo "No config. Please run \`access setup\` to configure access."
+        return
+    fi
+    
     current_ip=$(get_ip)
     
     # Use same logic as sync_dns for state files
@@ -563,20 +570,18 @@ EOF
     if systemctl is-active access.service >/dev/null 2>&1; then
         # System service is running
         service_status="✅ Running"
-        timer_count=$(systemctl list-timers --all --no-legend 2>/dev/null | grep -c "access.*timer" || echo "0")
+        timer_count=$(systemctl list-timers --all --no-legend 2>/dev/null | grep -c "access.*timer")
         cron_jobs=$(crontab -l 2>/dev/null | grep -c access || echo "0")
         echo "✅ System service: $service_status | Timers: $timer_count | Cron: $cron_jobs"
     elif systemctl --user is-active access.service >/dev/null 2>&1; then
-        timer_count=$(systemctl --user list-timers --all --no-legend 2>/dev/null | grep -c "access.*timer" || echo "0")
+        timer_count=$(systemctl --user list-timers --all --no-legend 2>/dev/null | grep -c "access.*timer")
         cron_jobs=$(crontab -l 2>/dev/null | grep -c "$ACCESS_BIN" || echo "0")
         echo "✅ Service: Running | Timers: $timer_count | Cron: $cron_jobs"
     else
-        timer_count=$(systemctl --user list-timers --all --no-legend 2>/dev/null | grep -c "access.*timer" || echo "0")
+        timer_count=$(systemctl --user list-timers --all --no-legend 2>/dev/null | grep -c "access.*timer")
         cron_jobs=$(crontab -l 2>/dev/null | grep -c "$ACCESS_BIN" || echo "0")
         echo "❌ Service: Down | Timers: $timer_count | Cron: $cron_jobs"
     fi
-    
-    [ ! -f "$CONFIG_FILE" ] && echo "⚠️  No config (run: access setup)"
 }
 
 case "${1:-install}" in
