@@ -1,0 +1,35 @@
+#!/bin/sh
+# Access Eternal - Minimal POSIX dynamic DNS
+set -e
+
+# Set LIB if it doesn't exist
+if [ -z "$LIB" ]; then
+    LIB="/usr/local/lib/access"
+fi
+
+# Initialize essential variables and functions
+if [ -f "$LIB/init.sh" ]; then
+    . "$LIB/init.sh"
+fi
+
+# Handle commands
+case "${1:-help}" in
+    "ip")
+        if [ -f "$LIB/module/ip.sh" ]; then
+            . "$LIB/module/ip.sh"
+            show_ip
+        else
+            echo "Error: IP module not found"
+            exit 1
+        fi
+        ;;
+    "help"|*)
+        if [ -f "$LIB/module/help.sh" ]; then
+            . "$LIB/module/help.sh"
+            show_help
+        else
+            echo "Error: Help module not found"
+            exit 1
+        fi
+        ;;
+esac

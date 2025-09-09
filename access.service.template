@@ -1,0 +1,15 @@
+[Unit]
+Description=Access Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=GROUP
+WorkingDirectory=INSTALL_DIR
+ExecStart=/bin/bash INSTALL_DIR/access.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
