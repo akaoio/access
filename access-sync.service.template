@@ -1,0 +1,10 @@
+[Unit]
+Description=Access Eternal - DNS Sync
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=__BIN__ sync
+StandardOutput=append:/var/log/access/access.log
+StandardError=append:/var/log/access/error.log

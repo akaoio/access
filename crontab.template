@@ -1,0 +1,6 @@
+# Access Eternal - Cron backup jobs
+# DNS sync every 5 minutes (backup to systemd timer)
+*/5 * * * * __BIN__ sync >> /var/log/access/access.log 2>> /var/log/access/error.log
+
+# Auto update every Sunday at 3 AM (backup to systemd timer)  
+0 3 * * 0 __BIN__ update >> /var/log/access/access.log 2>> /var/log/access/error.log
