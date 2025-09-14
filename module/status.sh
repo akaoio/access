@@ -8,11 +8,12 @@ show_status() {
         return
     fi
     
-    # Get current IP
-    if [ -f "$LIB/module/ip.sh" ]; then
-        . "$LIB/module/ip.sh"
-        current_ip=$(get_ip)
-    else
+    # Get current IP using access command
+    current_ip=$("$BIN" ip 2>/dev/null | grep "IPv6:" | cut -d' ' -f2)
+    if [ -z "$current_ip" ] || [ "$current_ip" = "Not available" ]; then
+        current_ip=$("$BIN" ip 2>/dev/null | grep "IPv4:" | cut -d' ' -f2)
+    fi
+    if [ -z "$current_ip" ]; then
         current_ip="?"
     fi
     
