@@ -99,3 +99,54 @@ printf "Config file created at %s\n" "$CONFIG"
 # Copy entry executable file, this makes Access available globally
 printf "Copying executable...\n"
 cp "$LIB/access" "$BIN"
+chmod +x "$BIN"
+printf "Executable copied successfully\n"
+
+# Create log directories
+printf "Creating log directories...\n"
+mkdir -p /var/log/access
+chmod 755 /var/log/access
+printf "Log directories created\n"
+
+# Process and install systemd service files
+printf "Installing systemd services...\n"
+sed "s|__BIN__|$BIN|g; s|__LIB__|$LIB|g" "$LIB/access.service.template" > /etc/systemd/system/access.service
+sed "s|__BIN__|$BIN|g; s|__LIB__|$LIB|g" "$LIB/access-sync.service.template" > /etc/systemd/system/access-sync.service
+sed "s|__BIN__|$BIN|g; s|__LIB__|$LIB|g" "$LIB/access-sync.timer.template" > /etc/systemd/system/access-sync.timer
+sed "s|__BIN__|$BIN|g; s|__LIB__|$LIB|g" "$LIB/access-update.service.template" > /etc/systemd/system/access-update.service
+sed "s|__BIN__|$BIN|g; s|__LIB__|$LIB|g" "$LIB/access-update.timer.template" > /etc/systemd/system/access-update.timer
+
+# Reload systemd and enable services
+printf "Reloading systemd...\n"
+systemctl daemon-reload
+
+# Enable and start main daemon service
+printf "Starting main daemon service...\n"
+if systemctl enable access.service && systemctl start access.service; then
+    printf "Main daemon service started\n"
+else
+    printf "WARNING: Failed to start main service\n"
+fi
+
+# Enable and start timers
+printf "Enabling backup timers...\n"
+if systemctl enable access-sync.timer access-update.timer && systemctl start access-sync.timer access-update.timer; then
+    printf "Backup timers enabled\n"
+else
+    printf "WARNING: Failed to enable timers\n"
+fi
+
+# Install cron backup jobs
+printf "Installing cron backup jobs...\n"
+_temp_cron=$(mktemp)
+crontab -l 2>/dev/null | grep -v "Access Eternal\|$BIN" > "$_temp_cron" || true
+sed "s|__BIN__|$BIN|g; s|__LIB__|$LIB|g" "$LIB/crontab.template" >> "$_temp_cron"
+if crontab "$_temp_cron"; then
+    printf "Cron backup jobs installed\n"
+else
+    printf "WARNING: Failed to install cron jobs\n"
+fi
+rm -f "$_temp_cron"
+
+printf "Access Eternal installation completed!\n"
+printf "Services: daemon (real-time) + timers (5min sync, weekly update) + cron backup\n"
