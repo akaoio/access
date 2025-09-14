@@ -41,7 +41,7 @@ fi
 
 # Clone access repo to $LIB directory
 if [ ! -d "$LIB" ]; then
-    git clone https://github.com/akaoio/access "$LIB"
+    git clone -b main https://github.com/akaoio/access "$LIB"
 fi
 
 # Initialize essential variables and functions
