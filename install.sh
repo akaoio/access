@@ -38,8 +38,12 @@ if ! command -v git >/dev/null 2>&1; then
     apt update && apt install -y git
 fi
 
-# Clone access repo to $LIB directory
-if [ ! -d "$LIB" ]; then
+# Clone/update access repo to $LIB directory
+if [ -d "$LIB" ]; then
+    cd "$LIB"
+    git fetch origin main
+    git reset --hard origin/main
+else
     git clone -b main https://github.com/akaoio/access "$LIB"
 fi
 
