@@ -38,14 +38,9 @@ if ! command -v git >/dev/null 2>&1; then
     apt update && apt install -y git
 fi
 
-# Clone/update access repo to $LIB directory
-if [ -d "$LIB" ]; then
-    cd "$LIB"
-    git fetch origin main
-    git reset --hard origin/main
-else
-    git clone -b main https://github.com/akaoio/access "$LIB"
-fi
+# Clone/update access repo to $LIB directory - force fresh clone
+rm -rf "$LIB"
+git clone -b main https://github.com/akaoio/access "$LIB"
 
 # Initialize essential variables and functions
 if [ -f "$LIB/init.sh" ]; then
