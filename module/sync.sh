@@ -37,6 +37,12 @@ sync_dns() {
     
     [ -z "$ip" ] && { printf "WARNING: No IP found\n"; return 1; }
     
+    # Check if IP changed first (before timestamp)
+    if [ -f "$LAST_IP_FILE" ] && [ "$(cat "$LAST_IP_FILE" 2>/dev/null)" = "$ip" ]; then
+        printf "SYNC: IP unchanged (%s)\n" "$ip"
+        return 0
+    fi
+    
     # Check if recent sync happened (within 2 minutes) to avoid redundant runs
     current_epoch=$(date +%s)
     if [ -f "$LAST_RUN_FILE" ]; then
@@ -47,15 +53,6 @@ sync_dns() {
             printf "SKIP: Recent sync %ss ago, skipping\n" "$time_diff"
             return 0
         fi
-    fi
-    
-    # Record run timestamp as epoch
-    printf "%s\n" "$current_epoch" > "$LAST_RUN_FILE"
-    
-    # Check if IP changed
-    if [ -f "$LAST_IP_FILE" ] && [ "$(cat "$LAST_IP_FILE" 2>/dev/null)" = "$ip" ]; then
-        printf "SYNC: IP unchanged (%s)\n" "$ip"
-        return 0
     fi
     
     # Determine DNS record type based on IP format
@@ -69,6 +66,8 @@ sync_dns() {
         -d "[{\"data\":\"$ip\",\"ttl\":600}]" >/dev/null; then
         printf "SUCCESS: %s.%s -> %s\n" "$HOST" "$DOMAIN" "$ip"
         printf "%s\n" "$ip" > "$LAST_IP_FILE"
+        # Record timestamp only after successful sync
+        printf "%s\n" "$current_epoch" > "$LAST_RUN_FILE"
     else
         printf "ERROR: Update failed\n"
         return 1
