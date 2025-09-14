@@ -1,6 +1,4 @@
 #!/bin/sh
-exec < /dev/tty # Do not remove this line
-set -x # Debug mode
 
 godaddy_key=""
 godaddy_secret=""
@@ -53,36 +51,47 @@ fi
 # Check if Access is installed
 # If Access is already installed, ask if the user wants to reinstall it
 if [ "$INSTALLED" = true ]; then
-    prompt_input "Access is already installed! Do you want to reinstall it? [y/N]" "yes_no" "$ABORTED" || exit 1
+    printf "Access is already installed! Do you want to reinstall it? [y/N]: "
+    read -r confirm < /dev/tty
+    case "$confirm" in
+        [Yy]*) ;;
+        *) printf "Installation aborted.\n"; exit 1 ;;
+    esac
 fi
 
 # Prompt for missing values
 if [ -z "$godaddy_key" ]; then
-    prompt_input "Enter your GoDaddy API Key" "non_empty"
-    godaddy_key="$PROMPT_RESULT"
+    printf "Enter your GoDaddy API Key: "
+    read -r godaddy_key < /dev/tty
 fi
 
 if [ -z "$godaddy_secret" ]; then
-    prompt_input "Enter your GoDaddy API Secret" "non_empty"
-    godaddy_secret="$PROMPT_RESULT"
+    printf "Enter your GoDaddy API Secret: "
+    read -r godaddy_secret < /dev/tty
 fi
 
 if [ -z "$domain" ]; then
-    prompt_input "Enter your domain name" "non_empty"
-    domain="$PROMPT_RESULT"
+    printf "Enter your domain name: "
+    read -r domain < /dev/tty
 fi
 
 if [ -z "$host" ]; then
-    prompt_input "Enter your host name" "non_empty"
-    host="$PROMPT_RESULT"
+    printf "Enter your host name: "
+    read -r host < /dev/tty
 fi
+
 # Confirm values
 printf "Please confirm the following values:\n"
 printf "GoDaddy API Key: %s\n" "$godaddy_key"
 printf "GoDaddy API Secret: %s\n" "$godaddy_secret"
 printf "Domain: %s\n" "$domain"
 printf "Host: %s\n" "$host"
-prompt_input "Continue with these values? [y/N]" "yes_no" "$ABORTED" || exit 1
+printf "Continue with these values? [y/N]: "
+read -r confirm < /dev/tty
+case "$confirm" in
+    [Yy]*) ;;
+    *) printf "Installation aborted.\n"; exit 1 ;;
+esac
 
 # Backup current config file if exists
 if [ -f "$CONFIG" ]; then
