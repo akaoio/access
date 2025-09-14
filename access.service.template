@@ -1,15 +1,15 @@
 [Unit]
-Description=Access Service
-After=network.target
+Description=Access Eternal - Real-time IP Monitor
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
-User=root
-Group=GROUP
-WorkingDirectory=INSTALL_DIR
-ExecStart=/bin/bash INSTALL_DIR/access.sh
 Restart=always
-RestartSec=10
+RestartSec=5
+ExecStart=__LIB__/daemon.sh
+StandardOutput=append:/var/log/access/access.log
+StandardError=append:/var/log/access/error.log
 
 [Install]
 WantedBy=multi-user.target
