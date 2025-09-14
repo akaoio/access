@@ -7,8 +7,16 @@ if [ -z "$LIB" ]; then
     LIB="/usr/local/lib/access"
 fi
 
-# Initialize essential variables and functions
-if [ -f "$LIB/init.sh" ]; then
+# Initialize essential variables and functions (without root check for ip command)
+command="${1:-help}"
+if [ "$command" = "ip" ]; then
+    # Skip root check for ip command
+    CONFIG="/etc/access/config.env"
+    BIN="/usr/local/bin/access"
+    LIB="/usr/local/lib/access"
+    STATE="/var/lib/access"
+    [ -f "$CONFIG" ] && . "$CONFIG"
+elif [ -f "$LIB/init.sh" ]; then
     . "$LIB/init.sh"
 fi
 
