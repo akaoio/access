@@ -90,7 +90,7 @@ fi
 
 # Create config directory and generate config from template
 mkdir -p "$(dirname "$CONFIG")"
-sed "s/__GODADDY_KEY__/$godaddy_key/g; s/__GODADDY_SECRET__/$godaddy_secret/g; s/__DOMAIN__/$domain/g; s/__HOST__/$host/g" config.env.template > "$CONFIG"
+sed "s/__GODADDY_KEY__/$godaddy_key/g; s/__GODADDY_SECRET__/$godaddy_secret/g; s/__DOMAIN__/$domain/g; s/__HOST__/$host/g" "$LIB/config.env.template" > "$CONFIG"
 
 # Copy entry executable file, this makes Access available globally
 cp "$LIB/access" "$BIN"
