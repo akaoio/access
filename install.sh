@@ -108,6 +108,8 @@ printf "Config file created at %s\n" "$CONFIG"
 printf "Copying executable...\n"
 cp "$LIB/access" "$BIN"
 chmod +x "$BIN"
+# Make daemon executable
+chmod +x "$LIB/daemon.sh"
 printf "Executable copied successfully\n"
 
 # Create log directories
