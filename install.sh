@@ -118,7 +118,25 @@ printf "Log directories created\n"
 
 # Process and install systemd service files
 printf "Installing systemd services...\n"
-sed "s|__BIN__|$BIN|g; s|__LIB__|$LIB|g" "$LIB/access.service.template" > /etc/systemd/system/access.service
+
+# Generate access.service directly with correct content
+cat > /etc/systemd/system/access.service << EOF
+[Unit]
+Description=Access Eternal - Real-time IP Monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5
+ExecStart=$LIB/daemon.sh
+StandardOutput=append:/var/log/access/access.log
+StandardError=append:/var/log/access/error.log
+
+[Install]
+WantedBy=multi-user.target
+EOF
 sed "s|__BIN__|$BIN|g; s|__LIB__|$LIB|g" "$LIB/access-sync.service.template" > /etc/systemd/system/access-sync.service
 sed "s|__BIN__|$BIN|g; s|__LIB__|$LIB|g" "$LIB/access-sync.timer.template" > /etc/systemd/system/access-sync.timer
 sed "s|__BIN__|$BIN|g; s|__LIB__|$LIB|g" "$LIB/access-update.service.template" > /etc/systemd/system/access-update.service
@@ -148,7 +166,15 @@ fi
 printf "Installing cron backup jobs...\n"
 _temp_cron=$(mktemp)
 crontab -l 2>/dev/null | grep -v "Access Eternal\|$BIN" > "$_temp_cron" || true
-sed "s|__BIN__|$BIN|g; s|__LIB__|$LIB|g" "$LIB/crontab.template" >> "$_temp_cron"
+cat >> "$_temp_cron" << EOF
+# Access Eternal - Cron backup jobs
+# DNS sync every 5 minutes (backup to systemd timer)
+*/5 * * * * $BIN sync >> /var/log/access/access.log 2>> /var/log/access/error.log
+
+# Auto update every Sunday at 3 AM (backup to systemd timer)  
+0 3 * * 0 $BIN update >> /var/log/access/access.log 2>> /var/log/access/error.log
+
+EOF
 if crontab "$_temp_cron"; then
     printf "Cron backup jobs installed\n"
 else
