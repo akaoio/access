@@ -9,8 +9,8 @@ fi
 
 # Initialize essential variables and functions (without root check for ip command)
 command="${1:-help}"
-if [ "$command" = "ip" ]; then
-    # Skip root check for ip command
+if [ "$command" = "ip" ] || [ "$command" = "help" ]; then
+    # Skip root check for ip and help commands
     CONFIG="/etc/access/config.env"
     BIN="/usr/local/bin/access"
     LIB="/usr/local/lib/access"
