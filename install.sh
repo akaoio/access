@@ -1,5 +1,6 @@
 #!/bin/sh
 exec < /dev/tty # Do not remove this line
+set -x # Debug mode
 
 godaddy_key=""
 godaddy_secret=""
@@ -89,8 +90,12 @@ if [ -f "$CONFIG" ]; then
 fi
 
 # Create config directory and generate config from template
+printf "Creating config directory...\n"
 mkdir -p "$(dirname "$CONFIG")"
+printf "Processing config template...\n"
 sed "s/__GODADDY_KEY__/$godaddy_key/g; s/__GODADDY_SECRET__/$godaddy_secret/g; s/__DOMAIN__/$domain/g; s/__HOST__/$host/g" "$LIB/config.env.template" > "$CONFIG"
+printf "Config file created at %s\n" "$CONFIG"
 
 # Copy entry executable file, this makes Access available globally
+printf "Copying executable...\n"
 cp "$LIB/access" "$BIN"
