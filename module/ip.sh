@@ -2,19 +2,52 @@
 # IP module for Access Eternal
 
 get_ipv4() {
-    ip -4 addr show | grep 'inet ' | grep -v '127.0.0.1' | head -1 | awk '{print $2}' | cut -d'/' -f1 || echo "Not available"
+    result=$(ip -4 addr show | grep "scope global" | head -1 | awk '{print $2}' | cut -d'/' -f1)
+    if [ -n "$result" ]; then
+        printf "%s" "$result"
+    else
+        printf "Not available"
+    fi
 }
 
 get_ipv6() {
-    ip -6 addr show | grep 'inet6 ' | grep -v '::1' | grep 'scope global' | head -1 | awk '{print $2}' | cut -d'/' -f1 || echo "Not available"
+    # Prefer stable IPv6 over temporary privacy addresses
+    stable_ipv6=$(ip -6 addr show | grep "scope global" | grep -v "temporary" | head -1 | awk '{print $2}' | cut -d'/' -f1)
+    if [ -n "$stable_ipv6" ]; then
+        printf "%s" "$stable_ipv6"
+        return
+    fi
+    
+    # Fallback to any global IPv6 (including temporary)
+    temp_ipv6=$(ip -6 addr show | grep "scope global" | head -1 | awk '{print $2}' | cut -d'/' -f1)
+    if [ -n "$temp_ipv6" ]; then
+        printf "%s" "$temp_ipv6"
+        return
+    fi
+    
+    printf "Not available"
 }
 
-show_ip() {
-    echo "IPv4: $(get_ipv4)"
-    echo "IPv6: $(get_ipv6)"
+get_ip() {
+    # Legacy function - prioritize stable IPv6 over temporary, then IPv4
+    stable_ipv6=$(ip -6 addr show | grep "scope global" | grep -v "temporary" | head -1 | awk '{print $2}' | cut -d'/' -f1)
+    if [ -n "$stable_ipv6" ]; then
+        printf "%s" "$stable_ipv6"
+        return
+    fi
+    
+    # Fallback to any global IPv6
+    temp_ipv6=$(ip -6 addr show | grep "scope global" | head -1 | awk '{print $2}' | cut -d'/' -f1)
+    if [ -n "$temp_ipv6" ]; then
+        printf "%s" "$temp_ipv6"
+        return
+    fi
+    
+    # Fallback to IPv4
+    ip -4 addr show | grep "scope global" | head -1 | awk '{print $2}' | cut -d'/' -f1
 }
 
-# If called directly, show IP info
-if [ "$(basename "$0")" = "ip.sh" ]; then
-    show_ip
-fi
+main() {
+    printf "IPv4: %s\n" "$(get_ipv4)"
+    printf "IPv6: %s\n" "$(get_ipv6)"
+}
