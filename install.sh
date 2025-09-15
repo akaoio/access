@@ -59,7 +59,11 @@ else
             
             while true; do
                 printf "%s: " "$_prompt"
-                read -r _input < /dev/tty
+                if [ -c /dev/tty ]; then
+                    read -r _input < /dev/tty
+                else
+                    read -r _input
+                fi
                 
                 case "$_validation_type" in
                     "yes_no")
@@ -99,7 +103,7 @@ git clone -b main https://github.com/akaoio/access "$LIB"
 # If Access is already installed, ask if the user wants to reinstall it
 if [ "$INSTALLED" = true ]; then
     printf "Access is already installed! Do you want to reinstall it? [y/N]: "
-    read -r confirm < /dev/tty
+    if [ -c /dev/tty ]; then read -r confirm < /dev/tty; else read -r confirm; fi
     case "$confirm" in
         [Yy]*) ;;
         *) printf "Installation aborted.\n"; exit 1 ;;
@@ -109,22 +113,22 @@ fi
 # Prompt for missing values
 if [ -z "$godaddy_key" ]; then
     printf "Enter your GoDaddy API Key: "
-    read -r godaddy_key < /dev/tty
+    if [ -c /dev/tty ]; then read -r godaddy_key < /dev/tty; else read -r godaddy_key; fi
 fi
 
 if [ -z "$godaddy_secret" ]; then
     printf "Enter your GoDaddy API Secret: "
-    read -r godaddy_secret < /dev/tty
+    if [ -c /dev/tty ]; then read -r godaddy_secret < /dev/tty; else read -r godaddy_secret; fi
 fi
 
 if [ -z "$domain" ]; then
     printf "Enter your domain name: "
-    read -r domain < /dev/tty
+    if [ -c /dev/tty ]; then read -r domain < /dev/tty; else read -r domain; fi
 fi
 
 if [ -z "$host" ]; then
     printf "Enter your host name: "
-    read -r host < /dev/tty
+    if [ -c /dev/tty ]; then read -r host < /dev/tty; else read -r host; fi
 fi
 
 # Confirm values
@@ -134,7 +138,7 @@ printf "GoDaddy API Secret: %s\n" "$godaddy_secret"
 printf "Domain: %s\n" "$domain"
 printf "Host: %s\n" "$host"
 printf "Continue with these values? [y/N]: "
-read -r confirm < /dev/tty
+if [ -c /dev/tty ]; then read -r confirm < /dev/tty; else read -r confirm; fi
 case "$confirm" in
     [Yy]*) ;;
     *) printf "Installation aborted.\n"; exit 1 ;;
