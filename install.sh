@@ -28,9 +28,62 @@ while getopts "k:s:d:h:" opt; do
     esac
 done
 
-# Set LIB if it doesn't exist
-if [ -z "$LIB" ]; then
-    LIB="/usr/local/lib/access"
+# Load init.sh to get all path variables
+if [ -f "./init.sh" ]; then
+    # Local development - use local init.sh  
+    . "./init.sh"
+elif [ -f "/usr/local/lib/access/init.sh" ]; then
+    # Already installed - use installed init.sh
+    . "/usr/local/lib/access/init.sh"
+else
+    # Remote install - download init.sh from GitHub
+    _temp_init=$(mktemp)
+    if curl -s https://raw.githubusercontent.com/akaoio/access/main/init.sh > "$_temp_init"; then
+        . "$_temp_init"
+        rm -f "$_temp_init"
+    else
+        # Fallback to hardcoded defaults if download fails
+        CONFIG="/etc/access/config.env"
+        BIN="/usr/local/bin/access"
+        LIB="/usr/local/lib/access"
+        STATE="/var/lib/access"
+        INSTALLED=false
+        YN="Please answer [Y]es or [N]o"
+        ABORTED="Installation aborted."
+        
+        # Define prompt_input function since init.sh not available
+        prompt_input() {
+            _prompt="$1"
+            _validation_type="${2:-any}"
+            _abort_msg="$3"
+            
+            while true; do
+                printf "%s: " "$_prompt"
+                read -r _input < /dev/tty
+                
+                case "$_validation_type" in
+                    "yes_no")
+                        case "$_input" in
+                            [Yy]*) return 0 ;;
+                            [Nn]*) 
+                                [ -n "$_abort_msg" ] && printf "%s\n" "$_abort_msg"
+                                return 1 ;;
+                            *) printf "Please enter Y or N. " ;;
+                        esac
+                        ;;
+                    "non_empty")
+                        if [ -n "$_input" ]; then
+                            PROMPT_RESULT="$_input"
+                            return 0
+                        else
+                            printf "Input cannot be empty. "
+                        fi
+                        ;;
+                    *) PROMPT_RESULT="$_input"; return 0 ;;
+                esac
+            done
+        }
+    fi
 fi
 
 # Install git if not exists
@@ -41,11 +94,6 @@ fi
 # Clone/update access repo to $LIB directory - force fresh clone
 rm -rf "$LIB"
 git clone -b main https://github.com/akaoio/access "$LIB"
-
-# Initialize essential variables and functions
-if [ -f "$LIB/init.sh" ]; then
-    . "$LIB/init.sh"
-fi
 
 # Check if Access is installed
 # If Access is already installed, ask if the user wants to reinstall it
