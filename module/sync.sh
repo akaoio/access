@@ -31,11 +31,14 @@ sync_dns() {
     
     # Get current IP using access command
     ip=$("$BIN" ip 2>/dev/null | grep "IPv6:" | cut -d' ' -f2)
-    if [ -z "$ip" ] || [ "$ip" = "Not available" ]; then
+    if [ -z "$ip" ] || [ "$ip" = "Not" ]; then
         ip=$("$BIN" ip 2>/dev/null | grep "IPv4:" | cut -d' ' -f2)
     fi
     
-    [ -z "$ip" ] && { printf "WARNING: No IP found\n"; return 1; }
+    if [ -z "$ip" ] || [ "$ip" = "Not" ]; then
+        printf "WARNING: No IP found\n"
+        return 1
+    fi
     
     # Check if IP changed first (before timestamp)
     if [ -f "$LAST_IP_FILE" ] && [ "$(cat "$LAST_IP_FILE" 2>/dev/null)" = "$ip" ]; then
