@@ -19,7 +19,8 @@ sync_dns() {
     mkdir -p "$STATE_DIR" 2>/dev/null || true
     
     LOCK_FILE="$STATE_DIR/sync.lock"
-    LAST_IP_FILE="$STATE_DIR/last_ip"
+    LAST_IPV4_FILE="$STATE_DIR/last_ipv4"
+    LAST_IPV6_FILE="$STATE_DIR/last_ipv6"
     LAST_RUN_FILE="$STATE_DIR/last_run"
     
     # Process lock to prevent concurrent runs
@@ -29,21 +30,22 @@ sync_dns() {
         return 0
     fi
     
-    # Get current IP using access command
-    ip=$("$BIN" ip 2>/dev/null | grep "IPv6:" | cut -d' ' -f2)
-    if [ -z "$ip" ] || [ "$ip" = "Not" ]; then
-        ip=$("$BIN" ip 2>/dev/null | grep "IPv4:" | cut -d' ' -f2)
+    # Get current IPv4 and IPv6 addresses
+    ipv4=$("$BIN" ip 2>/dev/null | grep "IPv4:" | cut -d' ' -f2)
+    ipv6=$("$BIN" ip 2>/dev/null | grep "IPv6:" | cut -d' ' -f2)
+    
+    # Validate IPs
+    if [ "$ipv4" = "Not" ] || [ -z "$ipv4" ]; then
+        ipv4=""
+    fi
+    if [ "$ipv6" = "Not" ] || [ -z "$ipv6" ]; then
+        ipv6=""
     fi
     
-    if [ -z "$ip" ] || [ "$ip" = "Not" ]; then
-        printf "WARNING: No IP found\n"
+    # Check if we have at least one valid IP
+    if [ -z "$ipv4" ] && [ -z "$ipv6" ]; then
+        printf "WARNING: No valid IP found\n"
         return 1
-    fi
-    
-    # Check if IP changed first (before timestamp)
-    if [ -f "$LAST_IP_FILE" ] && [ "$(cat "$LAST_IP_FILE" 2>/dev/null)" = "$ip" ]; then
-        printf "SYNC: IP unchanged (%s)\n" "$ip"
-        return 0
     fi
     
     # Check if recent sync happened (within 2 minutes) to avoid redundant runs
@@ -58,22 +60,50 @@ sync_dns() {
         fi
     fi
     
-    # Determine DNS record type based on IP format
-    dns_type="A"
-    case "$ip" in *:*) dns_type="AAAA";; esac
+    # Track sync status
+    sync_success=0
     
-    # Update DNS via GoDaddy API
-    if curl -s -X PUT "https://api.godaddy.com/v1/domains/$DOMAIN/records/$dns_type/$HOST" \
-        -H "Authorization: sso-key $GODADDY_KEY:$GODADDY_SECRET" \
-        -H "Content-Type: application/json" \
-        -d "[{\"data\":\"$ip\",\"ttl\":600}]" >/dev/null; then
-        printf "SUCCESS: %s.%s -> %s\n" "$HOST" "$DOMAIN" "$ip"
-        printf "%s\n" "$ip" > "$LAST_IP_FILE"
-        # Record timestamp only after successful sync
+    # Sync IPv4 (A record) if available
+    if [ -n "$ipv4" ]; then
+        last_ipv4=$(cat "$LAST_IPV4_FILE" 2>/dev/null || echo "")
+        if [ "$ipv4" != "$last_ipv4" ]; then
+            if curl -s -X PUT "https://api.godaddy.com/v1/domains/$DOMAIN/records/A/$HOST" \
+                -H "Authorization: sso-key $GODADDY_KEY:$GODADDY_SECRET" \
+                -H "Content-Type: application/json" \
+                -d "[{\"data\":\"$ipv4\",\"ttl\":600}]" >/dev/null; then
+                printf "SUCCESS: %s.%s -> %s (A)\n" "$HOST" "$DOMAIN" "$ipv4"
+                printf "%s\n" "$ipv4" > "$LAST_IPV4_FILE"
+                sync_success=1
+            else
+                printf "ERROR: IPv4 update failed\n"
+            fi
+        else
+            printf "SYNC: IPv4 unchanged (%s)\n" "$ipv4"
+        fi
+    fi
+    
+    # Sync IPv6 (AAAA record) if available
+    if [ -n "$ipv6" ]; then
+        last_ipv6=$(cat "$LAST_IPV6_FILE" 2>/dev/null || echo "")
+        if [ "$ipv6" != "$last_ipv6" ]; then
+            if curl -s -X PUT "https://api.godaddy.com/v1/domains/$DOMAIN/records/AAAA/$HOST" \
+                -H "Authorization: sso-key $GODADDY_KEY:$GODADDY_SECRET" \
+                -H "Content-Type: application/json" \
+                -d "[{\"data\":\"$ipv6\",\"ttl\":600}]" >/dev/null; then
+                printf "SUCCESS: %s.%s -> %s (AAAA)\n" "$HOST" "$DOMAIN" "$ipv6"
+                printf "%s\n" "$ipv6" > "$LAST_IPV6_FILE"
+                sync_success=1
+            else
+                printf "ERROR: IPv6 update failed\n"
+            fi
+        else
+            printf "SYNC: IPv6 unchanged (%s)\n" "$ipv6"
+        fi
+    fi
+    
+    # Record timestamp after sync attempt
+    if [ "$sync_success" -eq 1 ]; then
         printf "%s\n" "$current_epoch" > "$LAST_RUN_FILE"
-    else
-        printf "ERROR: Update failed\n"
-        return 1
     fi
 }
 
