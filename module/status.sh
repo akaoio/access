@@ -8,23 +8,28 @@ show_status() {
         return
     fi
     
-    # Get current IP using access command
-    current_ip=$("$BIN" ip 2>/dev/null | grep "IPv6:" | cut -d' ' -f2)
-    if [ -z "$current_ip" ] || [ "$current_ip" = "Not available" ]; then
-        current_ip=$("$BIN" ip 2>/dev/null | grep "IPv4:" | cut -d' ' -f2)
+    # Get current IPs using access command
+    current_ipv4=$("$BIN" ip 2>/dev/null | grep "IPv4:" | cut -d' ' -f2)
+    current_ipv6=$("$BIN" ip 2>/dev/null | grep "IPv6:" | cut -d' ' -f2)
+    
+    # Validate current IPs
+    if [ "$current_ipv4" = "Not" ] || [ -z "$current_ipv4" ]; then
+        current_ipv4="?"
     fi
-    if [ -z "$current_ip" ]; then
-        current_ip="?"
+    if [ "$current_ipv6" = "Not" ] || [ -z "$current_ipv6" ]; then
+        current_ipv6="?"
     fi
     
     # Get state file paths
     STATE_DIR="/var/lib/access"
-    LAST_IP_FILE="$STATE_DIR/last_ip"
+    LAST_IPV4_FILE="$STATE_DIR/last_ipv4"
+    LAST_IPV6_FILE="$STATE_DIR/last_ipv6"
     LAST_RUN_FILE="$STATE_DIR/last_run"
     LAST_UPGRADE_FILE="$STATE_DIR/last_upgrade"
     
     # Read state information
-    last_ip=$(cat "$LAST_IP_FILE" 2>/dev/null || echo "?")
+    last_ipv4=$(cat "$LAST_IPV4_FILE" 2>/dev/null || echo "?")
+    last_ipv6=$(cat "$LAST_IPV6_FILE" 2>/dev/null || echo "?")
     
     # Read timestamp files (now contain epoch seconds)
     if [ -f "$LAST_RUN_FILE" ]; then
@@ -52,7 +57,9 @@ show_status() {
     
     # Display status information
     cat << EOF
-STATUS: ${HOST:-unknown}.${DOMAIN:-unknown} | IP: ${current_ip:-?} | Last: $last_ip
+STATUS: ${HOST:-unknown}.${DOMAIN:-unknown}
+IPv4: ${current_ipv4} | Last: ${last_ipv4}
+IPv6: ${current_ipv6} | Last: ${last_ipv6}
 TIME: Run: $last_run | Upgrade: $last_upgrade
 EOF
     
