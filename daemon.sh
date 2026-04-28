@@ -41,9 +41,33 @@ cleanup() {
 
 trap cleanup TERM INT
 
+# Wait until a default route exists (network is up)
+wait_for_network() {
+    attempts=0
+    while [ "$attempts" -lt 60 ]; do
+        ip route show default 2>/dev/null | grep -q "default" && return 0
+        log_info "Waiting for network... ($((attempts + 1))/60)"
+        sleep 2
+        attempts=$((attempts + 1))
+    done
+    log_error "Network not available after 2 minutes"
+    return 1
+}
+
 log_info "Starting Access daemon - real-time IP monitoring"
 
-# Main monitoring loop
+# Initial sync on startup — handles case where IP was already assigned before daemon started
+# (machine booted after modem, or daemon restarted)
+if wait_for_network; then
+    log_info "Network up, running initial sync"
+    "$BIN" sync >> "$LOG_DIR/access.log" 2>>"$LOG_DIR/error.log" \
+        && log_info "Initial sync done" \
+        || log_error "Initial sync failed, will retry on next IP change"
+else
+    log_error "No network at startup, will sync when IP appears"
+fi
+
+# Main monitoring loop — catch future IP changes in real-time
 while true; do
     log_info "Starting IP monitor session"
     
@@ -52,7 +76,7 @@ while true; do
         case "$line" in
             *"scope global"*)
                 log_info "IP change detected: $line"
-                if "$BIN" sync 2>>"$LOG_DIR/error.log"; then
+                if "$BIN" sync >> "$LOG_DIR/access.log" 2>>"$LOG_DIR/error.log"; then
                     log_info "DNS sync successful"
                 else
                     log_error "DNS sync failed, will retry on next change"

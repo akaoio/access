@@ -21,7 +21,6 @@ sync_dns() {
     LOCK_FILE="$STATE_DIR/sync.lock"
     LAST_IPV4_FILE="$STATE_DIR/last_ipv4"
     LAST_IPV6_FILE="$STATE_DIR/last_ipv6"
-    LAST_RUN_FILE="$STATE_DIR/last_run"
     
     # Process lock to prevent concurrent runs
     if ! (
@@ -46,18 +45,6 @@ sync_dns() {
     if [ -z "$ipv4" ] && [ -z "$ipv6" ]; then
         printf "WARNING: No valid IP found\n"
         return 1
-    fi
-    
-    # Check if recent sync happened (within 2 minutes) to avoid redundant runs
-    current_epoch=$(date +%s)
-    if [ -f "$LAST_RUN_FILE" ]; then
-        last_epoch=$(cat "$LAST_RUN_FILE" 2>/dev/null || echo "0")
-        time_diff=$((current_epoch - last_epoch))
-        
-        if [ "$time_diff" -lt 120 ]; then
-            printf "SKIP: Recent sync %ss ago, skipping\n" "$time_diff"
-            return 0
-        fi
     fi
     
     # Track sync status
@@ -101,9 +88,10 @@ sync_dns() {
         fi
     fi
     
-    # Record timestamp after sync attempt
+    # Record timestamp after successful sync
     if [ "$sync_success" -eq 1 ]; then
-        printf "%s\n" "$current_epoch" > "$LAST_RUN_FILE"
+        log_time=$(date +%s)
+        printf "%s\n" "$log_time" > "$STATE_DIR/last_run"
     fi
 }
 
