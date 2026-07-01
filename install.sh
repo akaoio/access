@@ -170,7 +170,10 @@ if [ "$provider" = "cloudflare" ] && [ -z "$cloudflare_zone_id" ]; then
     _cf_zone_resp=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=$domain" \
         -H "Authorization: Bearer $cloudflare_token" \
         -H "Content-Type: application/json")
-    cloudflare_zone_id=$(printf "%s" "$_cf_zone_resp" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -1)
+    # Cloudflare's zone object nests other "id" fields (account.id, plan.id, ...)
+    # after its own id, so grab the first match in appearance order, not a
+    # greedy sed match which would silently grab the wrong (later) one.
+    cloudflare_zone_id=$(printf "%s" "$_cf_zone_resp" | grep -o '"id":"[^"]*"' | head -1 | sed 's/"id":"\([^"]*\)"/\1/')
     if [ -z "$cloudflare_zone_id" ]; then
         printf "WARNING: Could not auto-resolve Zone ID (check token permissions and domain).\n"
         printf "Enter your Cloudflare Zone ID manually (Cloudflare dashboard > your domain > Overview > API section): "

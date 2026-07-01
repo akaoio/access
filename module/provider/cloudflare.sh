@@ -17,9 +17,12 @@ _cf_record_name() {
     fi
 }
 
-# Extract the first "id":"..." value from a Cloudflare JSON response on stdin
+# Extract the first "id":"..." value from a Cloudflare JSON response on stdin.
+# Cloudflare objects nest other "id" fields (account.id, plan.id, ...) after the
+# resource's own id, so a greedy sed match would grab the wrong one; grep -o
+# lists matches in appearance order, so head -1 gets the resource's own id.
 _cf_extract_id() {
-    sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -1
+    grep -o '"id":"[^"]*"' | head -1 | sed 's/"id":"\([^"]*\)"/\1/'
 }
 
 # $1 = record type (A/AAAA) -> prints existing record id, empty if none
