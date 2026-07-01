@@ -10,6 +10,7 @@ fi
 CONFIG="/etc/access/config.env"
 BIN="/usr/local/bin/access"
 LIB="/usr/local/lib/access"
+STATE="/var/lib/access"
 INSTALLED=false
 
 YN="Please answer [Y]es or [N]o"

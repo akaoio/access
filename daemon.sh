@@ -2,17 +2,14 @@
 # Daemon script for Access Eternal - Real-time IP monitoring
 set -e
 
-# Get paths from init.sh if available
-if [ -f "$(dirname "$0")/init.sh" ]; then
-    . "$(dirname "$0")/init.sh"
-elif [ -f "/usr/local/lib/access/init.sh" ]; then
-    . "/usr/local/lib/access/init.sh"
-else
-    # Fallback defaults
-    BIN="/usr/local/bin/access"
-    LIB="/usr/local/lib/access"
-    STATE="/var/lib/access"
+# daemon.sh is only ever launched by systemd with an absolute ExecStart path
+# (see install.sh), so dirname "$0" reliably points at the installed $LIB
+# directory where init.sh - the single source of truth for these paths - lives.
+if [ ! -f "$(dirname "$0")/init.sh" ]; then
+    printf "ERROR: init.sh not found next to %s. Reinstall Access.\n" "$0" >&2
+    exit 1
 fi
+. "$(dirname "$0")/init.sh"
 
 # Ensure we have access command
 if [ ! -f "$BIN" ]; then

@@ -4,7 +4,7 @@
 show_status() {
     # Check for config first
     if [ ! -f "$CONFIG" ]; then
-        printf "No config. Please run 'access setup' to configure access.\n"
+        printf "No config found at %s. Run install.sh to configure Access.\n" "$CONFIG"
         return
     fi
     
@@ -22,7 +22,7 @@ show_status() {
     
     # Get state file paths (namespaced by provider, see module/sync.sh)
     PROVIDER="${PROVIDER:-godaddy}"
-    STATE_DIR="/var/lib/access"
+    STATE_DIR="$STATE"
     LAST_IPV4_FILE="$STATE_DIR/last_ipv4_$PROVIDER"
     LAST_IPV6_FILE="$STATE_DIR/last_ipv6_$PROVIDER"
     LAST_RUN_FILE="$STATE_DIR/last_run"

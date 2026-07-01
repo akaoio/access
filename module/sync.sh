@@ -23,7 +23,7 @@ sync_dns() {
     [ -z "$HOST" ] && { printf "WARNING: No HOST configured\n"; return 6; }
 
     # Ensure state directory exists
-    STATE_DIR="/var/lib/access"
+    STATE_DIR="$STATE"
     mkdir -p "$STATE_DIR" 2>/dev/null || true
     
     LOCK_FILE="$STATE_DIR/sync.lock"

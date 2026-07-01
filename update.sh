@@ -2,22 +2,15 @@
 # Update script for Access Eternal
 set -e
 
-# Get paths from init.sh if available
-if [ -f "$(dirname "$0")/init.sh" ]; then
-    . "$(dirname "$0")/init.sh"
-elif [ -f "/usr/local/lib/access/init.sh" ]; then
-    . "/usr/local/lib/access/init.sh"
-else
-    # Fallback defaults
-    BIN="/usr/local/bin/access"
-    LIB="/usr/local/lib/access"
-fi
-
-# Check if running as root
-if [ "$(id -u)" -ne 0 ]; then
-    printf "This script must be run as root. Please use sudo.\n"
+# update.sh is only ever launched via the access dispatcher (sh "$LIB/update.sh"),
+# so dirname "$0" reliably points at the installed $LIB directory where
+# init.sh - the single source of truth for these paths - lives. init.sh also
+# enforces the root requirement, so no separate check is needed here.
+if [ ! -f "$(dirname "$0")/init.sh" ]; then
+    printf "ERROR: init.sh not found next to %s. Reinstall Access.\n" "$0" >&2
     exit 1
 fi
+. "$(dirname "$0")/init.sh"
 
 # Verify LIB directory exists and is a git repository
 if [ ! -d "$LIB" ]; then
@@ -59,7 +52,7 @@ else
 fi
 
 # Record update timestamp
-STATE_DIR="/var/lib/access"
+STATE_DIR="$STATE"
 mkdir -p "$STATE_DIR" 2>/dev/null || true
 printf "%s\n" "$(date +%s)" > "$STATE_DIR/last_upgrade"
 
