@@ -73,4 +73,10 @@ if [ -d "$STATE_DIR" ]; then
     printf "Removed state directory: %s\n" "$STATE_DIR"
 fi
 
+# Remove log directory
+if [ -d "$LOG" ]; then
+    rm -rf "$LOG"
+    printf "Removed log directory: %s\n" "$LOG"
+fi
+
 printf "Access Eternal uninstalled successfully!\n"
