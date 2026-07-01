@@ -20,10 +20,11 @@ show_status() {
         current_ipv6="?"
     fi
     
-    # Get state file paths
+    # Get state file paths (namespaced by provider, see module/sync.sh)
+    PROVIDER="${PROVIDER:-godaddy}"
     STATE_DIR="/var/lib/access"
-    LAST_IPV4_FILE="$STATE_DIR/last_ipv4"
-    LAST_IPV6_FILE="$STATE_DIR/last_ipv6"
+    LAST_IPV4_FILE="$STATE_DIR/last_ipv4_$PROVIDER"
+    LAST_IPV6_FILE="$STATE_DIR/last_ipv6_$PROVIDER"
     LAST_RUN_FILE="$STATE_DIR/last_run"
     LAST_UPGRADE_FILE="$STATE_DIR/last_upgrade"
     

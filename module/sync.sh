@@ -27,8 +27,11 @@ sync_dns() {
     mkdir -p "$STATE_DIR" 2>/dev/null || true
     
     LOCK_FILE="$STATE_DIR/sync.lock"
-    LAST_IPV4_FILE="$STATE_DIR/last_ipv4"
-    LAST_IPV6_FILE="$STATE_DIR/last_ipv6"
+    # Namespaced by provider: switching provider (even with an unchanged IP)
+    # must not be skipped as a false "unchanged" dedup match against the
+    # previous provider's last-synced state.
+    LAST_IPV4_FILE="$STATE_DIR/last_ipv4_$PROVIDER"
+    LAST_IPV6_FILE="$STATE_DIR/last_ipv6_$PROVIDER"
     
     # Process lock to prevent concurrent runs
     if ! (
