@@ -128,6 +128,18 @@ MIT License
 3. Follow existing code patterns
 4. Document any new dependencies
 
+### Adding a DNS Provider
+
+All provider-specific code must stay inside a single `module/provider/<name>.sh` file - never in `sync.sh`, `install.sh`, or a shared config template. A provider module implements:
+
+- `provider_validate()` - checks its own required config vars are set, printing `WARNING: ...` and `return 6` if not
+- `provider_update_record TYPE VALUE` - updates the A/AAAA record (`TYPE` is `A`/`AAAA`, `VALUE` is the IP)
+- `provider_install_prompt DOMAIN HOST` - install-time: prompt for credentials, resolve anything domain-dependent
+- `provider_install_summary()` - install-time: print the values for the confirmation prompt
+- `provider_write_config CONFIG_PATH` - install-time: append this provider's `KEY=VALUE` lines to the config file
+
+`sync.sh` and `install.sh` only call these hooks by name (`$PROVIDER.sh` is sourced dynamically) - they must never reference a provider-specific variable or endpoint directly.
+
 ---
 
 **Access Eternal** - Because network connectivity shouldn't be complicated.
