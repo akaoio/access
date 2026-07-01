@@ -1,7 +1,10 @@
 #!/bin/sh
 
+provider=""
 godaddy_key=""
 godaddy_secret=""
+cloudflare_token=""
+cloudflare_zone_id=""
 domain=""
 host=""
 
@@ -9,19 +12,25 @@ host=""
 for arg in "$@"; do
     shift # Shift all arguments to the left
     case "$arg" in
-        --godaddy_key)    set -- "$@" "-k" ;;
-        --godaddy_secret) set -- "$@" "-s" ;;
-        --domain)         set -- "$@" "-d" ;;
-        --host)           set -- "$@" "-h" ;;
-        *)                set -- "$@" "$arg" ;;
+        --provider)          set -- "$@" "-p" ;;
+        --godaddy_key)       set -- "$@" "-k" ;;
+        --godaddy_secret)    set -- "$@" "-s" ;;
+        --cloudflare_token)  set -- "$@" "-t" ;;
+        --cloudflare_zone)   set -- "$@" "-z" ;;
+        --domain)            set -- "$@" "-d" ;;
+        --host)              set -- "$@" "-h" ;;
+        *)                   set -- "$@" "$arg" ;;
     esac
 done
 
 # Check options
-while getopts "k:s:d:h:" opt; do
+while getopts "p:k:s:t:z:d:h:" opt; do
     case $opt in
+        p) provider="$OPTARG" ;;
         k) godaddy_key="$OPTARG" ;;
         s) godaddy_secret="$OPTARG" ;;
+        t) cloudflare_token="$OPTARG" ;;
+        z) cloudflare_zone_id="$OPTARG" ;;
         d) domain="$OPTARG" ;;
         h) host="$OPTARG" ;;
         *) printf "Invalid option: -$OPTARG" >&2; exit 1 ;;
@@ -110,15 +119,39 @@ if [ "$INSTALLED" = true ]; then
     esac
 fi
 
-# Prompt for missing values
-if [ -z "$godaddy_key" ]; then
-    printf "Enter your GoDaddy API Key: "
-    if [ -c /dev/tty ]; then read -r godaddy_key < /dev/tty; else read -r godaddy_key; fi
+# Prompt for DNS provider
+if [ -z "$provider" ]; then
+    printf "Select your DNS provider:\n"
+    printf "  1) GoDaddy\n"
+    printf "  2) Cloudflare\n"
+    printf "Enter choice [1-2]: "
+    if [ -c /dev/tty ]; then read -r _provider_choice < /dev/tty; else read -r _provider_choice; fi
+    case "$_provider_choice" in
+        2) provider="cloudflare" ;;
+        *) provider="godaddy" ;;
+    esac
 fi
+case "$provider" in
+    godaddy|cloudflare) ;;
+    *) printf "Unknown provider '%s'. Must be 'godaddy' or 'cloudflare'.\n" "$provider"; exit 1 ;;
+esac
 
-if [ -z "$godaddy_secret" ]; then
-    printf "Enter your GoDaddy API Secret: "
-    if [ -c /dev/tty ]; then read -r godaddy_secret < /dev/tty; else read -r godaddy_secret; fi
+# Prompt for provider-specific credentials
+if [ "$provider" = "godaddy" ]; then
+    if [ -z "$godaddy_key" ]; then
+        printf "Enter your GoDaddy API Key: "
+        if [ -c /dev/tty ]; then read -r godaddy_key < /dev/tty; else read -r godaddy_key; fi
+    fi
+
+    if [ -z "$godaddy_secret" ]; then
+        printf "Enter your GoDaddy API Secret: "
+        if [ -c /dev/tty ]; then read -r godaddy_secret < /dev/tty; else read -r godaddy_secret; fi
+    fi
+else
+    if [ -z "$cloudflare_token" ]; then
+        printf "Enter your Cloudflare API Token (needs Zone:Read + DNS:Edit permissions): "
+        if [ -c /dev/tty ]; then read -r cloudflare_token < /dev/tty; else read -r cloudflare_token; fi
+    fi
 fi
 
 if [ -z "$domain" ]; then
@@ -131,10 +164,32 @@ if [ -z "$host" ]; then
     if [ -c /dev/tty ]; then read -r host < /dev/tty; else read -r host; fi
 fi
 
+# Resolve Cloudflare Zone ID from the domain if not already supplied
+if [ "$provider" = "cloudflare" ] && [ -z "$cloudflare_zone_id" ]; then
+    printf "Resolving Cloudflare Zone ID for %s...\n" "$domain"
+    _cf_zone_resp=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=$domain" \
+        -H "Authorization: Bearer $cloudflare_token" \
+        -H "Content-Type: application/json")
+    cloudflare_zone_id=$(printf "%s" "$_cf_zone_resp" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -1)
+    if [ -z "$cloudflare_zone_id" ]; then
+        printf "WARNING: Could not auto-resolve Zone ID (check token permissions and domain).\n"
+        printf "Enter your Cloudflare Zone ID manually (Cloudflare dashboard > your domain > Overview > API section): "
+        if [ -c /dev/tty ]; then read -r cloudflare_zone_id < /dev/tty; else read -r cloudflare_zone_id; fi
+    else
+        printf "Resolved Zone ID: %s\n" "$cloudflare_zone_id"
+    fi
+fi
+
 # Confirm values
 printf "Please confirm the following values:\n"
-printf "GoDaddy API Key: %s\n" "$godaddy_key"
-printf "GoDaddy API Secret: %s\n" "$godaddy_secret"
+printf "Provider: %s\n" "$provider"
+if [ "$provider" = "godaddy" ]; then
+    printf "GoDaddy API Key: %s\n" "$godaddy_key"
+    printf "GoDaddy API Secret: %s\n" "$godaddy_secret"
+else
+    printf "Cloudflare API Token: %s\n" "$cloudflare_token"
+    printf "Cloudflare Zone ID: %s\n" "$cloudflare_zone_id"
+fi
 printf "Domain: %s\n" "$domain"
 printf "Host: %s\n" "$host"
 printf "Continue with these values? [y/N]: "
@@ -153,7 +208,7 @@ fi
 printf "Creating config directory...\n"
 mkdir -p "$(dirname "$CONFIG")"
 printf "Processing config template...\n"
-sed "s/__GODADDY_KEY__/$godaddy_key/g; s/__GODADDY_SECRET__/$godaddy_secret/g; s/__DOMAIN__/$domain/g; s/__HOST__/$host/g" "$LIB/config.env.template" > "$CONFIG"
+sed "s/__PROVIDER__/$provider/g; s/__GODADDY_KEY__/$godaddy_key/g; s/__GODADDY_SECRET__/$godaddy_secret/g; s/__CLOUDFLARE_API_TOKEN__/$cloudflare_token/g; s/__CLOUDFLARE_ZONE_ID__/$cloudflare_zone_id/g; s/__DOMAIN__/$domain/g; s/__HOST__/$host/g" "$LIB/config.env.template" > "$CONFIG"
 printf "Config file created at %s\n" "$CONFIG"
 
 # Copy entry executable file, this makes Access available globally

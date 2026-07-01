@@ -7,13 +7,21 @@ sync_dns() {
         printf "WARNING: No config file found at %s\n" "$CONFIG"
         return 6
     fi
-    
+
+    # Configs created before multi-provider support have no PROVIDER field
+    PROVIDER="${PROVIDER:-godaddy}"
+
+    if [ ! -f "$LIB/module/provider/$PROVIDER.sh" ]; then
+        printf "WARNING: Unknown provider '%s'\n" "$PROVIDER"
+        return 6
+    fi
+    . "$LIB/module/provider/$PROVIDER.sh"
+
     # Check required variables
-    [ -z "$GODADDY_KEY" ] && { printf "WARNING: No GODADDY_KEY configured\n"; return 6; }
-    [ -z "$GODADDY_SECRET" ] && { printf "WARNING: No GODADDY_SECRET configured\n"; return 6; }
+    provider_validate || return $?
     [ -z "$DOMAIN" ] && { printf "WARNING: No DOMAIN configured\n"; return 6; }
     [ -z "$HOST" ] && { printf "WARNING: No HOST configured\n"; return 6; }
-    
+
     # Ensure state directory exists
     STATE_DIR="/var/lib/access"
     mkdir -p "$STATE_DIR" 2>/dev/null || true
@@ -54,10 +62,7 @@ sync_dns() {
     if [ -n "$ipv4" ]; then
         last_ipv4=$(cat "$LAST_IPV4_FILE" 2>/dev/null || echo "")
         if [ "$ipv4" != "$last_ipv4" ]; then
-            if curl -s -X PUT "https://api.godaddy.com/v1/domains/$DOMAIN/records/A/$HOST" \
-                -H "Authorization: sso-key $GODADDY_KEY:$GODADDY_SECRET" \
-                -H "Content-Type: application/json" \
-                -d "[{\"data\":\"$ipv4\",\"ttl\":600}]" >/dev/null; then
+            if provider_update_record A "$ipv4"; then
                 printf "SUCCESS: %s.%s -> %s (A)\n" "$HOST" "$DOMAIN" "$ipv4"
                 printf "%s\n" "$ipv4" > "$LAST_IPV4_FILE"
                 sync_success=1
@@ -73,10 +78,7 @@ sync_dns() {
     if [ -n "$ipv6" ]; then
         last_ipv6=$(cat "$LAST_IPV6_FILE" 2>/dev/null || echo "")
         if [ "$ipv6" != "$last_ipv6" ]; then
-            if curl -s -X PUT "https://api.godaddy.com/v1/domains/$DOMAIN/records/AAAA/$HOST" \
-                -H "Authorization: sso-key $GODADDY_KEY:$GODADDY_SECRET" \
-                -H "Content-Type: application/json" \
-                -d "[{\"data\":\"$ipv6\",\"ttl\":600}]" >/dev/null; then
+            if provider_update_record AAAA "$ipv6"; then
                 printf "SUCCESS: %s.%s -> %s (AAAA)\n" "$HOST" "$DOMAIN" "$ipv6"
                 printf "%s\n" "$ipv6" > "$LAST_IPV6_FILE"
                 sync_success=1

@@ -57,7 +57,7 @@ show_status() {
     
     # Display status information
     cat << EOF
-STATUS: ${HOST:-unknown}.${DOMAIN:-unknown}
+STATUS: ${HOST:-unknown}.${DOMAIN:-unknown} (${PROVIDER:-godaddy})
 IPv4: ${current_ipv4} | Last: ${last_ipv4}
 IPv6: ${current_ipv6} | Last: ${last_ipv6}
 TIME: Run: $last_run | Upgrade: $last_upgrade
