@@ -18,7 +18,7 @@ if [ ! -f "$BIN" ]; then
 fi
 
 # Create log directory
-LOG_DIR="/var/log/access"
+LOG_DIR="$LOG"
 mkdir -p "$LOG_DIR" 2>/dev/null || true
 
 log_info() {

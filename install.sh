@@ -49,6 +49,7 @@ else
         BIN="/usr/local/bin/access"
         LIB="/usr/local/lib/access"
         STATE="/var/lib/access"
+        LOG="/var/log/access"
         INSTALLED=false
         YN="Please answer [Y]es or [N]o"
         ABORTED="Installation aborted."
@@ -184,8 +185,8 @@ printf "Executable copied successfully\n"
 
 # Create log directories
 printf "Creating log directories...\n"
-mkdir -p /var/log/access
-chmod 755 /var/log/access
+mkdir -p "$LOG"
+chmod 755 "$LOG"
 printf "Log directories created\n"
 
 # Process and install systemd service files

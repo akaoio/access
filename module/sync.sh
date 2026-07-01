@@ -8,9 +8,6 @@ sync_dns() {
         return 6
     fi
 
-    # Configs created before multi-provider support have no PROVIDER field
-    PROVIDER="${PROVIDER:-godaddy}"
-
     if [ ! -f "$LIB/module/provider/$PROVIDER.sh" ]; then
         printf "WARNING: Unknown provider '%s'\n" "$PROVIDER"
         return 6

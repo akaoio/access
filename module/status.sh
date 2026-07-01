@@ -21,7 +21,6 @@ show_status() {
     fi
     
     # Get state file paths (namespaced by provider, see module/sync.sh)
-    PROVIDER="${PROVIDER:-godaddy}"
     STATE_DIR="$STATE"
     LAST_IPV4_FILE="$STATE_DIR/last_ipv4_$PROVIDER"
     LAST_IPV6_FILE="$STATE_DIR/last_ipv6_$PROVIDER"
@@ -58,7 +57,7 @@ show_status() {
     
     # Display status information
     cat << EOF
-STATUS: ${HOST:-unknown}.${DOMAIN:-unknown} (${PROVIDER:-godaddy})
+STATUS: ${HOST:-unknown}.${DOMAIN:-unknown} ($PROVIDER)
 IPv4: ${current_ipv4} | Last: ${last_ipv4}
 IPv6: ${current_ipv6} | Last: ${last_ipv6}
 TIME: Run: $last_run | Upgrade: $last_upgrade

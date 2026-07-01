@@ -11,6 +11,7 @@ CONFIG="/etc/access/config.env"
 BIN="/usr/local/bin/access"
 LIB="/usr/local/lib/access"
 STATE="/var/lib/access"
+LOG="/var/log/access"
 INSTALLED=false
 
 YN="Please answer [Y]es or [N]o"
@@ -20,6 +21,9 @@ ABORTED="Installation aborted."
 if [ -f "$CONFIG" ]; then
     . "$CONFIG"
 fi
+
+# Configs created before multi-provider support have no PROVIDER field
+PROVIDER="${PROVIDER:-godaddy}"
 
 # Check if Access is already installed
 if [ -f "$BIN" ] && [ -d "$LIB" ]; then
