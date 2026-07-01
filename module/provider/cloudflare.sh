@@ -51,3 +51,39 @@ provider_update_record() {
             -d "{\"type\":\"$_cf_type\",\"name\":\"$(_cf_record_name)\",\"content\":\"$_cf_value\",\"ttl\":600,\"proxied\":false}" >/dev/null
     fi
 }
+
+# Install-time: prompt for this provider's credentials and resolve anything
+# that depends on the domain (Zone ID). $1 = domain, $2 = host (unused here)
+provider_install_prompt() {
+    if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+        printf "Enter your Cloudflare API Token (needs Zone:Read + DNS:Edit permissions): "
+        if [ -c /dev/tty ]; then read -r CLOUDFLARE_API_TOKEN < /dev/tty; else read -r CLOUDFLARE_API_TOKEN; fi
+    fi
+
+    if [ -z "$CLOUDFLARE_ZONE_ID" ]; then
+        printf "Resolving Cloudflare Zone ID for %s...\n" "$1"
+        _cf_zone_resp=$(curl -s -X GET "$CLOUDFLARE_API/zones?name=$1" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H "Content-Type: application/json")
+        CLOUDFLARE_ZONE_ID=$(printf "%s" "$_cf_zone_resp" | _cf_extract_id)
+        if [ -z "$CLOUDFLARE_ZONE_ID" ]; then
+            printf "WARNING: Could not auto-resolve Zone ID (check token permissions and domain).\n"
+            printf "Enter your Cloudflare Zone ID manually (Cloudflare dashboard > your domain > Overview > API section): "
+            if [ -c /dev/tty ]; then read -r CLOUDFLARE_ZONE_ID < /dev/tty; else read -r CLOUDFLARE_ZONE_ID; fi
+        else
+            printf "Resolved Zone ID: %s\n" "$CLOUDFLARE_ZONE_ID"
+        fi
+    fi
+}
+
+# Install-time: print the values that will be saved, for install.sh's confirmation prompt
+provider_install_summary() {
+    printf "Cloudflare API Token: %s\n" "$CLOUDFLARE_API_TOKEN"
+    printf "Cloudflare Zone ID: %s\n" "$CLOUDFLARE_ZONE_ID"
+}
+
+# Install-time: append this provider's fields to the config file at $1
+provider_write_config() {
+    printf "CLOUDFLARE_API_TOKEN=%s\n" "$CLOUDFLARE_API_TOKEN" >> "$1"
+    printf "CLOUDFLARE_ZONE_ID=%s\n" "$CLOUDFLARE_ZONE_ID" >> "$1"
+}

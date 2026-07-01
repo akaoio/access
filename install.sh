@@ -1,10 +1,11 @@
 #!/bin/sh
 
+# Provider-specific credential variables (e.g. GODADDY_KEY, CLOUDFLARE_API_TOKEN)
+# are intentionally not known here - install.sh stays generic and each
+# module/provider/*.sh owns its own fields via the provider_install_* hooks.
+# Pre-seed them by exporting the env var the provider expects, e.g.:
+#   GODADDY_KEY=xxx GODADDY_SECRET=yyy sudo -E ./install.sh -p godaddy -d example.com -h server1
 provider=""
-godaddy_key=""
-godaddy_secret=""
-cloudflare_token=""
-cloudflare_zone_id=""
 domain=""
 host=""
 
@@ -12,25 +13,17 @@ host=""
 for arg in "$@"; do
     shift # Shift all arguments to the left
     case "$arg" in
-        --provider)          set -- "$@" "-p" ;;
-        --godaddy_key)       set -- "$@" "-k" ;;
-        --godaddy_secret)    set -- "$@" "-s" ;;
-        --cloudflare_token)  set -- "$@" "-t" ;;
-        --cloudflare_zone)   set -- "$@" "-z" ;;
-        --domain)            set -- "$@" "-d" ;;
-        --host)              set -- "$@" "-h" ;;
-        *)                   set -- "$@" "$arg" ;;
+        --provider) set -- "$@" "-p" ;;
+        --domain)   set -- "$@" "-d" ;;
+        --host)     set -- "$@" "-h" ;;
+        *)          set -- "$@" "$arg" ;;
     esac
 done
 
 # Check options
-while getopts "p:k:s:t:z:d:h:" opt; do
+while getopts "p:d:h:" opt; do
     case $opt in
         p) provider="$OPTARG" ;;
-        k) godaddy_key="$OPTARG" ;;
-        s) godaddy_secret="$OPTARG" ;;
-        t) cloudflare_token="$OPTARG" ;;
-        z) cloudflare_zone_id="$OPTARG" ;;
         d) domain="$OPTARG" ;;
         h) host="$OPTARG" ;;
         *) printf "Invalid option: -$OPTARG" >&2; exit 1 ;;
@@ -131,28 +124,11 @@ if [ -z "$provider" ]; then
         *) provider="godaddy" ;;
     esac
 fi
-case "$provider" in
-    godaddy|cloudflare) ;;
-    *) printf "Unknown provider '%s'. Must be 'godaddy' or 'cloudflare'.\n" "$provider"; exit 1 ;;
-esac
-
-# Prompt for provider-specific credentials
-if [ "$provider" = "godaddy" ]; then
-    if [ -z "$godaddy_key" ]; then
-        printf "Enter your GoDaddy API Key: "
-        if [ -c /dev/tty ]; then read -r godaddy_key < /dev/tty; else read -r godaddy_key; fi
-    fi
-
-    if [ -z "$godaddy_secret" ]; then
-        printf "Enter your GoDaddy API Secret: "
-        if [ -c /dev/tty ]; then read -r godaddy_secret < /dev/tty; else read -r godaddy_secret; fi
-    fi
-else
-    if [ -z "$cloudflare_token" ]; then
-        printf "Enter your Cloudflare API Token (needs Zone:Read + DNS:Edit permissions): "
-        if [ -c /dev/tty ]; then read -r cloudflare_token < /dev/tty; else read -r cloudflare_token; fi
-    fi
+if [ ! -f "$LIB/module/provider/$provider.sh" ]; then
+    printf "Unknown provider '%s'. Must match a file in module/provider/.\n" "$provider"
+    exit 1
 fi
+. "$LIB/module/provider/$provider.sh"
 
 if [ -z "$domain" ]; then
     printf "Enter your domain name: "
@@ -164,37 +140,16 @@ if [ -z "$host" ]; then
     if [ -c /dev/tty ]; then read -r host < /dev/tty; else read -r host; fi
 fi
 
-# Resolve Cloudflare Zone ID from the domain if not already supplied
-if [ "$provider" = "cloudflare" ] && [ -z "$cloudflare_zone_id" ]; then
-    printf "Resolving Cloudflare Zone ID for %s...\n" "$domain"
-    _cf_zone_resp=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=$domain" \
-        -H "Authorization: Bearer $cloudflare_token" \
-        -H "Content-Type: application/json")
-    # Cloudflare's zone object nests other "id" fields (account.id, plan.id, ...)
-    # after its own id, so grab the first match in appearance order, not a
-    # greedy sed match which would silently grab the wrong (later) one.
-    cloudflare_zone_id=$(printf "%s" "$_cf_zone_resp" | grep -o '"id":"[^"]*"' | head -1 | sed 's/"id":"\([^"]*\)"/\1/')
-    if [ -z "$cloudflare_zone_id" ]; then
-        printf "WARNING: Could not auto-resolve Zone ID (check token permissions and domain).\n"
-        printf "Enter your Cloudflare Zone ID manually (Cloudflare dashboard > your domain > Overview > API section): "
-        if [ -c /dev/tty ]; then read -r cloudflare_zone_id < /dev/tty; else read -r cloudflare_zone_id; fi
-    else
-        printf "Resolved Zone ID: %s\n" "$cloudflare_zone_id"
-    fi
-fi
+# Provider-owned prompting: credentials plus anything that depends on the
+# domain/host (e.g. Cloudflare resolving its Zone ID)
+provider_install_prompt "$domain" "$host"
 
 # Confirm values
 printf "Please confirm the following values:\n"
 printf "Provider: %s\n" "$provider"
-if [ "$provider" = "godaddy" ]; then
-    printf "GoDaddy API Key: %s\n" "$godaddy_key"
-    printf "GoDaddy API Secret: %s\n" "$godaddy_secret"
-else
-    printf "Cloudflare API Token: %s\n" "$cloudflare_token"
-    printf "Cloudflare Zone ID: %s\n" "$cloudflare_zone_id"
-fi
 printf "Domain: %s\n" "$domain"
 printf "Host: %s\n" "$host"
+provider_install_summary
 printf "Continue with these values? [y/N]: "
 if [ -c /dev/tty ]; then read -r confirm < /dev/tty; else read -r confirm; fi
 case "$confirm" in
@@ -207,11 +162,16 @@ if [ -f "$CONFIG" ]; then
     mv "$CONFIG" "$CONFIG.$(date +%s).bak"
 fi
 
-# Create config directory and generate config from template
+# Create config directory and write the config file: generic fields here,
+# provider-specific fields appended by the provider module itself
 printf "Creating config directory...\n"
 mkdir -p "$(dirname "$CONFIG")"
-printf "Processing config template...\n"
-sed "s/__PROVIDER__/$provider/g; s/__GODADDY_KEY__/$godaddy_key/g; s/__GODADDY_SECRET__/$godaddy_secret/g; s/__CLOUDFLARE_API_TOKEN__/$cloudflare_token/g; s/__CLOUDFLARE_ZONE_ID__/$cloudflare_zone_id/g; s/__DOMAIN__/$domain/g; s/__HOST__/$host/g" "$LIB/config.env.template" > "$CONFIG"
+{
+    printf "PROVIDER=%s\n" "$provider"
+    printf "DOMAIN=%s\n" "$domain"
+    printf "HOST=%s\n" "$host"
+} > "$CONFIG"
+provider_write_config "$CONFIG"
 printf "Config file created at %s\n" "$CONFIG"
 
 # Copy entry executable file, this makes Access available globally
