@@ -8,8 +8,8 @@ Type=simple
 Restart=always
 RestartSec=5
 ExecStart=__LIB__/daemon.sh
-StandardOutput=append:/var/log/access/access.log
-StandardError=append:/var/log/access/error.log
+StandardOutput=append:__LOG__/access.log
+StandardError=append:__LOG__/error.log
 
 [Install]
 WantedBy=multi-user.target

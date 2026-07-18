@@ -8,9 +8,11 @@ show_status() {
         return
     fi
     
-    # Get current IPs using access command
-    current_ipv4=$("$BIN" ip 2>/dev/null | grep "IPv4:" | cut -d' ' -f2)
-    current_ipv6=$("$BIN" ip 2>/dev/null | grep "IPv6:" | cut -d' ' -f2)
+    # Get current IPs using a single access invocation (each run costs
+    # external HTTP lookups)
+    _ip_out=$("$BIN" ip 2>/dev/null) || _ip_out=""
+    current_ipv4=$(printf "%s\n" "$_ip_out" | grep "IPv4:" | cut -d' ' -f2)
+    current_ipv6=$(printf "%s\n" "$_ip_out" | grep "IPv6:" | cut -d' ' -f2)
     
     # Validate current IPs
     if [ "$current_ipv4" = "Not" ] || [ -z "$current_ipv4" ]; then
@@ -21,11 +23,10 @@ show_status() {
     fi
     
     # Get state file paths (namespaced by provider, see module/sync.sh)
-    STATE_DIR="$STATE"
-    LAST_IPV4_FILE="$STATE_DIR/last_ipv4_$PROVIDER"
-    LAST_IPV6_FILE="$STATE_DIR/last_ipv6_$PROVIDER"
-    LAST_RUN_FILE="$STATE_DIR/last_run"
-    LAST_UPGRADE_FILE="$STATE_DIR/last_upgrade"
+    LAST_IPV4_FILE="$STATE/last_ipv4_$PROVIDER"
+    LAST_IPV6_FILE="$STATE/last_ipv6_$PROVIDER"
+    LAST_RUN_FILE="$STATE/last_run"
+    LAST_UPGRADE_FILE="$STATE/last_upgrade"
     
     # Read state information
     last_ipv4=$(cat "$LAST_IPV4_FILE" 2>/dev/null || echo "?")
@@ -63,20 +64,14 @@ IPv6: ${current_ipv6} | Last: ${last_ipv6}
 TIME: Run: $last_run | Upgrade: $last_upgrade
 EOF
     
-    # Check service status
+    # Check service status. Access only installs as a system service (FHS
+    # layout), so there is no --user variant to probe. grep -c exits nonzero
+    # on zero matches, so fall back via || (the dispatcher runs under set -e).
+    timer_count=$(systemctl list-timers --all --no-legend 2>/dev/null | grep -c "access.*timer") || timer_count=0
+    cron_jobs=$(crontab -l 2>/dev/null | grep -c access) || cron_jobs=0
     if systemctl is-active access.service >/dev/null 2>&1; then
-        # System service is running
-        service_status="Running"
-        timer_count=$(systemctl list-timers --all --no-legend 2>/dev/null | grep -c "access.*timer" || echo "0")
-        cron_jobs=$(crontab -l 2>/dev/null | grep -c access || echo "0")
-        printf "ACTIVE: System service: %s | Timers: %s | Cron: %s\n" "$service_status" "$timer_count" "$cron_jobs"
-    elif systemctl --user is-active access.service >/dev/null 2>&1; then
-        timer_count=$(systemctl --user list-timers --all --no-legend 2>/dev/null | grep -c "access.*timer" || echo "0")
-        cron_jobs=$(crontab -l 2>/dev/null | grep -c "access" || echo "0")
         printf "ACTIVE: Service: Running | Timers: %s | Cron: %s\n" "$timer_count" "$cron_jobs"
     else
-        timer_count=$(systemctl --user list-timers --all --no-legend 2>/dev/null | grep -c "access.*timer" || echo "0")
-        cron_jobs=$(crontab -l 2>/dev/null | grep -c "access" || echo "0")
         printf "INACTIVE: Service: Down | Timers: %s | Cron: %s\n" "$timer_count" "$cron_jobs"
     fi
 }

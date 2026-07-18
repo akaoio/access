@@ -32,8 +32,9 @@ rm -f /etc/systemd/system/access-update.timer
 # Reload systemd
 systemctl daemon-reload 2>/dev/null || true
 
-# Remove cron jobs
-crontab -l 2>/dev/null | grep -v access | crontab - 2>/dev/null || true
+# Remove only Access's own cron jobs (match on the marker comment and $BIN,
+# not the bare word "access", which could hit unrelated user jobs)
+crontab -l 2>/dev/null | grep -v "Access Eternal\|$BIN" | crontab - 2>/dev/null || true
 
 # Remove executable
 if [ -f "$BIN" ]; then
@@ -67,10 +68,9 @@ if [ -f "$CONFIG" ]; then
 fi
 
 # Remove state directory
-STATE_DIR="$STATE"
-if [ -d "$STATE_DIR" ]; then
-    rm -rf "$STATE_DIR"
-    printf "Removed state directory: %s\n" "$STATE_DIR"
+if [ -d "$STATE" ]; then
+    rm -rf "$STATE"
+    printf "Removed state directory: %s\n" "$STATE"
 fi
 
 # Remove log directory

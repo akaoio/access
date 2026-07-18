@@ -18,15 +18,14 @@ if [ ! -f "$BIN" ]; then
 fi
 
 # Create log directory
-LOG_DIR="$LOG"
-mkdir -p "$LOG_DIR" 2>/dev/null || true
+mkdir -p "$LOG" 2>/dev/null || true
 
 log_info() {
-    printf "[%s] %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$1" >> "$LOG_DIR/access.log"
+    printf "[%s] %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$1" >> "$LOG/access.log"
 }
 
 log_error() {
-    printf "[%s] ERROR: %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$1" >> "$LOG_DIR/error.log"
+    printf "[%s] ERROR: %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$1" >> "$LOG/error.log"
     printf "[%s] ERROR: %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$1" >&2
 }
 
@@ -57,7 +56,7 @@ log_info "Starting Access daemon - real-time IP monitoring"
 # (machine booted after modem, or daemon restarted)
 if wait_for_network; then
     log_info "Network up, running initial sync"
-    "$BIN" sync >> "$LOG_DIR/access.log" 2>>"$LOG_DIR/error.log" \
+    "$BIN" sync >> "$LOG/access.log" 2>>"$LOG/error.log" \
         && log_info "Initial sync done" \
         || log_error "Initial sync failed, will retry on next IP change"
 else
@@ -73,7 +72,7 @@ while true; do
         case "$line" in
             *"scope global"*)
                 log_info "IP change detected: $line"
-                if "$BIN" sync >> "$LOG_DIR/access.log" 2>>"$LOG_DIR/error.log"; then
+                if "$BIN" sync >> "$LOG/access.log" 2>>"$LOG/error.log"; then
                     log_info "DNS sync successful"
                 else
                     log_error "DNS sync failed, will retry on next change"

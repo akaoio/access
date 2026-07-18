@@ -20,26 +20,30 @@ sync_dns() {
     [ -z "$HOST" ] && { printf "WARNING: No HOST configured\n"; return 6; }
 
     # Ensure state directory exists
-    STATE_DIR="$STATE"
-    mkdir -p "$STATE_DIR" 2>/dev/null || true
-    
-    LOCK_FILE="$STATE_DIR/sync.lock"
+    mkdir -p "$STATE" 2>/dev/null || true
+
+    LOCK_FILE="$STATE/sync.lock"
     # Namespaced by provider: switching provider (even with an unchanged IP)
     # must not be skipped as a false "unchanged" dedup match against the
     # previous provider's last-synced state.
-    LAST_IPV4_FILE="$STATE_DIR/last_ipv4_$PROVIDER"
-    LAST_IPV6_FILE="$STATE_DIR/last_ipv6_$PROVIDER"
+    LAST_IPV4_FILE="$STATE/last_ipv4_$PROVIDER"
+    LAST_IPV6_FILE="$STATE/last_ipv6_$PROVIDER"
     
-    # Process lock to prevent concurrent runs
-    if ! (
-        flock -n 9 || { printf "LOCK: Another sync in progress, skipping\n"; exit 1; }
-    ) 9>"$LOCK_FILE"; then
+    # Hold the lock on fd 9 for the rest of the process, not just a subshell
+    # check: daemon, systemd timer and cron can all fire at once, and an
+    # overlapping run is what creates duplicate DNS records upstream. The fd
+    # (and lock) is released automatically when the process exits.
+    exec 9>"$LOCK_FILE"
+    if ! flock -n 9; then
+        printf "LOCK: Another sync in progress, skipping\n"
         return 0
     fi
     
-    # Get current IPv4 and IPv6 addresses
-    ipv4=$("$BIN" ip 2>/dev/null | grep "IPv4:" | cut -d' ' -f2)
-    ipv6=$("$BIN" ip 2>/dev/null | grep "IPv6:" | cut -d' ' -f2)
+    # Get current IPv4 and IPv6 addresses. One `access ip` invocation only:
+    # each run costs external HTTP lookups, so don't pay for it twice.
+    _ip_out=$("$BIN" ip 2>/dev/null) || _ip_out=""
+    ipv4=$(printf "%s\n" "$_ip_out" | grep "IPv4:" | cut -d' ' -f2)
+    ipv6=$(printf "%s\n" "$_ip_out" | grep "IPv6:" | cut -d' ' -f2)
     
     # Validate IPs
     if [ "$ipv4" = "Not" ] || [ -z "$ipv4" ]; then
@@ -93,7 +97,7 @@ sync_dns() {
     # Record timestamp after successful sync
     if [ "$sync_success" -eq 1 ]; then
         log_time=$(date +%s)
-        printf "%s\n" "$log_time" > "$STATE_DIR/last_run"
+        printf "%s\n" "$log_time" > "$STATE/last_run"
     fi
 }
 

@@ -2,28 +2,24 @@
 # Access Eternal - Minimal POSIX dynamic DNS
 set -e
 
-# Set LIB if it doesn't exist
+# Default to the installed library; overridable via env for development
 if [ -z "$LIB" ]; then
     LIB="/usr/local/lib/access"
 fi
 
-# Initialize essential variables and functions (without root check for ip command)
 command="${1:-help}"
+
+# ip and help are read-only: let init.sh skip its root requirement for them
 if [ "$command" = "ip" ] || [ "$command" = "help" ]; then
-    # Skip root check for ip and help commands
-    CONFIG="/etc/access/config.env"
-    BIN="/usr/local/bin/access"
-    LIB="/usr/local/lib/access"
-    STATE="/var/lib/access"
-    [ -f "$CONFIG" ] && . "$CONFIG"
-elif [ -f "$LIB/init.sh" ]; then
+    ACCESS_SKIP_ROOT_CHECK=1
+fi
+
+# init.sh is the single source of truth for paths and config
+if [ -f "$LIB/init.sh" ]; then
     . "$LIB/init.sh"
 fi
 
 # Handle commands
-command="${1:-help}"
-[ "$command" = "" ] && command="help"
-
 if [ -f "$LIB/$command.sh" ]; then
     sh "$LIB/$command.sh" "$@"
 elif [ -f "$LIB/module/$command.sh" ]; then

@@ -30,16 +30,21 @@ printf "Updating Access Eternal...\n"
 # Change to LIB directory and update
 cd "$LIB"
 
-# Stash any local changes (shouldn't be any, but just in case)
-git stash push -m "Auto-stash before update $(date)" 2>/dev/null || true
-
-# Pull latest changes
-if git pull origin main; then
+# The install is a plain deployment of origin/main, never a place for local
+# edits: fetch + hard reset (unlike the old stash+pull) can neither hit merge
+# conflicts nor pile up auto-stashes over years of weekly runs. Clear any
+# stashes older versions left behind.
+git stash clear 2>/dev/null || true
+if git fetch origin main && git reset --hard origin/main; then
     printf "Successfully updated source code\n"
 else
     printf "ERROR: Failed to update from git repository\n"
     exit 1
 fi
+
+# Re-source init.sh from the freshly updated tree so the template rendering
+# below runs the newest helper definitions, not the pre-update ones
+. "$LIB/init.sh"
 
 # Copy updated access executable to BIN
 if [ -f "$LIB/access" ]; then
@@ -51,9 +56,23 @@ else
     exit 1
 fi
 
+# Refresh systemd units and cron jobs from the updated templates, so template
+# changes actually reach the running system instead of drifting until the
+# next full reinstall. try-restart only touches units that are already active.
+if render_systemd_units; then
+    printf "Systemd units refreshed\n"
+    systemctl try-restart access.service access-sync.timer access-update.timer 2>/dev/null || true
+else
+    printf "WARNING: Failed to refresh systemd units\n"
+fi
+if render_cron_jobs; then
+    printf "Cron backup jobs refreshed\n"
+else
+    printf "WARNING: Failed to refresh cron jobs\n"
+fi
+
 # Record update timestamp
-STATE_DIR="$STATE"
-mkdir -p "$STATE_DIR" 2>/dev/null || true
-printf "%s\n" "$(date +%s)" > "$STATE_DIR/last_upgrade"
+mkdir -p "$STATE" 2>/dev/null || true
+printf "%s\n" "$(date +%s)" > "$STATE/last_upgrade"
 
 printf "Access Eternal updated successfully!\n"

@@ -51,46 +51,18 @@ else
         STATE="/var/lib/access"
         LOG="/var/log/access"
         INSTALLED=false
-        YN="Please answer [Y]es or [N]o"
-        ABORTED="Installation aborted."
-        
-        # Define prompt_input function since init.sh not available
-        prompt_input() {
-            _prompt="$1"
-            _validation_type="${2:-any}"
-            _abort_msg="$3"
-            
-            while true; do
-                printf "%s: " "$_prompt"
-                if [ -c /dev/tty ]; then
-                    read -r _input < /dev/tty
-                else
-                    read -r _input
-                fi
-                
-                case "$_validation_type" in
-                    "yes_no")
-                        case "$_input" in
-                            [Yy]*) return 0 ;;
-                            [Nn]*) 
-                                [ -n "$_abort_msg" ] && printf "%s\n" "$_abort_msg"
-                                return 1 ;;
-                            *) printf "Please enter Y or N. " ;;
-                        esac
-                        ;;
-                    "non_empty")
-                        if [ -n "$_input" ]; then
-                            PROMPT_RESULT="$_input"
-                            return 0
-                        else
-                            printf "Input cannot be empty. "
-                        fi
-                        ;;
-                    *) PROMPT_RESULT="$_input"; return 0 ;;
-                esac
-            done
-        }
     fi
+fi
+
+# If Access is already installed, ask BEFORE touching anything on disk so
+# aborting leaves the existing installation fully intact
+if [ "$INSTALLED" = true ]; then
+    printf "Access is already installed! Do you want to reinstall it? [y/N]: "
+    if [ -c /dev/tty ]; then read -r confirm < /dev/tty; else read -r confirm; fi
+    case "$confirm" in
+        [Yy]*) ;;
+        *) printf "Installation aborted.\n"; exit 1 ;;
+    esac
 fi
 
 # Install git if not exists
@@ -100,17 +72,15 @@ fi
 
 # Clone/update access repo to $LIB directory - force fresh clone
 rm -rf "$LIB"
-git clone -b main https://github.com/akaoio/access "$LIB"
+if ! git clone -b main https://github.com/akaoio/access "$LIB"; then
+    printf "ERROR: Failed to clone Access repository\n"
+    exit 1
+fi
 
-# Check if Access is installed
-# If Access is already installed, ask if the user wants to reinstall it
-if [ "$INSTALLED" = true ]; then
-    printf "Access is already installed! Do you want to reinstall it? [y/N]: "
-    if [ -c /dev/tty ]; then read -r confirm < /dev/tty; else read -r confirm; fi
-    case "$confirm" in
-        [Yy]*) ;;
-        *) printf "Installation aborted.\n"; exit 1 ;;
-    esac
+# If init.sh could not be sourced earlier (remote install whose raw-file
+# download failed), load it from the fresh clone so the render_* helpers exist
+if ! command -v render_systemd_units >/dev/null 2>&1; then
+    . "$LIB/init.sh"
 fi
 
 # Prompt for DNS provider
@@ -158,15 +128,21 @@ case "$confirm" in
     *) printf "Installation aborted.\n"; exit 1 ;;
 esac
 
-# Backup current config file if exists
+# Backup current config file if exists (it holds credentials, so lock the
+# backup down too - older installs may have left it world-readable)
 if [ -f "$CONFIG" ]; then
-    mv "$CONFIG" "$CONFIG.$(date +%s).bak"
+    _config_bak="$CONFIG.$(date +%s).bak"
+    mv "$CONFIG" "$_config_bak"
+    chmod 600 "$_config_bak"
 fi
 
 # Create config directory and write the config file: generic fields here,
-# provider-specific fields appended by the provider module itself
+# provider-specific fields appended by the provider module itself. The file
+# holds API credentials, so restrict permissions before anything is written.
 printf "Creating config directory...\n"
 mkdir -p "$(dirname "$CONFIG")"
+: > "$CONFIG"
+chmod 600 "$CONFIG"
 {
     printf "PROVIDER=%s\n" "$provider"
     printf "DOMAIN=%s\n" "$domain"
@@ -189,18 +165,14 @@ mkdir -p "$LOG"
 chmod 755 "$LOG"
 printf "Log directories created\n"
 
-# Process and install systemd service files
+# Process and install systemd service files (shared helper from init.sh,
+# also used by update.sh so units can't drift between install and update)
 printf "Installing systemd services...\n"
-
-sed "s|__BIN__|$BIN|g; s|__LIB__|$LIB|g" "$LIB/access.service.template" > /etc/systemd/system/access.service
-sed "s|__BIN__|$BIN|g; s|__LIB__|$LIB|g" "$LIB/access-sync.service.template" > /etc/systemd/system/access-sync.service
-sed "s|__BIN__|$BIN|g; s|__LIB__|$LIB|g" "$LIB/access-sync.timer.template" > /etc/systemd/system/access-sync.timer
-sed "s|__BIN__|$BIN|g; s|__LIB__|$LIB|g" "$LIB/access-update.service.template" > /etc/systemd/system/access-update.service
-sed "s|__BIN__|$BIN|g; s|__LIB__|$LIB|g" "$LIB/access-update.timer.template" > /etc/systemd/system/access-update.timer
-
-# Reload systemd and enable services
-printf "Reloading systemd...\n"
-systemctl daemon-reload
+if render_systemd_units; then
+    printf "Systemd units installed\n"
+else
+    printf "WARNING: Failed to install systemd units\n"
+fi
 
 # Enable and start main daemon service
 printf "Starting main daemon service...\n"
@@ -218,17 +190,13 @@ else
     printf "WARNING: Failed to enable timers\n"
 fi
 
-# Install cron backup jobs
+# Install cron backup jobs (shared helper from init.sh)
 printf "Installing cron backup jobs...\n"
-_temp_cron=$(mktemp)
-crontab -l 2>/dev/null | grep -v "Access Eternal\|$BIN" > "$_temp_cron" || true
-sed "s|__BIN__|$BIN|g" "$LIB/crontab.template" >> "$_temp_cron"
-if crontab "$_temp_cron"; then
+if render_cron_jobs; then
     printf "Cron backup jobs installed\n"
 else
     printf "WARNING: Failed to install cron jobs\n"
 fi
-rm -f "$_temp_cron"
 
 printf "Access Eternal installation completed!\n"
 printf "Services: daemon (real-time) + timers (5min sync, weekly update) + cron backup\n"

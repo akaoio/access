@@ -1,24 +1,26 @@
 #!/bin/sh
 set -e # Exit immediately if a command exits with a non-zero status
 
-if [ "$(id -u)" -ne 0 ]; then
+# Read-only commands (access ip/help) set ACCESS_SKIP_ROOT_CHECK=1 before
+# sourcing this file; everything else must run as root.
+if [ -z "$ACCESS_SKIP_ROOT_CHECK" ] && [ "$(id -u)" -ne 0 ]; then
     echo "This script must be run as root. Please use sudo."
     exit 1
 fi
 
-# Environment
-CONFIG="/etc/access/config.env"
-BIN="/usr/local/bin/access"
-LIB="/usr/local/lib/access"
-STATE="/var/lib/access"
-LOG="/var/log/access"
+# Environment - single source of truth for all paths. Overridable via env
+# for tests and development; defaults are the installed FHS locations.
+CONFIG="${CONFIG:-/etc/access/config.env}"
+BIN="${BIN:-/usr/local/bin/access}"
+LIB="${LIB:-/usr/local/lib/access}"
+STATE="${STATE:-/var/lib/access}"
+LOG="${LOG:-/var/log/access}"
+SYSTEMD_DIR="${SYSTEMD_DIR:-/etc/systemd/system}"
 INSTALLED=false
 
-YN="Please answer [Y]es or [N]o"
-ABORTED="Installation aborted."
-
-# Check if config file exists
-if [ -f "$CONFIG" ]; then
+# Load config if readable (-r, not -f: the file is chmod 600, so non-root
+# ip/help must skip it instead of dying on an unreadable source)
+if [ -r "$CONFIG" ]; then
     . "$CONFIG"
 fi
 
@@ -30,47 +32,23 @@ if [ -f "$BIN" ] && [ -d "$LIB" ]; then
     INSTALLED=true
 fi
 
-# Generic input prompt function
-prompt_input() {
-    _prompt="$1"
-    _validation_type="${2:-any}"  # any, yes_no, non_empty
-    _abort_msg="$3"
-    _default="$4"
-    
-    while true; do
-        if [ -n "$_default" ]; then
-            printf "%s [%s]: " "$_prompt" "$_default"
-        else
-            printf "%s: " "$_prompt"
-        fi
-        
-        read -r _input
-        
-        # Use default if empty input provided
-        [ -z "$_input" ] && [ -n "$_default" ] && _input="$_default"
-        
-        case "$_validation_type" in
-            "yes_no")
-                case "$_input" in
-                    [Yy]* ) return 0 ;;
-                    [Nn]* ) 
-                        [ -n "$_abort_msg" ] && printf "%s\n" "$_abort_msg"
-                        return 1 ;;
-                    * ) printf "Please enter Y or N. " ;;
-                esac
-                ;;
-            "non_empty")
-                if [ -n "$_input" ]; then
-                    PROMPT_RESULT="$_input"
-                    return 0
-                else
-                    printf "Input cannot be empty. "
-                fi
-                ;;
-            "any"|*)
-                PROMPT_RESULT="$_input"
-                return 0
-                ;;
-        esac
+# Render systemd unit templates from $LIB into $SYSTEMD_DIR and reload.
+# Shared by install.sh and update.sh so updated templates can never drift
+# from what a fresh install would lay down.
+render_systemd_units() {
+    for _unit in access.service access-sync.service access-sync.timer access-update.service access-update.timer; do
+        sed "s|__BIN__|$BIN|g; s|__LIB__|$LIB|g; s|__LOG__|$LOG|g" \
+            "$LIB/$_unit.template" > "$SYSTEMD_DIR/$_unit" || return 1
     done
+    systemctl daemon-reload
+}
+
+# Install/refresh the cron backup jobs from crontab.template, replacing any
+# previous Access entries. Shared by install.sh and update.sh.
+render_cron_jobs() {
+    _temp_cron=$(mktemp)
+    crontab -l 2>/dev/null | grep -v "Access Eternal\|$BIN" > "$_temp_cron" || true
+    sed "s|__BIN__|$BIN|g; s|__LOG__|$LOG|g" "$LIB/crontab.template" >> "$_temp_cron" || { rm -f "$_temp_cron"; return 1; }
+    crontab "$_temp_cron" || { rm -f "$_temp_cron"; return 1; }
+    rm -f "$_temp_cron"
 }

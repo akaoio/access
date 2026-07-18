@@ -71,8 +71,9 @@ sudo systemctl list-timers access-*       # Systemd timers
 
 ## 📋 Requirements
 
-- **Shell**: POSIX `/bin/sh`
-- **Commands**: `curl`, `ip`, `git`
+- **OS**: Linux (relies on `iproute2`'s `ip monitor`, `flock` from util-linux, and systemd + cron for scheduling)
+- **Shell**: POSIX `/bin/sh` (no bashisms; works under `dash`, `ash`, `bash`)
+- **Commands**: `curl`, `ip`, `git`, `flock`
 - **Privileges**: Root (for system installation)
 - **DNS Provider**: GoDaddy or Cloudflare
 
@@ -99,16 +100,16 @@ Config is stored in `/etc/access/config.env`. New fields (`PROVIDER`, `CLOUDFLAR
 
 ## 🔄 How It Works
 
-1. **IP Detection**: Prioritizes stable IPv6 → temporary IPv6 → IPv4
+1. **IP Detection**: IPv4 via public lookup services (`ifconfig.me`, falling back to `icanhazip.com`); IPv6 from the interface's stable global address (temporary privacy addresses only as a fallback)
 2. **Change Detection**: Real-time monitoring with `ip monitor addr`
 3. **DNS Update**: Updates the configured provider's DNS via API (A/AAAA records). GoDaddy updates the record directly by name; Cloudflare looks up the record ID first, then patches it (creating it if it doesn't exist yet).
-4. **Deduplication**: Only updates when IP actually changes
-5. **Rate Limiting**: Prevents redundant updates (2min cooldown)
+4. **Deduplication**: Only calls the provider API when the IP actually changed since the last successful sync (per-provider state in `/var/lib/access/`)
+5. **Locking**: A `flock`-held lock file prevents daemon, timer and cron syncs from overlapping
 
 ## 🛡️ Features
 
-- **100% POSIX Compatible** - Works on Linux, BSD, macOS, Solaris
-- **Zero Dependencies** - Only uses standard system tools
+- **POSIX Shell** - No bashisms; runs under `dash`, `ash`, `bash`
+- **Minimal Dependencies** - Only `curl`, `git` and standard Linux tools (`iproute2`, `flock`)
 - **Modular Architecture** - Clean, maintainable code
 - **Multi-Provider DNS** - GoDaddy and Cloudflare, via a pluggable `module/provider/*.sh` interface (add a new provider by dropping in one file)
 - **Triple Redundancy** - Multiple monitoring layers

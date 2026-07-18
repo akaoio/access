@@ -6,5 +6,5 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 ExecStart=__BIN__ update
-StandardOutput=append:/var/log/access/access.log
-StandardError=append:/var/log/access/error.log
+StandardOutput=append:__LOG__/access.log
+StandardError=append:__LOG__/error.log
