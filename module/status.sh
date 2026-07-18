@@ -1,6 +1,25 @@
 #!/bin/sh
 # Status module for Access Eternal - System status display
 
+# Print "<n>s/m/h/d ago" for an epoch-seconds value, or "Never" if missing/invalid
+humanize_epoch() {
+    _epoch="$1"
+    if [ -n "$_epoch" ] && [ "$_epoch" -gt 0 ] 2>/dev/null; then
+        _ago=$(($(date +%s) - _epoch))
+        if [ "$_ago" -lt 60 ]; then
+            printf "%ss ago" "$_ago"
+        elif [ "$_ago" -lt 3600 ]; then
+            printf "%sm ago" "$((_ago / 60))"
+        elif [ "$_ago" -lt 86400 ]; then
+            printf "%sh ago" "$((_ago / 3600))"
+        else
+            printf "%sd ago" "$((_ago / 86400))"
+        fi
+    else
+        printf "Never"
+    fi
+}
+
 show_status() {
     # Check for config first
     if [ ! -f "$CONFIG" ]; then
@@ -32,29 +51,9 @@ show_status() {
     last_ipv4=$(cat "$LAST_IPV4_FILE" 2>/dev/null || echo "?")
     last_ipv6=$(cat "$LAST_IPV6_FILE" 2>/dev/null || echo "?")
     
-    # Read timestamp files (now contain epoch seconds)
-    if [ -f "$LAST_RUN_FILE" ]; then
-        last_run_epoch=$(cat "$LAST_RUN_FILE" 2>/dev/null || echo "0")
-        if [ "$last_run_epoch" != "0" ] && [ "$last_run_epoch" -gt 0 ] 2>/dev/null; then
-            current_epoch=$(date +%s)
-            seconds_ago=$((current_epoch - last_run_epoch))
-            if [ "$seconds_ago" -lt 60 ]; then
-                last_run="${seconds_ago}s ago"
-            elif [ "$seconds_ago" -lt 3600 ]; then
-                last_run="$((seconds_ago / 60))m ago"
-            elif [ "$seconds_ago" -lt 86400 ]; then
-                last_run="$((seconds_ago / 3600))h ago"
-            else
-                last_run="$((seconds_ago / 86400))d ago"
-            fi
-        else
-            last_run="Never"
-        fi
-    else
-        last_run="Never"
-    fi
-    
-    last_upgrade=$(cat "$LAST_UPGRADE_FILE" 2>/dev/null || echo "Never")
+    # Both timestamp files contain epoch seconds - humanize them the same way
+    last_run=$(humanize_epoch "$(cat "$LAST_RUN_FILE" 2>/dev/null)")
+    last_upgrade=$(humanize_epoch "$(cat "$LAST_UPGRADE_FILE" 2>/dev/null)")
     
     # Display status information
     cat << EOF
