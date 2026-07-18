@@ -20,6 +20,30 @@ humanize_epoch() {
     fi
 }
 
+# Colors only when stdout is a terminal (empty when piped/redirected)
+if [ -t 1 ]; then
+    C_OK=$(printf '\033[32m')
+    C_BAD=$(printf '\033[31m')
+    C_WARN=$(printf '\033[33m')
+    C_DIM=$(printf '\033[2m')
+    C_OFF=$(printf '\033[0m')
+else
+    C_OK=""; C_BAD=""; C_WARN=""; C_DIM=""; C_OFF=""
+fi
+
+# $1 = current IP, $2 = last-synced IP -> short note instead of dumping both
+sync_note() {
+    if [ "$1" = "?" ]; then
+        printf "%s(unavailable)%s" "$C_DIM" "$C_OFF"
+    elif [ "$2" = "?" ]; then
+        printf "%s(never synced)%s" "$C_WARN" "$C_OFF"
+    elif [ "$1" = "$2" ]; then
+        printf "%s(synced)%s" "$C_OK" "$C_OFF"
+    else
+        printf "%s(DNS has %s)%s" "$C_BAD" "$2" "$C_OFF"
+    fi
+}
+
 show_status() {
     # Check for config first
     if [ ! -f "$CONFIG" ]; then
@@ -54,25 +78,32 @@ show_status() {
     # Both timestamp files contain epoch seconds - humanize them the same way
     last_run=$(humanize_epoch "$(cat "$LAST_RUN_FILE" 2>/dev/null)")
     last_upgrade=$(humanize_epoch "$(cat "$LAST_UPGRADE_FILE" 2>/dev/null)")
-    
-    # Display status information
-    cat << EOF
-STATUS: ${HOST:-unknown}.${DOMAIN:-unknown} ($PROVIDER)
-IPv4: ${current_ipv4} | Last: ${last_ipv4}
-IPv6: ${current_ipv6} | Last: ${last_ipv6}
-TIME: Run: $last_run | Upgrade: $last_upgrade
-EOF
-    
+
     # Check service status. Access only installs as a system service (FHS
     # layout), so there is no --user variant to probe. grep -c exits nonzero
     # on zero matches, so fall back via || (the dispatcher runs under set -e).
     timer_count=$(systemctl list-timers --all --no-legend 2>/dev/null | grep -c "access.*timer") || timer_count=0
     cron_jobs=$(crontab -l 2>/dev/null | grep -c access) || cron_jobs=0
     if systemctl is-active access.service >/dev/null 2>&1; then
-        printf "ACTIVE: Service: Running | Timers: %s | Cron: %s\n" "$timer_count" "$cron_jobs"
+        service_line="${C_OK}running${C_OFF}"
     else
-        printf "INACTIVE: Service: Down | Timers: %s | Cron: %s\n" "$timer_count" "$cron_jobs"
+        service_line="${C_BAD}down${C_OFF}"
     fi
+
+    # One fact per line so nothing wraps into the next field on narrow terminals
+    printf "\n"
+    printf "  %s.%s %s(%s)%s\n" "${HOST:-unknown}" "${DOMAIN:-unknown}" "$C_DIM" "$PROVIDER" "$C_OFF"
+    printf "\n"
+    printf "  %-13s%-16s %s\n" "IPv4:" "$current_ipv4" "$(sync_note "$current_ipv4" "$last_ipv4")"
+    printf "  %-13s%s %s\n" "IPv6:" "$current_ipv6" "$(sync_note "$current_ipv6" "$last_ipv6")"
+    printf "\n"
+    printf "  %-13s%s\n" "Last sync:" "$last_run"
+    printf "  %-13s%s\n" "Last update:" "$last_upgrade"
+    printf "\n"
+    printf "  %-13s%s\n" "Service:" "$service_line"
+    printf "  %-13s%s\n" "Timers:" "$timer_count"
+    printf "  %-13s%s\n" "Cron jobs:" "$cron_jobs"
+    printf "\n"
 }
 
 main() {
